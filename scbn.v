@@ -800,6 +800,14 @@ Proof.
       auto.
 Qed.
 
+Lemma dlc_lam_inv_strong :
+  forall {t1 t2},
+    dlc (dlam t1 t2) -> (forall x, dlc (t1 d^ x)) /\ (forall x, dlc (t2 d^ x)).
+Proof.
+  intros t1 t2 Hlc. rewrite dlc_dlam_dbody in Hlc.
+  split; intros x; apply dlc_dopen_gen; tauto.
+Qed.
+
 Lemma dwf_lam_inv_strong :
   forall {t1 t2},
     dwf (dlam t1 t2) -> (forall x, dwf (t1 d^ x)) /\ (forall x, dwf (t2 d^ x)) /\
@@ -1545,18 +1553,18 @@ Inductive gterm_env_wf : list (freevar * dterm) -> Prop :=
 | gterm_env_fv_cons :
     forall x t e,
       gterm_env_wf e ->
-      dwf (gterm_read t e) -> x \notin (dfv t ++ gterm_env_fv e) ->
+      dlc t -> x \notin (dfv t ++ gterm_env_fv e) ->
       gterm_env_wf ((x, t) :: e).
 
 Lemma gterm_env_wf_inv :
   forall {x t e}, gterm_env_wf ((x, t) :: e) ->
-             gterm_env_wf e /\ dwf (gterm_read t e) /\
+             gterm_env_wf e /\ dlc t /\
              x \notin (dfv t ++ gterm_env_fv e).
 Proof.
   intros x t e H. inversion H; tauto.
 Qed.
 
-Definition gterm_wf (t : gterm) := dwf (gterm_read (fst t) (snd t)) /\ gterm_env_wf (snd t).
+Definition gterm_wf (t : gterm) := dlc (fst t) /\ gterm_env_wf (snd t).
 
 Lemma dsubstf_dlc2 :
   forall t x u, dlc (t d[ x := u ]) -> dlc t.
@@ -1593,10 +1601,12 @@ Qed.
 Lemma gterm_read_wf_lc :
   forall e t, gterm_wf (t, e) -> dlc t.
 Proof.
+  intros e t H; apply H.
+  (*
   intros.
   unfold gterm_wf in *; simpl in *.
   eapply gterm_read_wf_lc_rec; [|apply H].
-  apply dwf_dlc; apply H.
+  apply H. *)
 Qed.
 
 Lemma gterm_read_dsubstb :
@@ -1627,11 +1637,12 @@ Lemma gwf_app_inv :
   forall {t1 t2 e}, gterm_wf (dapp t1 t2, e) -> gterm_wf (t1, e) /\ gterm_wf (t2, e).
 Proof.
   intros t1 t2 e [H1 H2]; simpl in *.
-  rewrite gterm_read_app in H1.
-  apply dwf_app_inv in H1.
+  (* rewrite gterm_read_app in H1. *)
+  inversion H1.
   unfold gterm_wf; simpl; tauto.
 Qed.
 
+(*
 Lemma gterm_wf_read_wf :
   forall {e t}, gterm_wf (t, e) -> dwf (gterm_read t e).
 Proof.
@@ -1644,12 +1655,41 @@ Proof.
     apply dsubstf_dwf; tauto. *)
   intros e t [H _]; exact H.
 Qed.
+ *)
 
 Lemma gterm_wf_read_lc :
-  forall {t e}, gterm_wf (t, e) -> dlc (gterm_read t e).
+  forall {e t}, gterm_wf (t, e) -> dlc (gterm_read t e).
 Proof.
-  intros t e H. apply dwf_dlc, gterm_wf_read_wf; assumption.
+  induction e as [|[x t] e].
+  - intros; unfold gterm_wf in *; simpl in *. tauto.
+  - intros t1 [H1 H2]; unfold gterm_wf in *; simpl in *.
+    apply gterm_env_wf_inv in H2.
+    apply IHe; split; [|tauto].
+    apply dsubstf_dlc; tauto.
+  (* intros t e H. (* apply dwf_dlc, gterm_wf_read_wf; assumption. *) apply H. *)
 Qed.
+
+
+Lemma gterm_read_var :
+  forall x e, x \notin gterm_env_fv e -> gterm_read (dfvar x) e = dfvar x.
+Proof.
+  intros x e. induction e as [|[y t] e].
+  - reflexivity.
+  - intros; simpl in *.
+    destruct freevar_eq_dec; try tauto.
+    apply IHe; rewrite !in_app_iff in *; tauto.
+Qed.
+
+Lemma gterm_wf_read_body :
+  forall {t e}, dbody t -> gterm_env_wf e -> dbody (gterm_read t e).
+Proof.
+  intros t e [L Hlc] He.
+  exists (L ++ gterm_env_fv e). intros x Hx; rewrite in_app_iff in Hx.
+  replace (dfvar x) with (gterm_read (dfvar x) e) by (apply gterm_read_var; tauto).
+  rewrite <- gterm_read_dsubstb by tauto.
+  apply gterm_wf_read_lc; split; firstorder.
+Qed.
+
 
 Lemma gterm_env_find_fv2 :
   forall e x t, gterm_env_wf e -> gterm_env_find x e = Some t -> x \notin dfv t.
@@ -1677,6 +1717,20 @@ Proof.
       rewrite dsubstf_dfv; [reflexivity|].
       assert (H2 := gterm_env_find_fv _ _ _ H0). firstorder.
 Qed.
+
+
+Lemma gterm_env_find_dlc :
+  forall e x t, gterm_env_wf e -> gterm_env_find x e = Some t -> dlc t.
+Proof.
+  induction e as [|[x u] e]; intros; simpl in *.
+  - congruence.
+  - repeat (destruct freevar_eq_dec); simpl in *; try congruence.
+    + replace t with u by congruence.
+      apply gterm_env_wf_inv in H. tauto.
+    + apply gterm_env_wf_inv in H.
+      firstorder.
+Qed.
+
 
 (*
 Lemma lc_app_inv : forall {t1 t2}, lc (app t1 t2) -> lc t1 /\ lc t2.
@@ -1841,16 +1895,6 @@ Proof.
     intros t3 t4 H; apply dbeta_subst; [constructor | assumption].
 Qed.
 
-Lemma gterm_read_var :
-  forall x e, x \notin gterm_env_fv e -> gterm_read (dfvar x) e = dfvar x.
-Proof.
-  intros x e. induction e as [|[y t] e].
-  - reflexivity.
-  - intros; simpl in *.
-    destruct freevar_eq_dec; try tauto.
-    apply IHe; rewrite !in_app_iff in *; tauto.
-Qed.
-
 Lemma gterm_redt_beta_rec :
   forall L t1 t2,
     gterm_redt L t1 t2 -> list_inc (gterm_fv t1) L -> gterm_wf t1 ->
@@ -1871,17 +1915,17 @@ Proof.
     destruct IHHred as (Hwf2 & Hbeta & [He2 | (x & t4 & Hx & Ht4 & He2)]); rewrite He2 in *;
       split; [|split| |split]; try eauto.
     + unfold gterm_wf in *; simpl in *.
-      rewrite gterm_read_app in *.
+      (* rewrite gterm_read_app in *. *)
       split; [|tauto].
       constructor; tauto.
     + rewrite !gterm_read_app; simpl.
       apply trans_refl_clos_dbeta_app; eauto.
       constructor.
     + unfold gterm_wf in *; simpl in *.
-      rewrite dsubstf_dfv with (t := t3).
-      2: { unfold gterm_fv in *. simpl in *. intro. apply Hx. apply HL. rewrite !in_app_iff; tauto. }
+      (* rewrite dsubstf_dfv with (t := t3).
+      2: { unfold gterm_fv in *. simpl in *. intro. apply Hx. apply HL. rewrite !in_app_iff; tauto. } *)
       split; [|tauto].
-      rewrite gterm_read_app in *.
+      (* rewrite gterm_read_app in *. *)
       constructor; tauto.
     + rewrite !gterm_read_app; simpl.
       rewrite dsubstf_dfv with (t := t3).
@@ -1901,17 +1945,17 @@ Proof.
     destruct IHHred as (Hwf2 & Hbeta & [He2 | (x & t4 & Hx & Ht4 & He2)]); rewrite He2 in *;
       split; [|split| |split]; try eauto.
     + unfold gterm_wf in *; simpl in *.
-      rewrite gterm_read_app in *.
+      (* rewrite gterm_read_app in *. *)
       split; [|tauto].
       constructor; tauto.
     + rewrite !gterm_read_app; simpl.
       apply trans_refl_clos_dbeta_app; eauto.
       constructor.
     + unfold gterm_wf in *; simpl in *.
-      rewrite dsubstf_dfv with (t := t3).
-      2: { unfold gterm_fv in *. simpl in *. intro. apply Hx. apply HL. rewrite !in_app_iff; tauto. }
+      (* rewrite dsubstf_dfv with (t := t3).
+      2: { unfold gterm_fv in *. simpl in *. intro. apply Hx. apply HL. rewrite !in_app_iff; tauto. } *)
       split; [|tauto].
-      rewrite gterm_read_app in *.
+      (* rewrite gterm_read_app in *. *)
       constructor; tauto.
     + rewrite !gterm_read_app; simpl.
       rewrite dsubstf_dfv with (t := t3).
@@ -1935,11 +1979,12 @@ Proof.
       intros x Hx. unfold gterm_wf in *; simpl in *.
       split; [|apply Hwf].
       destruct Hwf as [Hwfl Hwfe].
-      rewrite gterm_read_lam in Hwfl.
-      apply dwf_lam_inv_strong in Hwfl.
-      rewrite gterm_read_dsubstb; [|assumption].
+      (* rewrite gterm_read_lam in Hwfl. *)
+      apply dlc_lam_inv_strong in Hwfl.
+      (* rewrite gterm_read_dsubstb; [|assumption].
       rewrite gterm_read_var; [apply Hwfl|].
-      unfold list_inc, gterm_fv in *; simpl in *; firstorder.
+      unfold list_inc, gterm_fv in *; simpl in *; firstorder. *)
+      apply Hwfl.
     }
     assert (HL3 : list_inc (dfv t3) L).
     {
@@ -1950,18 +1995,18 @@ Proof.
     split; [|split].
     + unfold gterm_wf in *; simpl in *.
       split.
-      * rewrite gterm_read_lam in *.
-        apply dwf_lam with (L := L ++ L1 ++ gterm_env_fv e2); intros x Hx;
+      * (* rewrite gterm_read_lam in *. *)
+        apply dlc_lam with (L := L ++ L1 ++ gterm_env_fv e2); intros x Hx;
           rewrite !in_app_iff in *; specialize (H0 x ltac:(tauto) ltac:(auto) ltac:(auto)).
-        -- replace (gterm_read t3 e2) with (gterm_read t3 e1).
-           ++ destruct Hwf as [Hwfl Hwfe]; apply dwf_lam_inv_strong in Hwfl; apply Hwfl.
-           ++ destruct H0 as (Hwf2 & Hbeta & [He2 | (y & t4 & Hy & Ht4 & He2)]); rewrite He2 in *; [reflexivity|].
+        -- (* replace (gterm_read t3 e2) with (gterm_read t3 e1). *)
+           (* ++ *) destruct Hwf as [Hwfl Hwfe]; apply dlc_lam_inv_strong in Hwfl; apply Hwfl.
+(*           ++ destruct H0 as (Hwf2 & Hbeta & [He2 | (y & t4 & Hy & Ht4 & He2)]); rewrite He2 in *; [reflexivity|].
               simpl.
-              rewrite dsubstf_dfv; [reflexivity|firstorder].
-        -- rewrite gterm_read_dsubstb in H0 by tauto.
-           rewrite gterm_read_var in H0 by tauto.
+              rewrite dsubstf_dfv; [reflexivity|firstorder]. *)
+        -- (* rewrite gterm_read_dsubstb in H0 by tauto. *)
+           (* rewrite gterm_read_var in H0 by tauto. *)
            tauto.
-        -- destruct Hwf as [Hwfl Hwfe].
+(*        -- destruct Hwf as [Hwfl Hwfe].
            apply dwf_lam_inv_strong in Hwfl.
            destruct H0 as (Hwf2 & Hbeta & [He2 | (y & t4 & Hy & Ht4 & He2)]); rewrite He2 in *.
            ++ eapply trans_refl_clos_compose; [apply Hwfl|].
@@ -1976,7 +2021,7 @@ Proof.
               destruct freevar_eq_dec; [intuition congruence|].
               rewrite !gterm_read_dsubstb in Hbeta by tauto.
               rewrite !gterm_read_var in Hbeta by tauto.
-              apply Hbeta.
+              apply Hbeta. *)
       * pick x \notin (L ++ L1); rewrite !in_app_iff in *.
         specialize (H0 x ltac:(tauto) ltac:(auto) ltac:(auto)).
         tauto.
@@ -1990,16 +2035,30 @@ Proof.
         -- rewrite !gterm_read_dsubstb in Hbeta by tauto.
            rewrite !gterm_read_var in Hbeta by tauto.
            apply Hbeta.
-        -- destruct Hwf as [Hwfl Hwfe]; apply dwf_dlc in Hwfl.
-           rewrite gterm_read_lam in Hwfl. apply dlc_dlam_dbody in Hwfl.
-           tauto.
+        -- destruct Hwf as [Hwfl Hwfe].
+           (* rewrite gterm_read_lam in Hwfl. *) apply dlc_dlam_dbody in Hwfl.
+           apply gterm_wf_read_body; tauto.
+(*           destruct Hwfl as [[L3 Hwf3] _].
+           exists (L3 ++ gterm_env_fv e1). intros y Hy.
+           rewrite in_app_iff in Hy.
+           specialize (Hwf3 y ltac:(tauto)).
+           replace (dfvar y) with (gterm_read (dfvar y) e1) by (apply gterm_read_var; tauto).
+           rewrite <- gterm_read_dsubstb by tauto.
+           apply gterm_wf_read_lc. split; auto. *)
       * simpl in *.
         rewrite dsubstf_dfv by firstorder.
         apply trans_refl_clos_dbeta_dlam with (x := x); try tauto.
         2: {
-          destruct Hwf as [Hwfl Hwfe]; apply dwf_dlc in Hwfl.
-          rewrite gterm_read_lam in Hwfl. apply dlc_dlam_dbody in Hwfl.
-          tauto.
+          destruct Hwf as [Hwfl Hwfe].
+          (* rewrite gterm_read_lam in Hwfl. *) apply dlc_dlam_dbody in Hwfl. (* tauto. *)
+          apply gterm_wf_read_body; tauto.
+(*          destruct Hwfl as [[L3 Hwf3] _].
+          exists (L3 ++ gterm_env_fv e1). intros z Hz.
+          rewrite in_app_iff in Hz.
+           specialize (Hwf3 z ltac:(tauto)).
+           replace (dfvar z) with (gterm_read (dfvar z) e1) by (apply gterm_read_var; tauto).
+           rewrite <- gterm_read_dsubstb by tauto.
+           apply gterm_wf_read_lc. split; auto. *)
         }
         rewrite dsubstb_dsubstf in Hbeta by auto.
         simpl in Hbeta.
@@ -2018,13 +2077,14 @@ Proof.
     unfold gterm_fv in Hx; simpl in Hx; rewrite !in_app_iff in Hx.
     split; [|split].
     + unfold gterm_wf in *; simpl in *. split.
-      * rewrite gterm_read_dsubstf by tauto.
-        apply dsubstf_dwf; [tauto|].
+      * (* rewrite gterm_read_dsubstf by tauto.
+        apply dsubstf_dlc; [|tauto]. *)
         destruct Hwfl as [Hwfl _].
-        rewrite gterm_read_lam in Hwfl. apply dwf_lam_inv_strong in Hwfl.
-        rewrite gterm_read_dsubstb by tauto.
-        rewrite gterm_read_var by tauto.
+        (* rewrite gterm_read_lam in Hwfl. *) apply dlc_lam_inv_strong in Hwfl.
         apply Hwfl.
+        (* rewrite gterm_read_dsubstb by tauto.
+        rewrite gterm_read_var by tauto.
+        apply Hwfl. *)
       * constructor; try tauto.
         rewrite in_app_iff; tauto.
     + rewrite gterm_read_app, gterm_read_lam. simpl.
@@ -2032,19 +2092,20 @@ Proof.
       rewrite gterm_read_dsubstb by (apply Hwf3).
       econstructor; constructor.
       * destruct Hwfl as [Hwfl Hwfe]; simpl in *.
-        rewrite gterm_read_lam in *.
-        apply dwf_dlc in Hwfl. apply dlc_dlam_dbody in Hwfl. tauto.
+        (* rewrite gterm_read_lam in *. *)
+        apply dlc_dlam_dbody in Hwfl.
+        apply gterm_wf_read_body;
+        tauto.
       * destruct Hwfl as [Hwfl Hwfe]; simpl in *.
-        rewrite gterm_read_lam in *.
-        apply dwf_dlc in Hwfl. apply dlc_dlam_dbody in Hwfl. tauto.
-      * apply dwf_dlc. apply Hwf3.
+        (* rewrite gterm_read_lam in *. *)
+        apply dlc_dlam_dbody in Hwfl. apply gterm_wf_read_body; tauto.
+      * apply gterm_wf_read_lc. apply Hwf3.
     + right. exists x; exists t3. split; [|split]; eauto using gterm_read_wf_lc.
 
   - split; [|split]; [| |left; reflexivity].
     + unfold gterm_wf in *; simpl in *.
       split; [|tauto].
-      erewrite gterm_env_find_read in Hwf; try (eassumption || tauto).
-      tauto.
+      apply gterm_env_find_dlc in H; tauto.
     + erewrite gterm_env_find_read; try eassumption.
       * constructor.
       * apply Hwf.
