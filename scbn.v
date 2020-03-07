@@ -310,7 +310,7 @@ Proof.
     match goal with [ |- ?t1 = ?t2 ] => pick y \notin (x :: L ++ fv t1 ++ fv t2 ++ fv t) end.
     simpl in *; rewrite !in_app_iff in *.
     apply (open_inj y); try tauto.
-    rewrite open_close_core by intuition.
+    rewrite open_close_core by (tauto || discriminate).
     rewrite substf_substb_free by (simpl; intuition).
     intuition.
 Qed.
@@ -837,12 +837,3063 @@ Qed.
 
 
 
+Lemma trans_refl_clos_induction_rev :
+  forall {A : Type} (R : A -> A -> Prop) (P : A -> Prop) (x : A),
+    P x -> (forall y z, P y -> R y z -> P z) -> (forall y, trans_refl_clos R x y -> P y).
+Proof.
+  intros A R P x HPx HPind y Hy. revert HPx.
+  induction Hy; firstorder.
+Qed.
+
+
+(* List inclusion *)
+
+Definition list_inc (L1 L2 : list freevar) := forall x, In x L1 -> In x L2.
+Definition list_same (L1 L2 : list freevar) := forall x, In x L1 <-> In x L2.
+
+Ltac prove_list_inc := (let x := fresh "x" in intros x; simpl; try repeat (rewrite in_app_iff; simpl); tauto).
+
+Lemma list_inc_trans :
+  forall L1 L2 L3, list_inc L1 L2 -> list_inc L2 L3 -> list_inc L1 L3.
+Proof.
+  intros; unfold list_inc in *; firstorder.
+Qed.
+
+Lemma list_inc_app_left :
+  forall L1 L2 L3, list_inc (L1 ++ L2) L3 <-> list_inc L1 L3 /\ list_inc L2 L3.
+Proof.
+  intros; unfold list_inc in *.
+  firstorder using in_app_iff.
+  rewrite in_app_iff in *; firstorder.
+Qed.
+
+Lemma list_same_inc_iff :
+  forall L1 L2, list_same L1 L2 <-> list_inc L1 L2 /\ list_inc L2 L1.
+Proof.
+  intros; unfold list_same, list_inc. firstorder.
+Qed.
+
+Lemma list_same_inc :
+  forall L1 L2, list_same L1 L2 -> list_inc L1 L2.
+Proof.
+  intros. rewrite list_same_inc_iff in *. tauto.
+Qed.
+
+Require Import Setoid.
+Require Import Morphisms.
+
+Global Instance list_inc_Reflexive : Reflexive list_inc.
+Proof.
+  firstorder.
+Qed.
+
+Global Instance list_inc_Transitive : Transitive list_inc.
+Proof.
+  firstorder.
+Qed.
+
+Global Instance list_inc_PreOrdered : PreOrder list_inc.
+Proof.
+  split; auto with typeclass_instances.
+Qed.
+
+
+Global Instance list_same_Reflexive : Reflexive list_same.
+Proof.
+  firstorder.
+Qed.
+
+Global Instance list_same_Transitive : Transitive list_same.
+Proof.
+  firstorder.
+Qed.
+
+Global Instance list_same_Symmetric : Symmetric list_same.
+Proof.
+  firstorder.
+Qed.
+
+Global Instance list_same_Equivalence : Equivalence list_same.
+Proof.
+  split; auto with typeclass_instances.
+Qed.
+
+
+Notation "L1 '\subseteq' L2" := (list_inc L1 L2) (at level 70, only parsing).
+Notation "L1 '⊆' L2" := (list_inc L1 L2) (at level 70).
+Notation "L1 '==' L2" := (list_same L1 L2) (at level 70).
+
+Global Instance app_list_inc_Proper : Proper (list_inc ++> list_inc ++> list_inc) (@Datatypes.app freevar).
+Proof.
+  intros L1 L2 H12 L3 L4 H34.
+  rewrite list_inc_app_left, H12, H34.
+  split; prove_list_inc.
+Qed.
+
+Global Instance In_list_inc_Proper : Proper (eq ==> list_inc ++> Basics.impl) (@In freevar).
+Proof.
+  intros x1 x2 -> L1 L2 HL.
+  firstorder.
+Qed.
+
+
+Global Instance app_list_same_Proper : Proper (list_same ==> list_same ==> list_same) (@Datatypes.app freevar).
+Proof.
+  intros L1 L2 H12 L3 L4 H34.
+  rewrite list_same_inc_iff in *.
+  split; apply app_list_inc_Proper; tauto.
+Qed.
+
+Global Instance In_list_same_Proper : Proper (eq ==> list_same ==> iff) (@In freevar).
+Proof.
+  intros x1 x2 -> L1 L2 HL.
+  apply HL.
+Qed.
 
 
 
 
 
 
+Fixpoint env_find {A : Type} (e : list (freevar * A)) (x : freevar) :=
+  match e with
+  | nil => None
+  | (y, r) :: e => if freevar_eq_dec x y then Some r else env_find e x
+  end.
+
+
+Definition env_same {A : Type} (e1 e2 : list (freevar * A)) := forall x, env_find e1 x = env_find e2 x.
+
+Global Instance env_same_Reflexive {A : Type} : Reflexive (@env_same A).
+Proof.
+  firstorder.
+Qed.
+
+Global Instance env_same_Transitive {A : Type} : Transitive (@env_same A).
+Proof.
+  firstorder congruence.
+Qed.
+
+Global Instance env_same_Symmetric {A : Type} : Symmetric (@env_same A).
+Proof.
+  firstorder congruence.
+Qed.
+
+Global Instance env_same_Equivalence {A : Type} : Equivalence (@env_same A).
+Proof.
+  split; auto with typeclass_instances.
+Qed.
+
+Notation "e1 '===' e2" := (env_same e1 e2) (at level 70).
+
+Lemma env_find_app :
+  forall {A : Type} (env1 env2 : list (freevar * A)) x, env_find (env1 ++ env2) x = match env_find env1 x with Some t => Some t | None => env_find env2 x end.
+Proof.
+  intros. induction env1 as [|[y u] env1].
+  - reflexivity.
+  - simpl. destruct freevar_eq_dec.
+    + reflexivity.
+    + assumption.
+Qed.
+
+Global Instance env_same_app_Proper {A : Type} : Proper (env_same ==> env_same ==> env_same) (@Datatypes.app (freevar * A)).
+Proof.
+  intros e1 e2 H12 e3 e4 H34 x.
+  rewrite !env_find_app.
+  rewrite H12, H34.
+  reflexivity.
+Qed.
+
+Global Instance env_same_cons_Proper {A : Type} : Proper (eq ==> env_same ==> env_same) (@Datatypes.cons (freevar * A)).
+Proof.
+  intros z1 z2 -> e1 e2 H12 x.
+  apply (env_same_app_Proper (z2 :: nil) (z2 :: nil)); [reflexivity | assumption].
+Qed.
+
+
+Inductive nfval :=
+| NFFreeVar : freevar -> nfval
+| NFStructApp : nfval -> nfval_or_lam -> nfval
+
+with nfval_or_lam :=
+| NFVal : nfval -> nfval_or_lam
+| NFLam : freevar -> nfval_or_lam -> nfval_or_lam.
+
+Inductive envitem :=
+| EVal : nfval -> envitem
+| ELazy : term -> envitem
+| ELam : term -> freevar -> envitem.
+
+Inductive code :=
+| CTerm : term -> code
+| CVal : nfval -> code.
+
+Inductive cont :=
+| KNil : cont
+| KUpdateLazy : freevar -> list term -> cont -> cont
+| KUpdateLam : term -> freevar -> cont -> cont
+| KApp : nfval -> list term -> cont -> cont.
+
+Record state := mkState {
+  st_code : envitem ;
+  st_stack : list term ;
+  st_env : list (freevar * envitem) ;
+  st_cont : cont ;
+  st_lamnf : list (freevar * nfval_or_lam) ;
+  st_usedvars : list freevar ;
+}.
+
+Fixpoint update_env {A : Type} (env : list (freevar * A)) x v :=
+  match env with
+  | nil => (x, v) :: nil
+  | (y, u) :: env => if freevar_eq_dec x y then (x, v) :: env else (y, u) :: update_env env x v
+  end.
+
+Inductive red : state -> state -> Prop :=
+| red_app : forall t u e pi K W L,
+    red {| st_code := ELazy (app t u) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELazy t ; st_stack := u :: pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+| red_lam : forall t e pi K W L y,
+    y \notin L ->
+    red {| st_code := ELazy (lam t) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELam t y ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := y :: L |}
+| red_redex : forall t u e pi K W L x y,
+    x \notin L ->
+    red {| st_code := ELam t y ; st_stack := u :: pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELazy (t ^ x) ; st_stack := pi ; st_env := (x, ELazy u) :: e ; st_cont := K ; st_lamnf := W ; st_usedvars := x :: L |}
+| red_var_open : forall x e pi K W L,
+    env_find e x = None ->
+    red {| st_code := ELazy (fvar x) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := EVal (NFFreeVar x) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+| red_var_val : forall x e v pi K W L,
+    env_find e x = Some (EVal v) ->
+    red {| st_code := ELazy (fvar x) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := EVal v ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+| red_var_lazy : forall x e t pi K W L,
+    env_find e x = Some (ELazy t) ->
+    red {| st_code := ELazy (fvar x) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELazy t ; st_stack := nil ; st_env := e ; st_cont := KUpdateLazy x pi K ; st_lamnf := W ; st_usedvars := L |}
+| red_var_lam : forall x e t y pi K W L,
+    env_find e x = Some (ELam t y) ->
+    red {| st_code := ELazy (fvar x) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELam t y ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+| red_app_val : forall v e u pi K W L,
+    red {| st_code := EVal v ; st_stack := u :: pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELazy u ; st_stack := nil ; st_env := e ; st_cont := KApp v pi K ; st_lamnf := W ; st_usedvars := L |}
+| red_lam_deepen : forall t x e K W L,
+    env_find W x = None ->
+    red {| st_code := ELam t x ; st_stack := nil ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELazy (t ^ x) ; st_stack := nil ; st_env := e ; st_cont := KUpdateLam t x K ; st_lamnf := W ; st_usedvars := L |}
+| red_cont_app_val : forall v1 v2 pi K e W L,
+    red {| st_code := EVal v1 ; st_stack := nil ; st_env := e ; st_cont := KApp v2 pi K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := EVal (NFStructApp v2 (NFVal v1)) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+| red_cont_app_lam : forall t x body v pi K e W L,
+    env_find W x = Some body ->
+    red {| st_code := ELam t x ; st_stack := nil ; st_env := e ; st_cont := KApp v pi K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := EVal (NFStructApp v (NFLam x body)) ; st_stack := pi ; st_env := e ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+| red_cont_update_lam_val : forall t v x K e W L,
+    red {| st_code := EVal v ; st_stack := nil ; st_env := e ; st_cont := KUpdateLam t x K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELam t x ; st_stack := nil ; st_env := e ; st_cont := K ; st_lamnf := (x, NFVal v) :: W ; st_usedvars := L |}
+| red_cont_update_lam_lam : forall t1 t2 y body x K e W L,
+    env_find W y = Some body ->
+    red {| st_code := ELam t2 y ; st_stack := nil ; st_env := e ; st_cont := KUpdateLam t1 x K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELam t1 x ; st_stack := nil ; st_env := e ; st_cont := K ; st_lamnf := (x, NFLam y body) :: W ; st_usedvars := L |}
+| red_cont_update_lazy_val : forall v x pi e K W L,
+    red {| st_code := EVal v ; st_stack := nil ; st_env := e ; st_cont := KUpdateLazy x pi K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := EVal v ; st_stack := pi ; st_env := update_env e x (EVal v) ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+| red_cont_update_lazy_lam : forall t y x pi e K W L,
+    red {| st_code := ELam t y ; st_stack := nil ; st_env := e ; st_cont := KUpdateLazy x pi K ; st_lamnf := W ; st_usedvars := L |}
+        {| st_code := ELam t y ; st_stack := pi ; st_env := update_env e x (ELam t y) ; st_cont := K ; st_lamnf := W ; st_usedvars := L |}
+.
+
+
+
+Fixpoint read_nfval (v : nfval) :=
+  match v with
+  | NFFreeVar x => fvar x
+  | NFStructApp v1 v2 => app (read_nfval v1) (read_nfval_or_lam v2)
+  end
+
+with read_nfval_or_lam (v : nfval_or_lam) :=
+  match v with
+  | NFVal v => read_nfval v
+  | NFLam x v => lam (closeb 0 x (read_nfval_or_lam v))
+  end.
+
+Definition read_envitem (ei : envitem) :=
+  match ei with
+  | EVal v => read_nfval v
+  | ELam t x => lam t
+  | ELazy t => t
+  end.
+
+Fixpoint read_stack t pi :=
+  match pi with
+  | nil => t
+  | u :: pi => read_stack (app t u) pi
+  end.
+
+Fixpoint read_cont cont t env lamnf :=
+  match cont with
+  | KNil => (t, env, lamnf)
+  | KApp v pi K => read_cont K (read_stack (app (read_nfval v) t) pi) env lamnf
+  | KUpdateLam t2 x K => read_cont K (lam t2) env ((x, lam (closeb 0 x t)) :: lamnf)
+  | KUpdateLazy x pi K => read_cont K (read_stack t pi) ((x, t) :: env) lamnf
+  end.
+
+Definition acyclic_env env :=
+  well_founded (fun y x => exists t, env_find env x = Some t /\ y \in fv t).
+
+
+Lemma acyclic_env_nil :
+  acyclic_env nil.
+Proof.
+  intros x. constructor. intros y [t Ht]. simpl in Ht. destruct Ht; congruence.
+Qed.
+
+Fixpoint read_env env t :=
+  match env with
+  | nil => t
+  | (x, t2) :: env =>
+    (read_env env t) [ x := read_env env t2 ]
+  end.
+
+Lemma acyclic_env_same :
+  forall env1 env2, env1 === env2 -> acyclic_env env1 -> acyclic_env env2.
+Proof.
+  intros env1 env2 Henv H x. specialize (H x).
+  induction H.
+  constructor.
+  intros y [ei Hei].
+  apply H0. exists ei.
+  intuition congruence.
+Qed.
+
+Lemma acyclic_env_same_iff :
+  forall env1 env2, env1 === env2 -> acyclic_env env1 <-> acyclic_env env2.
+Proof.
+  intros env1 env2 Henv. split.
+  - apply acyclic_env_same. assumption.
+  - apply acyclic_env_same. intros x; rewrite Henv; reflexivity.
+Qed.
+
+Global Instance acyclic_env_Proper : Proper (env_same ==> iff) acyclic_env.
+Proof.
+  intros env1 env2. apply acyclic_env_same_iff.
+Qed.
+
+Inductive unique_env {A : Type} : list (freevar * A) -> Prop :=
+| unique_env_nil : unique_env nil
+| unique_env_cons : forall x t env, env_find env x = None -> unique_env env -> unique_env ((x, t) :: env).
+
+
+Definition map_assq {A B C : Type} (f : A -> B -> C) (L : list (A * B)) := map (fun '(x, u) => (x, f x u)) L.
+
+Lemma map_assq_id_forall :
+  forall (A B : Type) (f : A -> B -> B) (L : list (A * B)), Forall (fun '(x, u) => f x u = u) L -> map_assq f L = L.
+Proof.
+  intros A B f L H. induction L as [|[x u] L].
+  - reflexivity.
+  - inversion H; subst.
+    simpl. f_equal.
+    + congruence.
+    + auto.
+Qed.
+
+Lemma Forall_ext_In :
+  forall (A : Type) (P1 P2 : A -> Prop) (L : list A), Forall (fun x => P1 x <-> P2 x) L -> Forall P1 L <-> Forall P2 L.
+Proof.
+  intros. induction L.
+  - split; constructor.
+  - inversion H; subst.
+    rewrite !Forall_cons_iff. tauto.
+Qed.
+
+Lemma Forall_True :
+  forall (A : Type) (P : A -> Prop) (L : list A), (forall x, P x) -> Forall P L.
+Proof.
+  intros. induction L.
+  - constructor.
+  - constructor; auto.
+Qed.
+
+Lemma Forall_ext :
+  forall (A : Type) (P1 P2 : A -> Prop) (L : list A), (forall x, P1 x <-> P2 x) -> Forall P1 L <-> Forall P2 L.
+Proof.
+  intros. apply Forall_ext_In.
+  apply Forall_True. assumption.
+Qed.
+
+Lemma Forall_map_assq :
+  forall (A B C : Type) (f : A -> B -> C) (P : A * C -> Prop) (L : list (A * B)), Forall P (map_assq f L) <-> Forall (fun '(x, u) => P (x, f x u)) L.
+Proof.
+  intros.
+  unfold map_assq.
+  rewrite Forall_map.
+  apply Forall_ext. intros [x u].
+  reflexivity.
+Qed.
+
+Lemma Forall_filter :
+  forall (A : Type) (P : A -> Prop) (f : A -> bool) (L : list A), Forall P (filter f L) <-> Forall (fun x => f x = true -> P x) L.
+Proof.
+  intros. induction L.
+  - simpl. split; constructor.
+  - simpl. destruct (f a) eqn:Hfa.
+    + rewrite !Forall_cons_iff. tauto.
+    + rewrite Forall_cons_iff. intuition congruence.
+Qed.
+
+Lemma env_find_map_assq :
+  forall (B C : Type) (f : freevar -> B -> C) (L : list (freevar * B)) x, env_find (map_assq f L) x = match env_find L x with Some u => Some (f x u) | None => None end.
+Proof.
+  intros B C f L x. induction L as [|[y a] L].
+  - reflexivity.
+  - simpl. destruct freevar_eq_dec.
+    + subst. reflexivity.
+    + assumption.
+Qed.
+
+Print Acc_ind.
+
+Lemma Acc_ind2 (A : Type) (R : A -> A -> Prop) (P : A -> Prop) (H : forall x, (forall y, R y x -> Acc R y) -> (forall y, R y x -> P y) -> (forall y z, R z y -> R y x -> P z) -> P x) (x : A) (a : Acc R x) : P x.
+Proof.
+  enough (P x /\ forall y, R y x -> P y) by tauto.
+  induction a.
+  split; [|intros y Hy; apply H1; assumption].
+  apply H.
+  - assumption.
+  - intros y Hy; apply H1; assumption.
+  - intros y z Hz Hy; apply (H1 y); assumption.
+Qed.
+
+Lemma fv_substf :
+  forall x t u, fv (t [ x := u ]) \subseteq fv t ++ fv u.
+Proof.
+  intros x t u. induction t.
+  - simpl. prove_list_inc.
+  - simpl. destruct freevar_eq_dec; simpl; prove_list_inc.
+  - simpl. assumption.
+  - simpl. rewrite list_inc_app_left.
+    rewrite IHt1, IHt2.
+    split; prove_list_inc.
+Qed.
+
+Lemma fv_substf2 :
+  forall t x u, fv t \subseteq x :: fv (t [ x := u ]).
+Proof.
+  induction t.
+  - intros; simpl in *. prove_list_inc.
+  - intros; simpl in *. destruct freevar_eq_dec.
+    + subst. prove_list_inc.
+    + simpl. prove_list_inc.
+  - intros; simpl in *. apply IHt.
+  - intros; simpl in *.
+    rewrite (IHt1 x u). rewrite (IHt2 x u).
+    prove_list_inc.
+Qed.
+
+Definition list_remove x L := filter (fun y => if freevar_eq_dec x y then false else true) L.
+Lemma list_remove_correct :
+  forall x y L, y \in list_remove x L <-> y \in L /\ x <> y.
+Proof.
+  intros x y L.
+  unfold list_remove. rewrite filter_In.
+  destruct freevar_eq_dec; intuition congruence.
+Qed.
+
+Lemma list_remove_app :
+  forall x L1 L2, list_remove x (L1 ++ L2) = list_remove x L1 ++ list_remove x L2.
+Proof.
+  intros. unfold list_remove. induction L1.
+  - reflexivity.
+  - simpl. destruct freevar_eq_dec; simpl; rewrite IHL1; reflexivity.
+Qed.
+
+Lemma fv_substf3 :
+  forall t x u, list_remove x (fv t) \subseteq fv (t [ x := u ]).
+Proof.
+  induction t.
+  - intros; simpl in *. prove_list_inc.
+  - intros; simpl in *. destruct freevar_eq_dec.
+    + subst. prove_list_inc.
+    + simpl. prove_list_inc.
+  - intros; simpl in *. apply IHt.
+  - intros; simpl in *.
+    rewrite list_remove_app, (IHt1 x u), (IHt2 x u).
+    prove_list_inc.
+Qed.
+
+Lemma fv_substf4 :
+  forall t x u, x \in fv t -> fv u \subseteq fv (t [ x := u ]).
+Proof.
+  induction t.
+  - intros; simpl in *. prove_list_inc.
+  - intros; simpl in *. destruct freevar_eq_dec.
+    + subst. prove_list_inc.
+    + simpl. intuition congruence.
+  - intros; simpl in *. apply IHt. assumption.
+  - intros; simpl in *.
+    destruct (in_dec freevar_eq_dec x (fv t1)).
+    + rewrite (IHt1 x u); [prove_list_inc|assumption].
+    + rewrite (IHt2 x u); [prove_list_inc|].
+      rewrite in_app_iff in H; tauto.
+Qed.
+
+Lemma fv_substf_iff :
+  forall t x y u, y \in fv (t [ x := u ]) <-> (y \in fv t /\ y <> x) \/ (x \in fv t /\ y \in fv u).
+Proof.
+  induction t.
+  - intros; simpl in *; tauto.
+  - intros; simpl in *. destruct freevar_eq_dec.
+    + subst. intuition congruence.
+    + simpl. intuition congruence.
+  - intros; simpl in *; apply IHt.
+  - intros; simpl in *; rewrite !in_app_iff, IHt1, IHt2. tauto.
+Qed.
+
+Lemma acyclic_env_cons1 :
+  forall env x t, unique_env ((x, t) :: env) -> acyclic_env ((x, t) :: env) <-> x \notin fv t /\ acyclic_env (map_assq (fun y t2 => t2 [ x := t ]) env).
+Proof.
+  intros env x t Hunique. split.
+  - intros H.
+    split.
+    + intros Hx. remember x as x0 in Hx. specialize (H x0). revert Heqx0 Hx. induction H.
+      intros Heq Hx; subst.
+      apply (H0 x); try tauto.
+      exists t. simpl. destruct freevar_eq_dec; intuition.
+    + intros y.
+      specialize (H y).
+      refine (Acc_ind2 _ _ _ _ _ H). clear H y. intros y Hacc Hrec1 Hrec2.
+      constructor. intros z [u [Hu1 Hu2]].
+      rewrite env_find_map_assq in Hu1.
+      destruct (env_find env y) eqn:Hy; [injection Hu1; intro; subst|congruence].
+      destruct (in_dec freevar_eq_dec z (fv t0)).
+      * apply Hrec1. exists t0. split; [|assumption].
+        simpl. destruct freevar_eq_dec; [|assumption].
+        inversion Hunique; subst. congruence.
+      * apply (Hrec2 x).
+        -- exists t. simpl. destruct freevar_eq_dec; [|congruence].
+           split; [reflexivity|]. rewrite fv_substf, in_app_iff in Hu2. tauto.
+        -- exists t0. split; [|destruct (in_dec freevar_eq_dec x (fv t0)); [assumption|rewrite substf_fv in Hu2; tauto]].
+           simpl. destruct freevar_eq_dec; [|assumption].
+           subst. inversion Hunique. congruence.
+  - intros [H1 H2].
+    enough (forall y, x <> y -> Acc (fun y0 x0 => exists t0, env_find ((x, t) :: env) x0 = Some t0 /\ y0 \in fv t0) y).
+    + intros y. destruct (freevar_eq_dec x y); [subst|apply H; assumption].
+      constructor. intros z [u [Hu1 Hu2]].
+      simpl in Hu1. destruct freevar_eq_dec; [|congruence]. injection Hu1; intro; subst.
+      apply H. congruence.
+    + intros y Hy. specialize (H2 y).
+      induction H2.
+      constructor.
+      intros y [u [Hu1 Hu2]].
+      simpl in Hu1; destruct freevar_eq_dec; [congruence|].
+      destruct (freevar_eq_dec x y).
+      * subst. constructor.
+        intros z [v [Hv1 Hv2]]. 
+        simpl in Hv1. destruct freevar_eq_dec; [|congruence]. injection Hv1; intro; subst.
+        apply H0; [|congruence].
+        exists (u [ y := v ]). rewrite env_find_map_assq, Hu1. split; [reflexivity|].
+        rewrite <- fv_substf4; assumption.
+      * apply H0; [|assumption]. exists (u [ x := t ]). rewrite env_find_map_assq, Hu1.
+        split; [reflexivity|]. rewrite <- fv_substf3, list_remove_correct; tauto.
+Qed.
+
+Lemma list_length_ind (A : Type) (P : list A -> Prop) (H0 : P nil) (HS : forall x L, (forall L2, length L = length L2 -> P L2) -> P (x :: L)) : forall L, P L.
+Proof.
+  intros L. remember (length L) as n. revert L Heqn. induction n.
+  - intros L. destruct L.
+    + intros; apply H0.
+    + simpl; intros; congruence.
+  - intros L. destruct L.
+    + simpl; intros; congruence.
+    + simpl; intros H; injection H; intros; subst. apply HS. apply IHn.
+Qed.
+
+Lemma unique_env_map_assq :
+  forall (A B : Type) (f : freevar -> A -> B) env, unique_env (map_assq f env) <-> unique_env env.
+Proof.
+  intros A B f env. induction env as [|[x u] env].
+  - simpl. split; constructor.
+  - simpl. split; intros H; constructor; inversion H; subst.
+    + rewrite env_find_map_assq in H2; destruct env_find; congruence.
+    + tauto.
+    + rewrite env_find_map_assq, H2; reflexivity.
+    + tauto.
+Qed.
+
+
+Lemma substf_substf :
+  forall t x1 x2 u1 u2, x1 <> x2 -> x1 \notin fv u2 -> t [ x1 := u1 ] [ x2 := u2 ] = t [ x2 := u2 ] [ x1 := u1 [ x2 := u2 ] ].
+Proof.
+  induction t.
+  - intros; simpl in *; reflexivity.
+  - intros; simpl in *.
+    repeat (destruct freevar_eq_dec; simpl in * ); try congruence.
+    rewrite substf_fv; auto.
+  - intros; simpl in *; f_equal; auto.
+  - intros; simpl in *; f_equal; auto.
+Qed.
+
+Lemma acyclic_env_cons2_weak :
+  forall env x t, env_find env x = None -> acyclic_env ((x, t) :: env) -> acyclic_env env.
+Proof.
+  intros env x t Hx H y. specialize (H y). induction H.
+  constructor. intros y [u [Hu1 Hu2]].
+  apply H0. exists u. simpl.
+  destruct freevar_eq_dec; [congruence|].
+  split; assumption.
+Qed.
+
+Lemma unique_env_inv :
+  forall {A : Type} (env : list (freevar * A)) x t, unique_env ((x, t) :: env) -> unique_env env /\ env_find env x = None.
+Proof.
+  intros A env x t H; inversion H; subst; tauto.
+Qed.
+
+Lemma unique_env_inv_iff :
+  forall {A : Type} (env : list (freevar * A)) x t, unique_env ((x, t) :: env) <-> unique_env env /\ env_find env x = None.
+Proof.
+  intros. split.
+  - apply unique_env_inv.
+  - intros [? ?]; constructor; assumption.
+Qed.
+
+Lemma map_assq_compose :
+  forall {A B C D : Type} (f : A -> B -> C) (g : A -> C -> D) L, map_assq g (map_assq f L) = map_assq (fun x u => g x (f x u)) L.
+Proof.
+  intros. unfold map_assq. rewrite map_map. apply map_ext.
+  intros [? ?]; simpl; reflexivity.
+Qed.
+
+Lemma map_assq_length :
+  forall {A B C : Type} (f : A -> B -> C) L, length (map_assq f L) = length L.
+Proof.
+  intros; unfold map_assq; rewrite map_length; reflexivity.
+Qed.
+
+Lemma map_assq_ext :
+  forall {A B C : Type} (f g : A -> B -> C) L, (forall x u, f x u = g x u) -> map_assq f L = map_assq g L.
+Proof.
+  intros; unfold map_assq; apply map_ext; intros [? ?]; f_equal; auto.
+Qed.
+
+Lemma substf_exchange :
+  forall t u v x y, x <> y -> x \notin fv v \/ y \notin fv u -> t [ x := u ] [ y := v [ x := u ] ] = t [ y := v ] [ x := u [ y := v ] ].
+Proof.
+  intros t u v x y Hxy [Hx | Hy].
+  - rewrite substf_fv with (x := x) (t := v) by assumption.
+    rewrite substf_substf with (u1 := u) by assumption. reflexivity.
+  - rewrite substf_fv with (x := y) (t := u) by assumption.
+    rewrite substf_substf with (u1 := v) by congruence.
+    reflexivity.
+Qed.
+
+Lemma read_env_cons2 :
+  forall env t u x, unique_env ((x, u) :: env) -> acyclic_env ((x, u) :: env) -> read_env ((x, u) :: env) t = read_env (map_assq (fun _ t2 => t2 [ x := u ]) env) (t [ x := u ]).
+Proof.
+  simpl.
+  refine (list_length_ind _ _ _ _).
+  - intros t u x Hunique Hcycle. simpl. reflexivity.
+  - intros [y v] env Hrec t u x Hunique Hcycle. simpl.
+    rewrite !(Hrec env ltac:(reflexivity) _ _ y) by (apply unique_env_inv in Hunique; apply acyclic_env_cons2_weak in Hcycle; tauto).
+    rewrite !(Hrec (map_assq _ env) ltac:(rewrite map_assq_length; reflexivity) _ _ _).
+    + rewrite !map_assq_compose.
+      assert (x <> y /\ (x \notin fv v \/ y \notin fv u)).
+      assert (Hxy : x <> y) by (destruct (unique_env_inv _ _ _ Hunique) as [_ Hx]; simpl in Hx; destruct freevar_eq_dec; congruence).
+      * split; [assumption|].
+        destruct (in_dec freevar_eq_dec x (fv v)) as [Hx | Hx]; [|tauto]. right. intro Hy.
+        remember x as x0 in Hx. specialize (Hcycle x0). revert Hx Heqx0.
+        refine (Acc_ind2 _ _ (fun x0 => x0 \in fv v -> x0 <> x) _ x0 Hcycle).
+        intros x1 H1 H2 H3 Hfv Heq. subst. apply (H3 y x).
+        -- exists v. simpl. repeat (destruct freevar_eq_dec; try congruence). split; auto.
+        -- exists u. simpl. destruct freevar_eq_dec; [|congruence]. split; auto.
+        -- assumption.
+        -- reflexivity.
+      * f_equal; [|apply substf_exchange; intuition congruence].
+        apply map_assq_ext.
+        intros _ t2. apply substf_exchange; intuition congruence.
+    + destruct (unique_env_inv _ _ _ Hunique) as [Hunique2 Hx].
+      eapply unique_env_map_assq in Hunique2; exact Hunique2.
+    + rewrite acyclic_env_cons1 in Hcycle by assumption. apply Hcycle.
+    + destruct (unique_env_inv _ _ _ Hunique) as [Hunique2 Hx].
+      destruct (unique_env_inv _ _ _ Hunique2) as [Hunique3 Hy].
+      constructor.
+      * simpl in Hx; destruct freevar_eq_dec; [congruence|].
+        rewrite env_find_map_assq, Hx; reflexivity.
+      * rewrite unique_env_map_assq. assumption.
+    + assert (Hcycle2 : acyclic_env ((y, v) :: (x, u) :: env)).
+      * eapply acyclic_env_same; [|eassumption].
+        intros z; simpl; repeat destruct freevar_eq_dec; subst; try reflexivity.
+        destruct (unique_env_inv _ _ _ Hunique) as [_ Hy].
+        simpl in Hy; destruct freevar_eq_dec; congruence.
+      * rewrite acyclic_env_cons1 in Hcycle2; [apply Hcycle2|].
+        destruct (unique_env_inv _ _ _ Hunique) as [Hunique2 Hx].
+        destruct (unique_env_inv _ _ _ Hunique2) as [Hunique3 Hy].
+        simpl in Hx; destruct freevar_eq_dec; [congruence|].
+        constructor; [|constructor; assumption].
+        simpl. destruct freevar_eq_dec; congruence.
+Qed.
+
+(*
+Lemma read_env_substf1 :
+  forall env t u x, env_find env x = None -> unique_env env -> acyclic_env (map_assq (fun _ t2 => t2 [ x := u ]) env) ->
+               read_env (map_assq (fun _ t2 => t2 [ x := u ]) env) (t [ x := u ]) = read_env env t [ x := read_env env u ].
+Proof.
+  induction env as [|[y v] env]; intros t u x Hx Hunique Hcycle.
+  - simpl. reflexivity.
+  - simpl in *.
+    destruct freevar_eq_dec; [congruence|].
+    destruct (unique_env_inv _ _ _ Hunique) as [Hunique2 Hy].
+    assert (Hcycle2 := acyclic_env_cons2_weak _ _ _ ltac:(rewrite env_find_map_assq, Hy; reflexivity) Hcycle). 
+    rewrite acyclic_env_cons1 in Hcycle by (constructor; [rewrite env_find_map_assq, Hy; reflexivity|apply unique_env_map_assq; assumption]).
+    rewrite !IHenv by tauto.
+    rewrite fv_substf_iff in Hx2.
+    destruct (in_dec freevar_eq_dec y (fv (read_env (map_assq (fun _ t2 => t2 [ x := u ]) env) (t [ x := u ])))).
+    + assert (Heq1 := IHenv t u x Hx1 ltac:(tauto)).
+      assert (Heq2 := IHenv v u x Hx1 ltac:(tauto)).
+      rewrite Heq1, Heq2 in *.
+      rewrite fv_substf_iff in i; destruct i as [[Hy1 Hy2] | [Hx3 Hy]].
+      * admit.
+      * admit.
+    + rewrite substf_fv with (x := y); [|assumption].
+      assert (Heq := IHenv t u x Hx1 ltac:(tauto)).
+      rewrite Heq in *.
+      rewrite fv_substf_iff in n0.
+      rewrite substf_fv with (x := y) (t := read_env env t) by intuition congruence.
+      destruct (in_dec freevar_eq_dec x (fv (read_env env t))).
+      * rewrite substf_fv with (x := y) by tauto. reflexivity.
+      * rewrite !substf_fv with (x := x) by tauto. reflexivity.
+Admitted.
+*)
+
+Lemma acyclic_env_cons2 :
+  forall env x t, unique_env ((x, t) :: env) -> acyclic_env ((x, t) :: env) <-> x \notin fv (read_env env t) /\ acyclic_env env.
+Proof.
+  refine (list_length_ind _ _ _ _); [|intros [y u] env Hrec]; intros x t Hunique.
+  - simpl. rewrite acyclic_env_cons1; simpl; [reflexivity|].
+    assumption.
+  - transitivity (acyclic_env ((y, u) :: (x, t) :: env)).
+    + apply acyclic_env_same_iff. intros z.
+      simpl. repeat destruct freevar_eq_dec; subst; try congruence.
+      inversion Hunique; subst; simpl in *. destruct freevar_eq_dec; congruence.
+    + destruct (unique_env_inv _ _ _ Hunique) as [Hunique2 Hx].
+      destruct (unique_env_inv _ _ _ Hunique2) as [Hunique3 Hy].
+      simpl in Hx; destruct freevar_eq_dec as [Hxy | Hxy]; [congruence|].
+      assert (Hunique4 : unique_env ((x, t) :: env)) by (constructor; assumption).
+      assert (Hunique5 : unique_env ((y, u) :: (x, t) :: env)) by (constructor; [simpl; destruct freevar_eq_dec; congruence | assumption]).
+      rewrite !acyclic_env_cons1 with (x := y) by assumption.
+      simpl. rewrite Hrec.
+      * split; intros H.
+        -- split; [|tauto].
+           enough (x \notin fv (read_env ((y, u) :: env) t)) by assumption.
+           rewrite read_env_cons2; [apply H|assumption|].
+           rewrite acyclic_env_cons1; tauto.
+        -- split; [tauto|]. split; [|tauto].
+           rewrite <- read_env_cons2; [apply H|assumption|].
+           rewrite acyclic_env_cons1; tauto.
+      * unfold map_assq. rewrite map_length. reflexivity.
+      * apply <- (unique_env_map_assq _ _ (fun _ t2 => t2 [ y := u ]) ((x, t) :: env)).
+        inversion Hunique; subst. inversion H3; subst. simpl in *.
+        destruct freevar_eq_dec; [congruence|].
+        constructor; assumption.
+Qed.
+
+Lemma read_env_cons_mid :
+  forall env1 env2 x t1 t2, unique_env (env1 ++ (x, t1) :: env2) -> acyclic_env (env1 ++ (x, t1) :: env2) -> read_env (env1 ++ (x, t1) :: env2) t2 = read_env (env1 ++ env2) t2 [ x := read_env (env1 ++ env2) t1 ].
+Proof.
+  induction env1 as [|[y t3] env1].
+  - intros; simpl; reflexivity.
+  - intros env2 x t1 t2 Hunique Hcycle. simpl.
+    simpl in Hcycle. rewrite acyclic_env_cons2 in Hcycle by assumption.
+    simpl in Hunique. destruct (unique_env_inv _ _ _ Hunique) as [Hunique2 Hy].
+    rewrite !IHenv1 in * by tauto.
+    assert (Hxy : x <> y) by (rewrite env_find_app in Hy; destruct (env_find env1 y); [congruence|]; simpl in Hy; destruct freevar_eq_dec; congruence).
+    apply substf_exchange; [assumption|].
+    rewrite fv_substf_iff in Hcycle.
+    destruct (in_dec freevar_eq_dec x (fv (read_env (env1 ++ env2) t3))); intuition congruence.
+Qed.
+
+Lemma unique_env_cons_mid_iff :
+  forall {A : Type} (env1 env2 : list (freevar * A)) x t, unique_env (env1 ++ (x, t) :: env2) <-> unique_env (env1 ++ env2) /\ env_find (env1 ++ env2) x = None.
+Proof.
+  intros A; induction env1 as [|[y u] env1]; intros env2 x t.
+  - simpl. rewrite unique_env_inv_iff. reflexivity.
+  - simpl. rewrite !unique_env_inv_iff.
+    rewrite IHenv1, !env_find_app; simpl in *.
+    repeat destruct env_find; repeat destruct freevar_eq_dec; intuition congruence.
+Qed.
+
+Lemma unique_env_cons_mid :
+  forall {A : Type} (env1 env2 : list (freevar * A)) x t, unique_env (env1 ++ (x, t) :: env2) -> unique_env (env1 ++ env2) /\ env_find (env1 ++ env2) x = None.
+Proof.
+  intros. rewrite <- unique_env_cons_mid_iff. eassumption.
+Qed.
+
+Lemma env_find_exists :
+  forall {A : Type} (env : list (freevar * A)) x t, env_find env x = Some t -> exists env1 env2, env = env1 ++ (x, t) :: env2.
+Proof.
+  intros. induction env as [|[y u] env].
+  - simpl in *. congruence.
+  - simpl in *. destruct freevar_eq_dec.
+    + exists nil. exists env. simpl. congruence.
+    + destruct (IHenv H) as (env1 & env2 & IH).
+      exists ((y, u) :: env1). exists env2.
+      rewrite IH. reflexivity.
+Qed.
+
+Lemma read_env_same :
+  forall env1 env2 t, env1 === env2 -> unique_env env1 -> unique_env env2 -> acyclic_env env1 -> read_env env1 t = read_env env2 t.
+Proof.
+  induction env1 as [|[x t1] env1]; intros env2 t Henv Hunique1 Hunique2 Hcycle.
+  - destruct env2 as [|[y t2] env2].
+    + reflexivity.
+    + specialize (Henv y); simpl in Henv.
+      destruct freevar_eq_dec; congruence.
+  - simpl.
+    assert (Hfind := Henv x).
+    simpl in Hfind. destruct freevar_eq_dec; [|congruence]. symmetry in Hfind.
+    apply env_find_exists in Hfind. destruct Hfind as (env2a & env2b & Henv2).
+    rewrite Henv2, read_env_cons_mid.
+    rewrite Henv2 in Hunique2.
+    destruct (unique_env_cons_mid _ _ _ _ Hunique2) as [Hunique2a Hx].
+    + rewrite !IHenv1 with (env2 := env2a ++ env2b).
+      * reflexivity.
+      * intros y. specialize (Henv y).
+        rewrite Henv2, env_find_app in Henv; simpl in Henv.
+        destruct freevar_eq_dec.
+        -- subst. apply unique_env_inv in Hunique1. intuition congruence.
+        -- rewrite env_find_app. assumption.
+      * apply unique_env_inv in Hunique1; tauto.
+      * assumption.
+      * apply acyclic_env_cons2_weak in Hcycle; [assumption | apply unique_env_inv in Hunique1; tauto].
+      * intros y. specialize (Henv y).
+        rewrite Henv2, env_find_app in Henv; simpl in Henv.
+        destruct freevar_eq_dec.
+        -- subst. apply unique_env_inv in Hunique1. intuition congruence.
+        -- rewrite env_find_app. assumption.
+      * apply unique_env_inv in Hunique1; tauto.
+      * assumption.
+      * apply acyclic_env_cons2_weak in Hcycle; [assumption | apply unique_env_inv in Hunique1; tauto].
+    + rewrite <- Henv2; assumption.
+    + rewrite <- Henv2.
+      eapply acyclic_env_same; eassumption.
+Qed.
+
+
+(*
+Inductive read_env env : term -> term -> Prop :=
+| read_env_app : forall t u t2 u2, read_env env t t2 -> read_env env u u2 -> read_env env (app t u) (app t2 u2)
+| read_env_lam : forall t t2 L, (forall x, x \notin L -> read_env env (t ^ x) (t2 ^ x)) -> read_env env (lam t) (lam t2)
+| read_env_fvar_free : forall x, env_find env x = None -> read_env env (fvar x) (fvar x)
+| read_env_fvar_bound : forall x t t2, env_find env x = Some t -> read_env env t t2 -> read_env env (fvar x) t2.
+
+Lemma read_env_unique :
+  forall env t t2 t3, read_env env t t2 -> read_env env t t3 -> t2 = t3.
+Proof.
+  intros env t t2 t3 H2. revert t3. induction H2; intros t3 H3; inversion H3.
+  - f_equal; auto.
+  - f_equal. pick x \notin (L ++ L0 ++ fv t1 ++ fv t2) as Hx; rewrite !in_app_iff in *.
+    specialize (H2 x ltac:(tauto)).
+    specialize (H0 x ltac:(tauto) _ H2).
+    erewrite <- close_open with (t := t2), H0, close_open; tauto.
+  - reflexivity.
+  - congruence.
+  - congruence.
+  - subst. apply IHread_env. congruence.
+Qed.
+
+(*
+Definition read_state st t2 :=
+  let '(t, env, lamnf) :=
+      read_cont (st_cont st)
+                (read_stack (read_envitem (st_code st)) (st_stack st))
+                (map (fun '(x, ei) => (x, read_envitem ei)) (st_env st))
+                (map (fun '(x, nf) => (x, lam (closeb 0 x (read_nfval_or_lam nf)))) (st_lamnf st))
+  in
+  read_env env t t2.
+ *)
+
+Inductive read_env_envitem env : envitem -> term -> Prop :=
+| read_env_envitem_val : forall v, read_env_envitem env (EVal v) (read_nfval v)
+| read_env_envitem_lam : forall t t2 x, read_env env (lam t) (lam t2) -> read_env_envitem env (ELam t x) (lam t2)
+| read_env_envitem_lazy : forall t t2, read_env env t t2 -> read_env_envitem env (ELazy t) t2.
+
+Inductive read_stack_env env : term -> list term -> term -> Prop :=
+| read_stack_env_nil : forall t, read_stack_env env t nil t
+| read_stack_env_cons : forall t1 t2 t3 t4 pi, read_env env t1 t2 -> read_stack_env env (app t3 t2) pi t4 -> read_stack_env env t3 (t1 :: pi) t4.
+
+Definition read_env2 env L t1 t2 :=
+  read_env (map_assq (fun x ei => read_envitem ei) (filter (fun '(x, ei) => if in_dec freevar_eq_dec x L then true else match ei with ELazy _ => false | _ => true end) env)) t1 t2.
+
+*)
+
+Definition read_env_envitem env ei :=
+  match ei with
+  | EVal v => read_nfval v
+  | ELam t x => read_env env (lam t)
+  | ELazy t => read_env env t
+  end.
+
+Fixpoint read_stack_env env t pi :=
+  match pi with
+  | nil => t
+  | t2 :: pi => read_stack_env env (app t (read_env env t2)) pi
+  end.
+
+
+Lemma env_find_update_env :
+  forall {A : Type} (e : list (freevar * A)) x y v, env_find (update_env e x v) y = if freevar_eq_dec x y then Some v else env_find e y.
+Proof.
+  intros. induction e as [|[z u] e].
+  - simpl. repeat (destruct freevar_eq_dec); congruence.
+  - simpl. repeat (destruct freevar_eq_dec; simpl); congruence.
+Qed.
+
+Lemma update_env_same :
+  forall {A : Type} (e : list (freevar * A)) x v, update_env e x v === (x, v) :: e.
+Proof.
+  intros A e x v y. simpl.
+  rewrite env_find_update_env.
+  repeat destruct freevar_eq_dec; congruence.
+Qed.
+
+Lemma update_env_unique :
+  forall {A : Type} (env : list (freevar * A)) x v, unique_env env -> unique_env (update_env env x v).
+Proof.
+  intros. induction env as [|[y u] env].
+  - simpl. constructor; [reflexivity|constructor].
+  - simpl. destruct freevar_eq_dec.
+    + subst. inversion H; constructor; assumption.
+    + inversion H; subst. constructor.
+      * rewrite env_find_update_env.
+        destruct freevar_eq_dec; congruence.
+      * auto.
+Qed.
+
+Fixpoint uniquify_env {A : Type} (env : list (freevar * A)) :=
+  match env with
+  | nil => nil
+  | (y, u) :: env => (y, u) :: filter (fun '(x, v) => if freevar_eq_dec x y then false else true) (uniquify_env env)
+  end.
+
+
+Lemma env_find_filter_unique :
+  forall (A : Type) (env : list (freevar * A)) P x, unique_env env -> env_find (filter P env) x = match env_find env x with Some u => if P (x, u) then Some u else None | None => None end.
+Proof.
+  intros A env P x Hunique. induction env as [|[y u] env].
+  - reflexivity.
+  - simpl in *. destruct (P (y, u)) eqn:HP; simpl.
+    + destruct freevar_eq_dec.
+      * subst. rewrite HP; simpl. reflexivity.
+      * apply IHenv. inversion Hunique; assumption.
+    + destruct freevar_eq_dec.
+      * subst. rewrite HP; simpl.
+        inversion Hunique; subst.
+        rewrite IHenv, H1; auto.
+      * apply IHenv. inversion Hunique; assumption.
+Qed.
+
+Lemma unique_env_filter :
+  forall (A : Type) (env : list (freevar * A)) P, unique_env env -> unique_env (filter P env).
+Proof.
+  intros A env P H. induction H.
+  - constructor.
+  - simpl. destruct (P (x, t)).
+    + constructor.
+      * rewrite env_find_filter_unique by assumption.
+        rewrite H; reflexivity.
+      * assumption.
+    + assumption.
+Qed.
+
+Lemma uniquify_env_unique :
+  forall (A : Type) (env : list (freevar * A)), unique_env (uniquify_env env).
+Proof.
+  intros. induction env as [|[y u] env].
+  - simpl. constructor.
+  - simpl. constructor.
+    + rewrite env_find_filter_unique by assumption.
+      destruct freevar_eq_dec; destruct env_find; congruence.
+    + apply unique_env_filter. assumption.
+Qed.
+
+Lemma uniquify_env_same :
+  forall (A : Type) (env : list (freevar * A)), uniquify_env env === env.
+Proof.
+  intros. induction env as [|[y u] env].
+  - simpl. reflexivity.
+  - simpl. intros x. simpl.
+    destruct freevar_eq_dec.
+    + reflexivity.
+    + rewrite env_find_filter_unique by (apply uniquify_env_unique).
+      rewrite IHenv. destruct env_find; [|reflexivity].
+      destruct freevar_eq_dec; congruence.
+Qed.
+
+(*
+Definition read_env2 env L t :=
+  read_env (map_assq (fun x ei => read_envitem ei) (filter (fun '(x, ei) => if in_dec freevar_eq_dec x L then true else match ei with ELazy _ => false | _ => true end) (uniquify_env env))) t.
+
+*)
+
+Definition read_env2 env t :=
+  read_env (map_assq (fun x ei => read_envitem ei) (filter (fun '(x, ei) => match ei with ELazy _ => false | _ => true end) (uniquify_env env))) t.
+
+Inductive read_env3 env : term -> term -> Prop :=
+| read_env3_app : forall t1 t2 t3 t4, read_env3 env t1 t2 -> read_env3 env t3 t4 -> read_env3 env (app t1 t3) (app t2 t4)
+| read_env3_lam : forall L t1 t2, (forall x, x \notin L -> read_env3 env (t1 ^ x) (t2 ^ x)) -> read_env3 env (lam t1) (lam t2)
+| read_env3_fvar_free : forall x, env_find env x = None -> read_env3 env (fvar x) (fvar x)
+| read_env3_fvar_bound : forall x ei t, env_find env x = Some ei -> read_env3 env (read_envitem ei) t -> read_env3 env (fvar x) t
+| read_env3_fvar_lazy : forall x t, env_find env x = Some (ELazy t) -> read_env3 env (fvar x) (fvar x).
+
+
+(*
+Lemma read_env2_cons_lazy :
+  forall env L t1 t2 x t, read_env2 ((x, ELazy t) :: env) L t1 t2 <-> read_env2 env L (t1 [ x := t ]) t2.
+
+Lemma read_env_lc :
+  forall env t1 t2, read_env env t1 t2 -> lc t1 /\ lc t2.
+Proof.
+  intros env t1 t2 H. induction H.
+  - split; constructor; tauto.
+  - split; econstructor; apply H0.
+  - split; constructor.
+  - split; [constructor | tauto].
+Qed.
+*)
+
+(*
+Lemma read_env_subst :
+  forall env t1 t2 x t3 t4, env_find env x = None -> read_env env t1 t2 -> read_env (map_assq (fun y t => t [ x := t3 ]) env) t3 t4 ->
+                       read_env (map_assq (fun y t => t [ x := t3 ]) env) (t1 [ x := t3 ]) (t2 [ x := t4 ]).
+Proof.
+  intros env t1 t2 x t3 t4 Hx Hread1 Hread2. induction Hread1.
+  - simpl. constructor; assumption.
+  - simpl. apply read_env_lam with (L := x :: L).
+    intros y Hy.
+    rewrite !substf_substb_free by ((simpl in *; intuition congruence) || (apply read_env_lc in Hread2; tauto)).
+    apply H0. simpl in *; tauto.
+  - simpl. destruct freevar_eq_dec.
+    + assumption.
+    + constructor. rewrite env_find_map_assq, H. reflexivity.
+  - simpl.
+    destruct freevar_eq_dec.
+    + congruence.
+    + econstructor.
+      * rewrite env_find_map_assq, H. reflexivity.
+      * assumption.
+Qed.
+*)
+
+Fixpoint env_fv env :=
+  match env with
+  | nil => nil
+  | (x, t) :: env => x :: fv t ++ env_fv env
+  end.
+
+Lemma env_fv_inc :
+  forall env, Forall (fun '(x, t) => x :: fv t \subseteq env_fv env) env.
+Proof.
+  induction env as [|[x t] env].
+  - constructor.
+  - constructor.
+    + simpl. prove_list_inc.
+    + simpl. eapply Forall_impl; [|eassumption].
+      intros [x1 t1]. intros H; rewrite H; prove_list_inc.
+Qed.
+
+Lemma env_find_fv_None :
+  forall env x, x \notin env_fv env -> env_find env x = None.
+Proof.
+  intros env x Hx.
+  induction env as [|[y t] env].
+  - reflexivity.
+  - simpl in *. destruct freevar_eq_dec.
+    + subst. tauto.
+    + rewrite in_app_iff in *. tauto.
+Qed.
+
+(*
+Lemma read_env_read_env2 :
+  forall env t1 t2, read_env (map_assq (fun x ei => read_envitem ei) env) t1 t2 -> forall L, exists t3, read_env2 env L t1 t3.
+Proof.
+  intros env t1 t2 H.
+  remember (map (fun x ei => read_envitem ei) env) as env2. revert Heqenv2.
+  induction H; intro; subst.
+  - intros L.
+    destruct (IHread_env1 (eq_refl _) L) as [t3 Ht3].
+    destruct (IHread_env2 (eq_refl _) L) as [u3 Hu3].
+    exists (app t3 u3).
+    constructor; assumption.
+  - intros L1.
+    pick x \notin (L ++ fv t ++ env_fv (map_assq (fun x ei => read_envitem ei) env)) as Hx; rewrite !in_app_iff in Hx.
+    destruct (H0 x ltac:(tauto) (eq_refl _) L1) as [t3 Ht3].
+    exists (lam (closeb 0 x t3)).
+    apply read_env_lam with (L := L ++ fv t ++ env_fv (map_assq (fun x ei => read_envitem ei) env)).
+    intros y Hy; rewrite !in_app_iff in Hy.
+    rewrite open_close by (constructor || apply read_env_lc in Ht3; tauto).
+    match goal with [ |- read_env ?env _ _ ] => remember env as env2 end.
+    assert (Hsub := read_env_subst env2 (t ^ x) t3 x (fvar y) (fvar y)).
+    rewrite map_assq_id_forall in Hsub.
+    + rewrite <- substb_is_substf in Hsub by tauto.
+      apply Hsub.
+      * rewrite Heqenv2, env_find_map_assq.
+        admit.
+      * subst. assumption.
+      * constructor.
+        rewrite Heqenv2, env_find_map_assq.
+        admit.
+    + rewrite Heqenv2.
+      enough (Forall (fun '(_, u) => u [ x := fvar y ] = u) (map_assq (fun _ u => read_envitem u) env)).
+      { rewrite Forall_map_assq, Forall_filter in *. eapply Forall_impl; [|eassumption]. intros [z u]; auto. }
+      eapply Forall_impl; [|apply env_fv_inc].
+      intros [z u] Hfv. simpl in *.
+      apply substf_fv. firstorder.
+  - intros L.
+    exists (fvar x). constructor.
+    rewrite env_find_map_assq in *.
+    admit.
+  - intros L.
+    admit.
+Admitted.
+ *)
+
+Inductive in_fv_rec env : freevar -> term -> Prop :=
+| in_fv_rec_in : forall x t, x \in fv t -> in_fv_rec env x t
+| in_fv_rec_env : forall x y t1 t2, y \in fv t1 -> env_find env y = Some t2 -> in_fv_rec env x (read_envitem t2) -> in_fv_rec env x t1.
+
+Lemma in_fv_rec_same :
+  forall env1 env2 x t, env1 === env2 -> in_fv_rec env1 x t -> in_fv_rec env2 x t.
+Proof.
+  intros env1 env2 x t Henv12 H. induction H.
+  - apply in_fv_rec_in. assumption.
+  - rewrite Henv12 in *; eapply in_fv_rec_env; eassumption.
+Qed.
+
+Lemma in_fv_rec_same_iff :
+  forall env1 env2 x t, env1 === env2 -> in_fv_rec env1 x t <-> in_fv_rec env2 x t.
+Proof.
+  intros; split.
+  - apply in_fv_rec_same; assumption.
+  - apply in_fv_rec_same; intuition congruence.
+Qed.
+
+Global Instance in_fv_rec_Proper : Proper (env_same ==> eq ==> eq ==> iff) in_fv_rec.
+Proof.
+  intros env1 env2 H12 x1 x2 -> t1 t2 ->.
+  apply in_fv_rec_same_iff. assumption.
+Qed.
+
+Lemma in_fv_rec_cons :
+  forall env x y ei t, env_find env x = None -> in_fv_rec ((x, ei) :: env) y t <-> (in_fv_rec env y t \/ (in_fv_rec env x t /\ in_fv_rec env y (read_envitem ei))).
+Proof.
+  intros env x y ei t Hx. split.
+  - intros H. induction H.
+    + left. apply in_fv_rec_in. assumption.
+    + simpl in H0. destruct freevar_eq_dec.
+      * subst. injection H0; intro; subst.
+        right. split; [|tauto].
+        apply in_fv_rec_in. assumption.
+      * destruct IHin_fv_rec as [? | [? ?]]; [left; eapply in_fv_rec_env; eassumption|right].
+        split; [|assumption].
+        eapply in_fv_rec_env; eassumption.
+  - intros [H | [H1 H2]].
+    + induction H.
+      * apply in_fv_rec_in. assumption.
+      * eapply in_fv_rec_env; try eassumption.
+        simpl. destruct freevar_eq_dec; congruence.
+    + induction H1.
+      * eapply in_fv_rec_env; [eassumption|simpl; destruct freevar_eq_dec; [reflexivity|congruence]|].
+        induction H2.
+        -- apply in_fv_rec_in. assumption.
+        -- eapply in_fv_rec_env; try eassumption. simpl.
+           destruct freevar_eq_dec; [congruence|assumption].
+      * eapply in_fv_rec_env; [eassumption| |apply IHin_fv_rec; assumption].
+        simpl. destruct freevar_eq_dec; [congruence|assumption].
+Qed.
+
+Lemma in_fv_rec_dec_list_unique :
+  forall env t, unique_env env -> { L | forall x, in_fv_rec env x t <-> x \in L }.
+Proof.
+  induction env as [|[y ei] env].
+  - intros t Hunique. exists (fv t). intros x.
+    split; intros H.
+    + inversion H; subst; simpl in *; [assumption|congruence].
+    + apply in_fv_rec_in. assumption.
+  - intros t Hunique.
+    destruct (IHenv t) as [L HL]; [inversion Hunique; auto|].
+    destruct (in_dec freevar_eq_dec y L).
+    + destruct (IHenv (read_envitem ei)) as [L2 HL2]; [inversion Hunique; auto|].
+      exists (L ++ L2). intros x.
+      rewrite in_fv_rec_cons, in_app_iff, !HL, HL2; [tauto|].
+      inversion Hunique; tauto.
+    + exists L. intros x.
+      rewrite in_fv_rec_cons, !HL; [tauto|].
+      inversion Hunique; tauto.
+Qed.
+
+Lemma in_fv_rec_dec_list :
+  forall env t, { L | forall x, in_fv_rec env x t <-> x \in L }.
+Proof.
+  intros env t.
+  destruct (in_fv_rec_dec_list_unique (uniquify_env env) t (uniquify_env_unique _ env)) as [L HL].
+  exists L. intros x; specialize (HL x).
+  rewrite uniquify_env_same in HL. assumption.
+Qed.
+
+Lemma in_fv_rec_dec :
+  forall env t x, { in_fv_rec env x t } + { ~ in_fv_rec env x t }.
+Proof.
+  intros env t x.
+  destruct (in_fv_rec_dec_list env t) as [L HL].
+  destruct (in_dec freevar_eq_dec x L).
+  - left. rewrite HL; assumption.
+  - right. rewrite HL; assumption.
+Qed.
+
+Lemma in_fv_rec_list :
+  forall env t, exists L, forall x, in_fv_rec env x t <-> x \in L.
+Proof.
+  intros env t.
+  destruct (in_fv_rec_dec_list env t) as [L HL].
+  exists L. assumption.
+Qed.
+
+Definition in_fv_recL env t := proj1_sig (in_fv_rec_dec_list env t).
+Lemma in_fv_recL_iff :
+  forall env t x, x \in in_fv_recL env t <-> in_fv_rec env x t.
+Proof.
+  intros env t x. unfold in_fv_recL. destruct in_fv_rec_dec_list. simpl.
+  firstorder.
+Qed.
+
+Global Instance in_fv_recL_Proper : Proper (env_same ==> eq ==> list_same) in_fv_recL.
+Proof.
+  intros e1 e2 H12 t1 t2 -> z.
+  rewrite !in_fv_recL_iff, H12. reflexivity.
+Qed.
+
+Lemma in_fv_recL_cons :
+  forall env x y ei t, env_find env x = None -> y \in in_fv_recL ((x, ei) :: env) t <-> (y \in in_fv_recL env t \/ (x \in in_fv_recL env t /\ y \in in_fv_recL env (read_envitem ei))).
+Proof.
+  intros. rewrite !in_fv_recL_iff.
+  apply in_fv_rec_cons. assumption.
+Qed.
+
+Lemma in_fv_recL_cons_same :
+  forall env x ei t, env_find env x = None -> x \in in_fv_recL ((x, ei) :: env) t <-> x \in in_fv_recL env t.
+Proof.
+  intros. rewrite !in_fv_recL_iff.
+  rewrite in_fv_rec_cons by assumption.
+  tauto.
+Qed.
+
+Lemma in_fv_recL_cons_In :
+  forall env x ei t, env_find env x = None -> x \in in_fv_recL env t -> in_fv_recL ((x, ei) :: env) t == in_fv_recL env t ++ in_fv_recL env (read_envitem ei).
+Proof.
+  intros env x ei t Hx Hfv y.
+  rewrite !in_fv_recL_cons, in_app_iff by assumption.
+  tauto.
+Qed.
+
+Lemma in_fv_recL_cons_notIn :
+  forall env x ei t, env_find env x = None -> x \notin in_fv_recL env t -> in_fv_recL ((x, ei) :: env) t == in_fv_recL env t.
+Proof.
+  intros env x ei t Hx Hfv y.
+  rewrite !in_fv_recL_cons by assumption.
+  tauto.
+Qed.
+
+Definition list_diff (L1 L2 : list freevar) := filter (fun x => if in_dec freevar_eq_dec x L2 then false else true) L1.
+
+Lemma list_diff_In_iff :
+  forall L1 L2 x, x \in list_diff L1 L2 <-> x \in L1 /\ x \notin L2.
+Proof.
+  intros L1 L2 x. unfold list_diff.
+  rewrite filter_In.
+  destruct in_dec; intuition congruence.
+Qed.
+
+Global Instance list_diff_inc_Proper : Proper (list_inc ++> list_inc --> list_inc) list_diff.
+Proof.
+  intros L1 L2 H12 L3 L4 H34 x.
+  rewrite !list_diff_In_iff.
+  rewrite H12. rewrite H34.
+  tauto.
+Qed.
+
+Global Instance list_diff_same_Proper : Proper (list_same ==> list_same ==> list_same) list_diff.
+Proof.
+  intros L1 L2 H12 L3 L4 H34.
+  rewrite list_same_inc_iff in *.
+  split; apply list_diff_inc_Proper; tauto.
+Qed.
+
+Definition check_red env t1 t2 :=
+  (* exists L, (forall x, in_fv_rec env x t2 -> ~ in_fv_rec env x t1 -> x \in L) /\ (forall x, x \in L -> ~ in_fv_rec env x t1) /\ trans_refl_clos beta (read_env2 env nil t1) (read_env2 env L t2). *)
+  (* trans_refl_clos beta (read_env2 env nil t1) (read_env2 env (list_diff (in_fv_recL env t2) (in_fv_recL env t1)) t2). *)
+  exists t3, trans_refl_clos beta (read_env2 env t1) t3 /\ read_env3 env t2 t3.
+
+(*
+Lemma check_red_self :
+  forall env t1 t2, read_env (map_assq (fun x ei => read_envitem ei) env) t1 t2 -> check_red env t1 t1.
+Proof.
+  intros env t1 t2 H.
+  exists nil.
+  apply read_env_read_env2 with (L := nil) in H.
+  destruct H as [t3 H]. exists t3. exists t3.
+  repeat try split; try assumption.
+  - intros x Hx; simpl in *; tauto.
+  - constructor.
+Qed.
+*)
+
+(*
+Lemma check_red_self :
+  forall env t, check_red env t t.
+Proof.
+  intros env t.
+  exists nil.
+  split; [|split].
+  - intros; tauto.
+  - intros x Hx; simpl in *; tauto.
+  - constructor.
+Qed.
+*)
+(*
+Lemma check_red_self :
+  forall env t, check_red env t t.
+Proof.
+  intros env t.
+  unfold check_red.
+  destruct list_diff as [|x L] eqn:Hdiff; [constructor|].
+  exfalso.
+  assert (H : x \in (x :: L)) by (simpl; tauto).
+  rewrite <- Hdiff, list_diff_In_iff in H. tauto.
+Qed.
+ *)
+
+Inductive is_lazy : envitem -> Prop := is_lazy_lazy : forall t, is_lazy (ELazy t).
+
+(*
+Lemma read_env_same :
+  forall env1 env2 t1 t2, (forall x, env_find env1 x = env_find env2 x) -> read_env env1 t1 t2 -> read_env env2 t1 t2.
+Proof.
+  intros env1 env2 t1 t2 Henv H. induction H.
+  - constructor; assumption.
+  - apply read_env_lam with (L := L). assumption.
+  - apply read_env_fvar_free. rewrite <- Henv; assumption.
+  - eapply read_env_fvar_bound.
+    + rewrite <- Henv; eassumption.
+    + assumption.
+Qed.
+
+Lemma read_env_same_iff :
+  forall env1 env2 t1 t2, (forall x, env_find env1 x = env_find env2 x) -> read_env env1 t1 t2 <-> read_env env2 t1 t2.
+Proof.
+  intros.
+  split; apply read_env_same; firstorder.
+Qed.
+ *)
+
+(*
+Lemma read_env_add :
+  forall env t1 t2 x t3 t4, env_find env x = None -> read_env ((x, t3) :: env) t3 t4 -> read_env ((x, t3) :: env) t1 t2 <-> (exists t5, read_env env t1 t5 /\ t2 = t5 [ x := t4 ]).
+Proof.
+  intros env t1 t2 x t3 t4 Hfind Ht3. split.
+  - intros H. induction H.
+    + destruct IHread_env1 as [t5 Ht5].
+      destruct IHread_env2 as [u5 Hu5].
+      exists (app t5 u5). split.
+      * constructor; tauto.
+      * simpl; f_equal; tauto.
+    + pick y \notin (x :: fv t ++ fv t2 ++ fv t4 ++ env_fv env ++ L) as Hy; simpl in Hy; rewrite !in_app_iff in Hy.
+      destruct (H0 y ltac:(tauto)) as [t5 [H1 H2]].
+      exists (lam (closeb 0 y t5)).
+      split.
+      * apply read_env_lam with (L := x :: L ++ env_fv env).
+        intros z Hz; simpl in *; rewrite in_app_iff in Hz.
+        rewrite open_close by (constructor || apply read_env_lc in H1; tauto).
+        apply (read_env_subst _ _ _ y (fvar z) (fvar z)) in H1.
+        -- rewrite <- substb_is_substf in H1 by tauto.
+           rewrite map_assq_id_forall in H1; [assumption|].
+           eapply Forall_impl; [|apply env_fv_inc].
+           intros [w u] Hwu. apply substf_fv. firstorder.
+        -- apply env_find_fv_None. tauto.
+        -- constructor. rewrite env_find_map_assq.
+           rewrite env_find_fv_None; [reflexivity|tauto].
+      * simpl. f_equal.
+        rewrite closeb_substf_free by (intuition congruence).
+        rewrite <- H2. rewrite close_open; tauto.
+    + exists (fvar x0).
+      simpl in *.
+      destruct freevar_eq_dec; [congruence|].
+      split; [constructor; assumption|].
+      destruct freevar_eq_dec; congruence.
+    + simpl in *.
+      destruct freevar_eq_dec.
+      * subst. exists (fvar x).
+        split; [constructor; assumption|].
+        assert (t = t3) by congruence; subst.
+        assert (t2 = t4) by (eapply read_env_unique; eassumption); subst.
+        simpl. destruct freevar_eq_dec; congruence.
+      * destruct IHread_env as [t5 [H1 H2]].
+        exists t5. split; [|assumption].
+        econstructor; eassumption.
+  - intros [t5 [Hread Ht2]]. subst.
+    induction Hread.
+    + simpl. constructor; assumption.
+    + simpl. apply read_env_lam with (L := x :: L).
+      intros y Hy; simpl in Hy.
+      rewrite substf_substb_free by (apply read_env_lc in Ht3; tauto || simpl; intuition congruence).
+      apply H0. tauto.
+    + simpl.
+      destruct freevar_eq_dec.
+      * subst.
+        econstructor; [|eassumption].
+        simpl. destruct freevar_eq_dec; congruence.
+      * constructor. simpl.
+        destruct freevar_eq_dec; congruence.
+    + econstructor; [|eassumption].
+      simpl. destruct freevar_eq_dec; congruence.
+Qed.
+*)
+
+(*
+Lemma read_env2_same_list_strong :
+  forall env L1 L2 t, (forall x, env_find env x <> None -> in_fv_rec env x t -> x \in L1 <-> x \in L2) -> read_env2 env L1 t = read_env2 env L2 t.
+Proof.
+Admitted.
+
+Lemma read_env2_same :
+  forall env1 env2 L1 L2 t, env1 === env2 -> L1 == L2 -> read_env2 env1 L1 t = read_env2 env2 L2 t.
+Proof.
+Admitted.
+
+Global Instance read_env2_Proper : Proper (env_same ==> list_same ==> eq ==> eq) read_env2.
+Proof.
+  intros e1 e2 He L1 L2 HL t1 t2 ->.
+  apply read_env2_same; assumption.
+Qed.
+*)
+
+Definition rdei (env : list (freevar * envitem)) := map_assq (fun x ei => read_envitem ei) env.
+
+Inductive sublist_ordered {A : Type} : list A -> list A -> Prop :=
+| sublist_ordered_nil : sublist_ordered nil nil
+| sublist_ordered_cons_both : forall x L1 L2, sublist_ordered L1 L2 -> sublist_ordered (x :: L1) (x :: L2)
+| sublist_ordered_cons_one : forall x L1 L2, sublist_ordered L1 L2 -> sublist_ordered L1 (x :: L2).
+
+Lemma sublist_ordered_map :
+  forall (A B : Type) (f : A -> B) L1 L2, sublist_ordered L1 L2 -> sublist_ordered (map f L1) (map f L2).
+Proof.
+  intros A B f L1 L2 H. induction H.
+  - constructor.
+  - constructor; assumption.
+  - constructor; assumption.
+Qed.
+
+Lemma sublist_ordered_map_assq :
+  forall (A B C : Type) (f : A -> B -> C) L1 L2, sublist_ordered L1 L2 -> sublist_ordered (map_assq f L1) (map_assq f L2).
+Proof.
+  intros. apply sublist_ordered_map. assumption.
+Qed.
+
+Lemma sublist_ordered_filter :
+  forall (A : Type) (P : A -> bool) L, sublist_ordered (filter P L) L.
+Proof.
+  intros A P L. induction L.
+  - constructor.
+  - simpl. destruct (P a); constructor; assumption.
+Qed.
+
+Lemma read_env_fv_sub :
+  forall env1 env2 t x, sublist_ordered env2 env1 -> unique_env env1 -> x \in fv (read_env env2 t) -> x \in fv (read_env env1 t) \/ (env_find env1 x <> None).
+Proof.
+  intros env1 env2 t x H. revert t x. induction H.
+  - intros; left; assumption.
+  - destruct x as [x u]. intros t y Hunique Hin.
+    simpl in *. destruct freevar_eq_dec; [subst; right; congruence|].
+    rewrite fv_substf_iff in *. destruct Hin as [[Hin1 Hin2] | [Hin1 Hin2]].
+    + apply IHsublist_ordered in Hin1; [|inversion Hunique; assumption]. tauto.
+    + apply IHsublist_ordered in Hin1; [|inversion Hunique; assumption].
+      apply IHsublist_ordered in Hin2; [|inversion Hunique; assumption].
+      destruct Hin1 as [Hin1 | Hin1]; [tauto|].
+      inversion Hunique; subst; congruence.
+  - destruct x as [x u]. intros t y Hunique Hin.
+    simpl. apply IHsublist_ordered in Hin; [|inversion Hunique; assumption].
+    rewrite fv_substf_iff. destruct freevar_eq_dec; [|tauto].
+    right; congruence.
+Qed.
+
+Lemma sublist_ordered_env_find :
+  forall (A : Type) (env1 env2 : list (freevar * A)) x, sublist_ordered env2 env1 -> unique_env env1 -> forall t, env_find env2 x = Some t -> env_find env1 x = Some t.
+Proof.
+  intros A env1 env2 x H. induction H; intros Hunique t Hfind.
+  + assumption.
+  + destruct x0 as [y u]. simpl in *.
+    destruct freevar_eq_dec; [assumption|].
+    apply IHsublist_ordered; [inversion Hunique|]; assumption.
+  + destruct x0 as [y u]. simpl in *.
+    destruct freevar_eq_dec.
+    * subst. apply IHsublist_ordered in Hfind; inversion Hunique; subst; congruence.
+    * apply IHsublist_ordered; [inversion Hunique|]; assumption.
+Qed.
+
+Lemma sublist_ordered_unique_env :
+  forall (A : Type) (env1 env2 : list (freevar * A)), sublist_ordered env2 env1 -> unique_env env1 -> unique_env env2.
+Proof.
+  intros A env1 env2 H. induction H.
+  - intros; assumption.
+  - destruct x as [y u]. intros Hunique. inversion Hunique; subst.
+    constructor; [|tauto].
+    destruct (env_find L1 y) eqn:Hfind; [|reflexivity].
+    eapply sublist_ordered_env_find in Hfind; [|eassumption|eassumption]. congruence.
+  - intros Hunique. inversion Hunique. tauto.
+Qed.
+
+Lemma acyclic_sub_env_unique :
+  forall env1 env2, sublist_ordered env2 env1 -> unique_env env1 -> acyclic_env env1 -> acyclic_env env2.
+Proof.
+  intros env1 env2 H. induction H.
+  - intros; assumption.
+  - intros Hunique Hcycle. destruct x as [x u].
+    rewrite acyclic_env_cons2 in *; [|assumption|eapply sublist_ordered_unique_env; [econstructor|]; eassumption].
+    destruct Hcycle as [Hcycle1 Hcycle2]; split; [|inversion Hunique; tauto].
+    intros Hx. eapply read_env_fv_sub in Hx; [|eassumption|inversion Hunique; assumption].
+    inversion Hunique; tauto.
+  - intros Hunique Hcycle. destruct x as [x u].
+    rewrite acyclic_env_cons2 in Hcycle by assumption.
+    inversion Hunique; tauto.
+Qed.
+
+Global Instance map_assq_env_Proper {A B : Type} : Proper ((eq ==> eq ==> eq) ==> env_same ==> env_same) (@map_assq freevar A B).
+Proof.
+  intros f1 f2 Hf e1 e2 He x.
+  rewrite !env_find_map_assq, He. destruct (env_find e2 x); [|reflexivity].
+  f_equal. apply Hf; reflexivity.
+Qed.
+
+Lemma read_env2_same :
+  forall env1 env2 t, env1 === env2 -> acyclic_env (rdei env1) -> read_env2 env1 t = read_env2 env2 t.
+Proof.
+  intros env1 env2 t He Hcycle.
+  unfold read_env2.
+  apply read_env_same.
+  - intros x.
+    rewrite !env_find_map_assq, !env_find_filter_unique, !uniquify_env_same, He by (apply uniquify_env_unique).
+    reflexivity.
+  - apply unique_env_map_assq. apply unique_env_filter.
+    apply uniquify_env_unique.
+  - apply unique_env_map_assq. apply unique_env_filter.
+    apply uniquify_env_unique.
+  - apply acyclic_sub_env_unique with (env1 := rdei (uniquify_env env1)).
+    + apply sublist_ordered_map. apply sublist_ordered_filter.
+    + apply unique_env_map_assq. apply uniquify_env_unique.
+    + unfold rdei. rewrite uniquify_env_same. apply Hcycle.
+Qed.
+
+(*
+Global Instance read_env2_Proper : Proper (env_same ==> eq ==> eq) read_env2.
+Proof.
+  intros e1 e2 He t1 t2 ->.
+  apply read_env2_same; assumption.
+Qed.
+*)
+Lemma read_env3_same :
+  forall env1 env2 t1 t2, env1 === env2 -> read_env3 env1 t1 t2 -> read_env3 env2 t1 t2.
+Proof.
+  intros env1 env2 t1 t2 Henv Heq. induction Heq.
+  - constructor; assumption.
+  - eapply read_env3_lam with (L := L). assumption.
+  - apply read_env3_fvar_free; rewrite <- Henv; assumption.
+  - eapply read_env3_fvar_bound; [|eassumption].
+    rewrite <- Henv; assumption.
+  - eapply read_env3_fvar_lazy. rewrite <- Henv; eassumption.
+Qed.
+
+Global Instance read_env3_Proper : Proper (env_same ==> eq ==> eq ==> iff) read_env3.
+Proof.
+  intros e1 e2 He t1 t2 -> t3 t4 ->.
+  split; eapply read_env3_same; [|symmetry]; eassumption.
+Qed.
+
+
+
+(*
+Lemma check_red_same :
+  forall env1 env2 t1 t2, unique_env env1 -> unique_env env2 -> (forall x, env_find env1 x = env_find env2 x) -> check_red env1 t1 t2 -> check_red env2 t1 t2.
+Proof.
+  intros env1 env2 t1 t2 Hunique1 Hunique2 Henv H.
+  destruct H as [L H].
+  exists L.
+  rewrite !read_env2_same with (env1 := env1) (env2 := env2) in H by tauto.
+  split; [|split]; [| |tauto].
+  all: intros x; rewrite <- !in_fv_rec_same_iff with (env1 := env1) (env2 := env2) by assumption; apply H.
+Qed.
+ *)
+
+(*
+Lemma check_red_same :
+  forall env1 env2 t1 t2, env1 === env2 -> check_red env1 t1 t2 -> check_red env2 t1 t2.
+Proof.
+  intros env1 env2 t1 t2 Henv H.
+  unfold check_red in *.
+  rewrite Henv in H.
+  assumption.
+Qed.
+*)
+
+Lemma check_red_same :
+  forall env1 env2 t1 t2, env1 === env2 -> acyclic_env (rdei env1) -> check_red env1 t1 t2 -> check_red env2 t1 t2.
+Proof.
+  intros env1 env2 t1 t2 Henv Hcycle H.
+  destruct H as [t3 H]. exists t3.
+  destruct H as [H1 H2]; split; [|rewrite <- Henv; assumption].
+  erewrite <- read_env2_same; eassumption.
+Qed.
+
+(*
+Lemma read_env2_cons_lazy :
+  forall env L t1 x t, x \notin L -> read_env2 ((x, ELazy t) :: env) L t1 = read_env2 env L t1.
+Proof. Admitted.
+(*  intros. unfold read_env2.
+  simpl. destruct in_dec; [tauto|].
+  reflexivity.
+Qed.
+*)
+Lemma read_env2_cons_not_lazy :
+  forall env L t1 x ei, (x \in L \/ ~is_lazy ei) -> read_env2 ((x, ei) :: env) L t1 = read_env2 env L t1 [ x := read_env2 env L (read_envitem ei) ].
+Proof. Admitted. (*
+  intros. unfold read_env2.
+  simpl. destruct in_dec.
+  - simpl. reflexivity.
+  - destruct ei; simpl; try reflexivity.
+    destruct H as [H | H]; [tauto | exfalso; apply H; constructor].
+Qed.
+                  *)
+*)
+
+Lemma Forall_filter_eq :
+  forall {A : Type} (P : A -> bool) L, Forall (fun x => P x = true) L -> filter P L = L.
+Proof.
+  intros A P L. induction L.
+  - intros; reflexivity.
+  - intros H. simpl. inversion H; subst.
+    rewrite H2; simpl; f_equal; apply IHL. assumption.
+Qed.
+
+Lemma env_find_In2 :
+  forall {A : Type} x u (env : list (freevar * A)), (x, u) \in env -> exists v, env_find env x = Some v.
+Proof.
+  intros A x u env Hin. induction env as [|[y v] env].
+  - simpl in Hin; tauto.
+  - simpl. destruct freevar_eq_dec.
+    + subst. exists v. reflexivity.
+    + apply IHenv. simpl in Hin. intuition congruence.
+Qed.
+
+Lemma uniquify_env_not_in :
+  forall {A : Type} x u (env : list (freevar * A)), env_find env x = None -> uniquify_env ((x, u) :: env) = (x, u) :: uniquify_env env.
+Proof.
+  intros A x u env Hx.
+  simpl. f_equal. apply Forall_filter_eq. rewrite Forall_forall.
+  intros [y v] H. destruct freevar_eq_dec; [|congruence]. subst.
+  exfalso. apply env_find_In2 in H. destruct H as [w H]; rewrite uniquify_env_same in H; congruence.
+Qed.
+
+Lemma read_env2_cons_lazy :
+  forall env t1 x t, env_find env x = None -> read_env2 ((x, ELazy t) :: env) t1 = read_env2 env t1.
+Proof.
+  intros. unfold read_env2.
+  rewrite uniquify_env_not_in by assumption.
+  simpl. reflexivity.
+Qed.
+
+Lemma read_env2_cons_not_lazy :
+  forall env t1 x ei, env_find env x = None -> ~ is_lazy ei -> read_env2 ((x, ei) :: env) t1 = read_env2 env t1 [ x := read_env2 env (read_envitem ei) ].
+Proof.
+  intros env t1 x ei Hx Hlazy. unfold read_env2.
+  rewrite uniquify_env_not_in by assumption.
+  simpl. destruct ei; try reflexivity.
+  exfalso. apply Hlazy. constructor.
+Qed.
+
+Lemma trans_refl_clos_beta_same :
+  forall t1 t2, t1 = t2 -> trans_refl_clos beta t1 t2.
+Proof.
+  intros t1 t2 ->. constructor.
+Qed.
+
+Lemma read_env3_cons_lazy :
+  forall env x t1 t2 t3, lc t2 -> read_env3 ((x, ELazy t3) :: env) t1 t2 -> exists t4 t5, body t4 /\ read_env3 env t3 t5 /\ read_env3 env t1 (t4 ^ x) /\ t2 = t4 ^^ t5.
+Proof.
+  intros env x t1 t2 t3 Hlc Henv. induction Henv.
+  - destruct IHHenv1 as (t5 & t6 & H1); [inversion Hlc; subst; auto|].
+    destruct IHHenv2 as (t7 & t8 & H2); [inversion Hlc; subst; auto|].
+    exists (app t5 t7).
+Abort.
+
+Lemma beta_lam_one :
+  forall x t1 t2, x \notin fv t1 -> x \notin fv t2 -> beta (t1 ^ x) (t2 ^ x) -> beta (lam t1) (lam t2).
+Proof.
+  intros x t1 t2 Hx1 Hx2 Hbeta.
+  apply beta_lam with (L := fv t1 ++ fv t2). intros y Hy; rewrite in_app_iff in Hy.
+  rewrite substb_is_substf with (x := x) (t := t1) by assumption.
+  rewrite substb_is_substf with (x := x) (t := t2) by assumption.
+  apply beta_subst; [constructor|assumption].
+Qed.
+
+Lemma read_env3_lc_1 :
+  forall env t1 t2, read_env3 env t1 t2 -> lc t1.
+Proof.
+  intros env t1 t2 H. induction H.
+  - constructor; assumption.
+  - apply lc_lam with (L := L). assumption.
+  - constructor.
+  - constructor.
+  - constructor.
+Qed.
+
+Lemma read_env3_lc_2 :
+  forall env t1 t2, read_env3 env t1 t2 -> lc t2.
+Proof.
+  intros env t1 t2 H. induction H.
+  - constructor; assumption.
+  - apply lc_lam with (L := L). assumption.
+  - constructor.
+  - assumption.
+  - constructor.
+Qed.
+
+Lemma Forall_In :
+  forall (A : Type) (P : A -> Prop) (L : list A), Forall P L <-> (forall x, In x L -> P x).
+Proof.
+  intros A P L. induction L.
+  - simpl. split; intros; [tauto|constructor].
+  - rewrite Forall_cons_iff, IHL. simpl.
+    firstorder congruence.
+Qed.
+
+Lemma env_find_In :
+  forall (A : Type) (env : list (freevar * A)) x u, env_find env x = Some u -> In (x, u) env.
+Proof.
+  induction env as [|[y v] env].
+  - intros; simpl in *. congruence.
+  - intros; simpl in *.
+    destruct freevar_eq_dec.
+    + left; congruence.
+    + right; apply IHenv. assumption.
+Qed.
+
+Definition env_ei_fv env := env_fv (rdei env).
+Lemma env_ei_fv_None :
+  forall env x, x \notin env_ei_fv env -> env_find env x = None.
+Proof.
+  intros env x H. unfold env_ei_fv, rdei in *.
+  destruct (env_find env x) eqn:Hfind; [|reflexivity].
+  exfalso.
+  apply env_find_In in Hfind.
+  assert (Hinc := env_fv_inc (map_assq (fun _ ei => read_envitem ei) env)).
+  rewrite Forall_map_assq, Forall_In in Hinc.
+  specialize (Hinc (x, e) Hfind).
+  simpl in Hinc. rewrite <- Hinc in H. simpl in H. tauto.
+Qed.
+
+Lemma read_env3_subst :
+  forall x env t1 t2 t3 t4, x \notin env_ei_fv env -> read_env3 env t1 t2 -> read_env3 env t3 t4 -> read_env3 env (t1 [ x := t3 ]) (t2 [ x := t4 ]).
+Proof.
+  intros x env t1 t2 t3 t4 Hx Hread1 Hread2; induction Hread1.
+  - simpl. constructor; assumption.
+  - simpl. apply read_env3_lam with (L := x :: L).
+    intros y Hy. simpl in Hy. rewrite !substf_substb_free.
+    + apply H0. tauto.
+    + simpl; intuition congruence.
+    + eapply read_env3_lc_2; eassumption.
+    + simpl; intuition congruence.
+    + apply read_env3_lc_1 in Hread2; assumption.
+  - simpl. destruct freevar_eq_dec.
+    + assumption.
+    + apply read_env3_fvar_free. assumption.
+  - simpl. destruct freevar_eq_dec.
+    + apply env_find_fv_None in Hx. unfold rdei in Hx. rewrite env_find_map_assq in Hx.
+      subst.
+      destruct env_find; congruence.
+    + eapply read_env3_fvar_bound; [eassumption|].
+      rewrite substf_fv in IHHread1; [assumption|].
+      unfold env_ei_fv in Hx.
+      assert (Hinc := env_fv_inc (rdei env)). unfold rdei in Hinc.
+      rewrite Forall_map_assq, Forall_In in Hinc.
+      specialize (Hinc (x0, ei) ltac:(apply env_find_In; assumption)).
+      simpl in Hinc. rewrite <- Hinc in Hx.
+      simpl in Hx; tauto.
+  - simpl. destruct freevar_eq_dec.
+    + congruence.
+    + eapply read_env3_fvar_lazy; eassumption.
+Qed.
+
+Lemma read_env3_lam_one :
+  forall x env t1 t2, x \notin fv t1 -> x \notin fv t2 -> x \notin env_ei_fv env ->
+                 read_env3 env (t1 ^ x) (t2 ^ x) -> read_env3 env (lam t1) (lam t2).
+Proof.
+  intros x env t1 t2 Hx1 Hx2 Hx3 Hread.
+  apply read_env3_lam with (L := fv t1 ++ fv t2 ++ env_ei_fv env).
+  intros y Hy; rewrite !in_app_iff in Hy.
+  rewrite substb_is_substf with (x := x) (t := t1) by assumption.
+  rewrite substb_is_substf with (x := x) (t := t2) by assumption.
+  apply read_env3_subst.
+  - assumption.
+  - assumption.
+  - apply read_env3_fvar_free. apply env_ei_fv_None. tauto.
+Qed.
+
+Lemma closeb_lc_free :
+  forall x k t, x \notin fv (closeb k x t).
+Proof.
+  intros x k t. revert k. induction t.
+  - simpl; tauto.
+  - simpl. destruct freevar_eq_dec; intros k.
+    + simpl; tauto.
+    + simpl. intuition congruence.
+  - simpl. intros k; apply IHt.
+  - simpl. intros k.
+    rewrite in_app_iff; firstorder.
+Qed.
+
+Lemma read_env3_beta1 :
+  forall env t1 t2 t3, read_env3 env t1 t2 -> beta t1 t3 -> exists t4, read_env3 env t3 t4 /\ beta t2 t4.
+Proof.
+  intros env t1 t2 t3 Hread Hbeta. revert t2 Hread. induction Hbeta; intros t5 Hread.
+  - inversion Hread; subst.
+    inversion H3; subst.
+    pick x \notin (L ++ fv t1 ++ fv t4 ++ env_ei_fv env) as Hx; rewrite !in_app_iff in Hx.
+    rewrite substb_is_substf with (x := x) by tauto.
+    exists (t4 ^^ t6).
+    split; [|constructor; apply read_env3_lc_2 in Hread; inversion Hread; subst; [rewrite <- lc_lam_body|]; assumption].
+    rewrite substb_is_substf with (x := x) (t := t4) by tauto.
+    apply read_env3_subst.
+    + tauto.
+    + apply H2. tauto.
+    + assumption.
+  - inversion Hread; subst.
+    destruct (IHHbeta _ H2) as (t5 & Ht5a & Ht5b).
+    exists (app t5 t7). split; constructor; try assumption.
+    eapply read_env3_lc_2; eassumption.
+  - inversion Hread; subst.
+    destruct (IHHbeta _ H4) as (t5 & Ht5a & Ht5b).
+    exists (app t4 t5). split; constructor; try assumption.
+    eapply read_env3_lc_2; eassumption.
+  - inversion Hread; subst.
+    pick x \notin (L ++ L0 ++ fv t3 ++ fv t2 ++ env_ei_fv env) as Hx; rewrite !in_app_iff in Hx.
+    specialize (H0 x ltac:(tauto) (t3 ^ x) (H2 x ltac:(tauto))).
+    destruct H0 as (t4 & Ht4a & Ht4b).
+    exists (lam (closeb 0 x t4)). split.
+    + apply read_env3_lam_one with (x := x).
+      * tauto.
+      * apply closeb_lc_free.
+      * tauto.
+      * rewrite open_close_var by (apply beta_lc in Ht4b; tauto). assumption.
+    + apply beta_lam_one with (x := x).
+      * tauto.
+      * apply closeb_lc_free.
+      * rewrite open_close_var by (apply beta_lc in Ht4b; tauto). assumption.
+Qed.
+
+Lemma read_env3_beta :
+  forall env t1 t2 t3, read_env3 env t1 t2 -> trans_refl_clos beta t1 t3 -> exists t4, read_env3 env t3 t4 /\ trans_refl_clos beta t2 t4.
+Proof.
+  intros env t1 t2 t3 Hread H. revert t2 Hread. induction H; intros t2 Hread.
+  - exists t2; split; [assumption|constructor].
+  - eapply read_env3_beta1 in H; [|eassumption].
+    destruct H as (t4 & Ht4a & Ht4b).
+    specialize (IHtrans_refl_clos t4 Ht4a).
+    destruct IHtrans_refl_clos as (t5 & Ht5a & Ht5b). exists t5.
+    split; [assumption|econstructor; eassumption].
+Qed.
+
+(*
+Lemma read_env3_beta :
+  forall env t t1 t2 t3 ei x, read_env3 ((x, ELazy t) :: env) t1 t2 -> trans_refl_clos beta (read_env2 env t) t3 -> read_env3 ((x, ei) :: env) (read_envitem ei) t3 -> exists t4, read_env3 ((x, ei) :: env) t1 t4 /\ trans_refl_clos beta (t2 [ x := read_env2 env t ]) t4.
+Proof.
+  intros env t t1 t2 t3 ei x H Hred Hread. induction H.
+  - admit.
+  - admit.
+  - admit.
+  - simpl in H.
+    destruct freevar_eq_dec.
+    + injection H; intro; subst. simpl in *.
+Admitted.
+ *)
+
+Lemma read_env2_app :
+  forall env t1 t2, read_env2 env (app t1 t2) = app (read_env2 env t1) (read_env2 env t2).
+Proof.
+  intros env t1 t2. unfold read_env2.
+  remember (uniquify_env env) as env2. clear env Heqenv2. revert t1 t2.
+  induction env2 as [|[x u] env2].
+  - reflexivity.
+  - intros t1 t2. simpl.
+    destruct u; simpl; rewrite IHenv2; reflexivity.
+Qed.
+
+Lemma read_env2_lam :
+  forall env t, read_env2 env (lam t) = lam (read_env2 env t).
+Proof.
+  intros env t. unfold read_env2.
+  remember (uniquify_env env) as env2. clear env Heqenv2. revert t.
+  induction env2 as [|[x u] env2].
+  - reflexivity.
+  - intros t. simpl.
+    destruct u; simpl; rewrite !IHenv2; reflexivity.
+Qed.
+
+Lemma read_env2_fvar_rec :
+  forall env x, env_find env x = None -> read_env (map_assq (fun _ ei => read_envitem ei) (filter (fun '(x, u) => match u with ELazy _ => false | _ => true end) env)) (fvar x) = fvar x.
+Proof.
+  intros env x Hx. induction env as [|[y u] env].
+  - simpl. reflexivity.
+  - simpl in *.
+    destruct freevar_eq_dec; [congruence|].
+    destruct u; simpl; rewrite IHenv by assumption; simpl; try destruct freevar_eq_dec; congruence.
+Qed.
+
+Lemma read_env2_fvar_free :
+  forall env x, env_find env x = None -> read_env2 env (fvar x) = fvar x.
+Proof.
+  intros env x Hx. unfold read_env2.
+  remember (uniquify_env env) as env2.
+  assert (Hx2 : env_find env2 x = None) by (rewrite Heqenv2, uniquify_env_same; assumption).
+  rewrite read_env2_fvar_rec; tauto.
+Qed.
+
+Lemma read_env2_fvar_lazy :
+  forall env x t, env_find env x = Some (ELazy t) -> read_env2 env (fvar x) = fvar x.
+Proof.
+  intros env x t Hx. unfold read_env2.
+  remember (uniquify_env env) as env2.
+  assert (Hx2 : env_find env2 x = Some (ELazy t)) by (rewrite Heqenv2, uniquify_env_same; assumption).
+  assert (Hunique : unique_env env2) by (rewrite Heqenv2; apply uniquify_env_unique).
+  clear env Hx Heqenv2. induction env2 as [|[y u] env2].
+  - simpl. reflexivity.
+  - simpl in *. destruct (unique_env_inv _ _ _ Hunique) as [Hy Hunique2].
+    destruct freevar_eq_dec.
+    + subst. injection Hx2; intro; subst.
+      rewrite read_env2_fvar_rec; tauto.
+    + destruct u; simpl; rewrite IHenv2 by assumption; simpl; try destruct freevar_eq_dec; congruence.
+Qed.
+
+Lemma read_env2_fvar_bound :
+  forall env x ei, acyclic_env (rdei env) -> env_find env x = Some ei -> ~is_lazy ei -> read_env2 env (fvar x) = read_env2 env (read_envitem ei).
+Proof.
+  intros env x ei Hcycle Hx Hlazy. unfold read_env2.
+  remember (uniquify_env env) as env2.
+  assert (Hx2 : env_find env2 x = Some ei) by (rewrite Heqenv2, uniquify_env_same; assumption).
+  assert (Hunique : unique_env env2) by (rewrite Heqenv2; apply uniquify_env_unique).
+  unfold rdei in Hcycle. rewrite <- uniquify_env_same with (env := env), <- Heqenv2 in Hcycle.
+  clear env Hx Heqenv2. induction env2 as [|[y u] env2].
+  - simpl in Hx2. congruence.
+  - simpl in *.
+    rewrite acyclic_env_cons2 in Hcycle by (erewrite <- unique_env_map_assq in Hunique; apply Hunique).
+    destruct (unique_env_inv _ _ _ Hunique) as [Hunique2 Hy].
+    destruct freevar_eq_dec.
+    + subst. injection Hx2; intro; subst.
+      destruct ei; simpl.
+      * rewrite read_env2_fvar_rec by assumption.
+        simpl; destruct freevar_eq_dec; [|congruence].
+        symmetry; apply substf_fv.
+        intros H.
+        eapply read_env_fv_sub in H;
+          [|apply sublist_ordered_map_assq; apply sublist_ordered_filter|apply unique_env_map_assq; assumption].
+        destruct H as [H | H]; [|rewrite env_find_map_assq, Hy in H; congruence].
+        simpl in *; tauto.
+      * exfalso; apply Hlazy; constructor.
+      * rewrite read_env2_fvar_rec by assumption.
+        simpl; destruct freevar_eq_dec; [|congruence].
+        symmetry; apply substf_fv.
+        intros H.
+        eapply read_env_fv_sub in H;
+          [|apply sublist_ordered_map_assq; apply sublist_ordered_filter|apply unique_env_map_assq; assumption].
+        destruct H as [H | H]; [|rewrite env_find_map_assq, Hy in H; congruence].
+        simpl in *; tauto.
+    + destruct u; simpl; rewrite IHenv2 by tauto; reflexivity.
+Qed.
+
+Definition elc (env : list (freevar * term)) := forall x u, env_find env x = Some u -> lc u.
+Global Instance elc_Proper : Proper (env_same ==> iff) elc.
+Proof.
+  intros env1 env2 Henv.
+  split; intros H x u Hfind; specialize (H x u); rewrite Henv in *; tauto.
+Qed.
+
+Lemma elc_cons_inv :
+  forall x u env, env_find env x = None -> elc ((x, u) :: env) -> lc u /\ elc env.
+Proof.
+  intros x u env Hfind H. split.
+  - apply (H x u). simpl. destruct freevar_eq_dec; congruence.
+  - intros y v H1. apply (H y v).
+    simpl. destruct freevar_eq_dec; congruence.
+Qed.
+
+Lemma read_env_lc :
+  forall env t, unique_env env -> elc env -> lc t -> lc (read_env env t).
+Proof.
+  induction env as [|[x u] env].
+  - intros; simpl; assumption.
+  - intros t Hunique Helc Hlc. simpl.
+    apply unique_env_inv in Hunique. destruct Hunique as [Hunique Hy].
+    apply elc_cons_inv in Helc; [|assumption].
+    apply substf_lc; apply IHenv; tauto.
+Qed.
+
+Lemma read_env2_lc :
+  forall env t, elc (rdei env) -> lc t -> lc (read_env2 env t).
+Proof.
+  intros env t Helc Hlc. apply read_env_lc.
+  - apply unique_env_map_assq. apply unique_env_filter. apply uniquify_env_unique.
+  - intros x v H.
+    rewrite env_find_map_assq, env_find_filter_unique, uniquify_env_same in H by (apply uniquify_env_unique).
+    specialize (Helc x v). apply Helc. unfold rdei; rewrite env_find_map_assq.
+    destruct (env_find env x) as [ei|]; [|congruence].
+    destruct ei; congruence.
+  - assumption.
+Qed.
+
+Lemma read_env_substb :
+  forall env t k u, unique_env env -> elc env -> read_env env (t [ k <- u ]) = read_env env t [ k <- read_env env u ].
+Proof.
+  intros env t k u Hunique Hlc. induction env as [|[y v] env].
+  - reflexivity.
+  - simpl.
+    apply unique_env_inv in Hunique. destruct Hunique as [Hunique Hy].
+    apply elc_cons_inv in Hlc; [|assumption].
+    rewrite IHenv by tauto.
+    apply substb_substf.
+    apply read_env_lc; tauto.
+Qed.
+
+Lemma read_env2_substb :
+  forall env t k u, elc (rdei env) -> read_env2 env (t [ k <- u ]) = read_env2 env t [ k <- read_env2 env u ].
+Proof.
+  intros env t k u Hlc.
+  apply read_env_substb.
+  - apply unique_env_map_assq. apply unique_env_filter. apply uniquify_env_unique.
+  - intros x v H.
+    rewrite env_find_map_assq, env_find_filter_unique, uniquify_env_same in H by (apply uniquify_env_unique).
+    specialize (Hlc x v). apply Hlc. unfold rdei; rewrite env_find_map_assq.
+    destruct (env_find env x) as [ei|]; [|congruence].
+    destruct ei; congruence.
+Qed.
+
+
+Definition env_wf env := elc (rdei env) /\ unique_env env /\ acyclic_env (rdei env).
+Lemma env_wf_cons_inv :
+  forall x ei env, env_wf ((x, ei) :: env) <-> env_wf env /\ env_find env x = None /\ lc (read_envitem ei) /\ x \notin fv (read_env (rdei env) (read_envitem ei)).
+Proof.
+  intros x ei env. split.
+  - intros (H1 & H2 & H3).
+    simpl in *.
+    rewrite acyclic_env_cons2 in H3 by (erewrite <- unique_env_map_assq in H2; exact H2).
+    rewrite unique_env_inv_iff in H2; destruct H2 as [H2 Hx].
+    apply elc_cons_inv in H1; [|unfold rdei; rewrite env_find_map_assq, Hx; reflexivity].
+    unfold env_wf; tauto.
+  - intros ((H1 & H2 & H3) & Hx & Hlc & Hx2). unfold env_wf.
+    simpl. split; [|split].
+    + intros y t Hy. simpl in Hy.
+      destruct freevar_eq_dec; [injection Hy; intro; subst; assumption|].
+      eapply H1; eassumption.
+    + rewrite unique_env_inv_iff. tauto.
+    + rewrite acyclic_env_cons2; [tauto|].
+      rewrite unique_env_map_assq with (f := fun _ ei => read_envitem ei) (env := (x, ei) :: env).
+      constructor; assumption.
+Qed.
+
+Lemma read_env3_read_env2_left :
+  forall env t1 t2, env_wf env -> read_env3 env t1 t2 -> read_env3 env (read_env2 env t1) t2.
+Proof.
+  intros env t1 t2 Hewf H. induction H.
+  - rewrite read_env2_app. constructor; assumption.
+  - rewrite read_env2_lam. apply read_env3_lam with (L := L ++ env_ei_fv env).
+    intros x Hx. rewrite in_app_iff in Hx. specialize (H0 x ltac:(tauto)).
+    rewrite read_env2_substb in H0 by apply Hewf.
+    rewrite read_env2_fvar_free in H0 by (apply env_ei_fv_None; tauto).
+    assumption.
+  - rewrite read_env2_fvar_free; [apply read_env3_fvar_free|]; assumption.
+  - destruct ei.
+    + erewrite read_env2_fvar_bound; try eassumption; [apply Hewf|]. intros Hlazy; inversion Hlazy.
+    + erewrite read_env2_fvar_lazy; [|eassumption].
+      eapply read_env3_fvar_bound; eassumption.
+    + erewrite read_env2_fvar_bound; try eassumption; [apply Hewf|]. intros Hlazy; inversion Hlazy.
+  - erewrite read_env2_fvar_lazy; [|eassumption].
+    eapply read_env3_fvar_lazy. eassumption.
+Qed.
+
+Lemma read_env3_cons_subst :
+  forall env t1 t2 t3 ei x, env_find env x = None -> read_env3 env t1 t2 -> read_env3 ((x, ei) :: env) (read_envitem ei) t3 -> read_env3 ((x, ei) :: env) t1 (t2 [ x := t3 ]).
+Proof.
+  intros env t1 t2 t3 ei x Hx Hread Hread2. induction Hread.
+  - simpl. constructor; assumption.
+  - simpl. apply read_env3_lam with (L := x :: L).
+    intros y Hy. rewrite substf_substb_free; [|simpl in *; intuition congruence|eapply read_env3_lc_2; eassumption].
+    apply H0. simpl in *; tauto.
+  - simpl. destruct freevar_eq_dec.
+    + subst. eapply read_env3_fvar_bound; [|eassumption].
+      simpl. destruct freevar_eq_dec; congruence.
+    + apply read_env3_fvar_free. simpl.
+      destruct freevar_eq_dec; congruence.
+  - eapply read_env3_fvar_bound; [|eassumption].
+    simpl. destruct freevar_eq_dec; congruence.
+  - simpl. destruct freevar_eq_dec; [congruence|].
+    eapply read_env3_fvar_lazy. simpl; destruct freevar_eq_dec; [congruence|eassumption].
+Qed.
+
+Lemma read_env3_cons_lazy :
+  forall env t1 t2 t x, env_find env x = None -> read_env3 env t1 t2 -> read_env3 ((x, ELazy t) :: env) t1 t2.
+Proof.
+  intros env t1 t2 t x Hx Hread. induction Hread.
+  - simpl. constructor; assumption.
+  - simpl. apply read_env3_lam with (L := L). assumption.
+  - simpl. destruct (freevar_eq_dec x x0).
+    + subst. eapply read_env3_fvar_lazy.
+      simpl. destruct freevar_eq_dec; [reflexivity|congruence].
+    + apply read_env3_fvar_free.
+      simpl. destruct freevar_eq_dec; congruence.
+  - eapply read_env3_fvar_bound; [|eassumption].
+    simpl. destruct freevar_eq_dec; congruence.
+  - eapply read_env3_fvar_lazy. simpl.
+    destruct freevar_eq_dec; [congruence|eassumption].
+Qed.
+
+Lemma acyclic_fv_recL_read_env :
+  forall env t, acyclic_env (rdei env) -> unique_env env -> fv (read_env (rdei env) t) \subseteq in_fv_recL env t.
+Proof.
+  intros env t Hcycle Hunique x. revert x t. induction env as [|[y u] env]; intros x t.
+  - simpl. rewrite in_fv_recL_iff.
+    intros H.
+    constructor. assumption.
+  - simpl in Hcycle.
+    rewrite acyclic_env_cons2 in Hcycle; [|rewrite <- unique_env_map_assq in Hunique; apply Hunique].
+    apply unique_env_inv in Hunique.
+    rewrite in_fv_recL_cons by tauto. simpl.
+    rewrite fv_substf_iff.
+    firstorder.
+Qed.
+
+Lemma acyclic_fv_recL_read_env2 :
+  forall env t x, acyclic_env (rdei env) -> unique_env env -> env_find env x = None -> x \in in_fv_recL env t -> x \in fv (read_env (rdei env) t).
+Proof.
+  intros env. induction env as [|[y u] env]; intros t x Hcycle Hunique Hxenv Hx.
+  - simpl. rewrite in_fv_recL_iff in *.
+    inversion Hx; subst; [assumption|]. simpl in *; congruence.
+  - simpl in Hcycle.
+    rewrite acyclic_env_cons2 in Hcycle; [|rewrite <- unique_env_map_assq in Hunique; apply Hunique].
+    apply unique_env_inv in Hunique.
+    rewrite in_fv_recL_cons in * by tauto. simpl in *.
+    rewrite fv_substf_iff.
+    destruct freevar_eq_dec; [congruence|].
+    firstorder.
+Qed.
+
+Lemma in_fv_recL_app :
+  forall env t1 t2, in_fv_recL env (app t1 t2) == in_fv_recL env t1 ++ in_fv_recL env t2.
+Proof.
+  intros env t1 t2 x. rewrite in_app_iff, !in_fv_recL_iff.
+  split; intros H; inversion H; subst.
+  - simpl in H0. rewrite in_app_iff in H0; destruct H0.
+    + left. constructor. assumption.
+    + right. constructor. assumption.
+  - simpl in H0. rewrite in_app_iff in H0; destruct H0.
+    + left. eapply in_fv_rec_env; eassumption.
+    + right. eapply in_fv_rec_env; eassumption.
+  - inversion H0; subst.
+    + constructor. simpl. rewrite in_app_iff. left; assumption.
+    + eapply in_fv_rec_env; [simpl; rewrite in_app_iff; left| |]; eassumption.
+  - inversion H0; subst.
+    + constructor. simpl. rewrite in_app_iff. right; assumption.
+    + eapply in_fv_rec_env; [simpl; rewrite in_app_iff; right| |]; eassumption.
+Qed.
+
+Lemma in_fv_recL_lam :
+  forall env t, in_fv_recL env (lam t) == in_fv_recL env t.
+Proof.
+  intros env t x. rewrite !in_fv_recL_iff.
+  split; intros H; inversion H; subst.
+  - simpl in H0. constructor. assumption.
+  - simpl in H0. eapply in_fv_rec_env; eassumption.
+  - constructor. simpl. assumption.
+  - eapply in_fv_rec_env; simpl; eassumption.
+Qed.
+
+Lemma substb_fv :
+  forall t k u, fv (t [ k <- u ]) \subseteq fv t ++ fv u.
+Proof.
+  induction t; intros k u.
+  - simpl. destruct Nat.eq_dec; simpl; prove_list_inc.
+  - simpl. prove_list_inc.
+  - simpl. apply IHt.
+  - simpl. rewrite IHt1, IHt2. prove_list_inc.
+Qed.
+
+Lemma in_fv_recL_substb :
+  forall env k t u, in_fv_recL env (t [ k <- u ]) \subseteq in_fv_recL env t ++ in_fv_recL env u.
+Proof.
+  intros env k t u x. rewrite in_app_iff, !in_fv_recL_iff.
+  intros H; inversion H; subst.
+  - rewrite substb_fv, in_app_iff in H0. destruct H0; [left | right]; constructor; assumption.
+  - rewrite substb_fv, in_app_iff in H0. destruct H0; [left | right]; eapply in_fv_rec_env; eassumption.
+Qed.
+
+
+Lemma read_env3_cons_notin :
+  forall env t1 t2 ei x, x \notin in_fv_recL env t1 -> read_env3 ((x, ei) :: env) t1 t2 <-> read_env3 env t1 t2.
+Proof.
+  intros env t1 t2 ei x Hx. split; intros H; induction H.
+  - rewrite in_fv_recL_app, in_app_iff in Hx. constructor; tauto.
+  - apply read_env3_lam with (L := x :: L ++ env_ei_fv env); intros y Hy; simpl in Hy; rewrite in_app_iff in Hy.
+    apply H0; [tauto|].
+    rewrite in_fv_recL_lam in Hx. rewrite in_fv_recL_substb, in_app_iff.
+    intros [H2 | H2]; [tauto|].
+    rewrite in_fv_recL_iff in H2. inversion H2; subst.
+    + simpl in *; intuition congruence.
+    + simpl in *. rewrite env_ei_fv_None in * by intuition congruence. congruence.
+  - apply read_env3_fvar_free. simpl in H.
+    destruct freevar_eq_dec; congruence.
+  - eapply read_env3_fvar_bound; [|apply IHread_env3].
+    + simpl in *. destruct freevar_eq_dec; [|assumption].
+      subst. exfalso; apply Hx. rewrite in_fv_recL_iff. constructor. simpl; tauto.
+    + intros H1. apply Hx. rewrite in_fv_recL_iff in *. eapply in_fv_rec_env; [simpl; left; reflexivity| |eassumption].
+      simpl in H. destruct freevar_eq_dec; [|congruence]. subst.
+      exfalso; apply Hx. constructor; simpl; tauto.
+  - eapply read_env3_fvar_lazy. simpl in H.
+    destruct freevar_eq_dec; [|eassumption].
+    subst. exfalso. apply Hx. rewrite in_fv_recL_iff. constructor. simpl; tauto.
+  - rewrite in_fv_recL_app, in_app_iff in Hx. constructor; tauto.
+  - apply read_env3_lam with (L := x :: L ++ env_ei_fv env); intros y Hy; simpl in Hy; rewrite in_app_iff in Hy.
+    apply H0; [tauto|].
+    rewrite in_fv_recL_lam in Hx. rewrite in_fv_recL_substb, in_app_iff.
+    intros [H2 | H2]; [tauto|].
+    rewrite in_fv_recL_iff in H2. inversion H2; subst.
+    + simpl in *; intuition congruence.
+    + simpl in *. rewrite env_ei_fv_None in * by intuition congruence. congruence.
+  - apply read_env3_fvar_free. simpl.
+    destruct freevar_eq_dec; [|assumption].
+    subst. exfalso; apply Hx. rewrite in_fv_recL_iff. constructor. simpl; tauto.
+  - eapply read_env3_fvar_bound; [|apply IHread_env3].
+    + simpl in *. destruct freevar_eq_dec; [|assumption].
+      subst. exfalso; apply Hx. rewrite in_fv_recL_iff. constructor. simpl; tauto.
+    + intros H1. apply Hx. rewrite in_fv_recL_iff in *. eapply in_fv_rec_env; [simpl; left; reflexivity| |eassumption].
+      assumption.
+  - eapply read_env3_fvar_lazy. simpl.
+    destruct freevar_eq_dec; [|eassumption].
+    subst. exfalso. apply Hx. rewrite in_fv_recL_iff. constructor. simpl; tauto.
+Qed.
+
+Lemma read_env3_read_env2_right :
+  forall env t, elc (rdei env) -> unique_env env -> acyclic_env (rdei env) -> lc t -> read_env3 env t (read_env2 env t).
+Proof.
+  intros env. induction env as [|[x u] env]; intros t Helc Hunique Hcycle Hlc.
+  - unfold read_env2. simpl. induction Hlc.
+    + apply read_env3_fvar_free. reflexivity.
+    + constructor; assumption.
+    + apply read_env3_lam with (L := L). assumption.
+  - simpl in Hcycle.
+    rewrite acyclic_env_cons2 in Hcycle; [|erewrite <- unique_env_map_assq in Hunique; apply Hunique].
+    destruct Hcycle as [Hxcycle Hcycle].
+    apply unique_env_inv in Hunique; destruct Hunique as [Hunique Hx].
+    simpl in Helc.
+    apply elc_cons_inv in Helc; [|unfold rdei; rewrite env_find_map_assq, Hx; reflexivity]; destruct Helc as [Hlcu Helc].
+    destruct u.
+    + rewrite read_env2_cons_not_lazy; [|assumption|intros H; inversion H].
+      apply read_env3_cons_subst.
+      * assumption.
+      * apply IHenv; assumption.
+      * rewrite read_env3_cons_notin; [|intros Hx2; apply acyclic_fv_recL_read_env2 in Hx2; tauto].
+        apply IHenv; assumption.
+    + rewrite read_env2_cons_lazy by assumption.
+      apply read_env3_cons_lazy; [assumption|].
+      apply IHenv; assumption.
+    + rewrite read_env2_cons_not_lazy; [|assumption|intros H; inversion H].
+      apply read_env3_cons_subst.
+      * assumption.
+      * apply IHenv; assumption.
+      * rewrite read_env3_cons_notin; [|intros Hx2; apply acyclic_fv_recL_read_env2 in Hx2; tauto].
+        apply IHenv; assumption.
+Qed.
+
+Lemma read_env3_compose :
+  forall env t1 t2 t3, read_env3 env t1 t2 -> read_env3 env t2 t3 -> read_env3 env t1 t3.
+Proof.
+  intros env t1 t2 t3 H. revert t3. induction H.
+  - intros t5 H2. inversion H2; subst; constructor; auto.
+  - intros t3 H2. inversion H2; subst.
+    apply read_env3_lam with (L := L ++ L0).
+    intros x Hx; rewrite in_app_iff in Hx; apply H0; auto.
+  - intros t3 H2. inversion H2; congruence.
+  - intros t3 H2. econstructor; [eassumption|].
+    apply IHread_env3. assumption.
+  - intros; assumption.
+Qed.
+
+Lemma check_red_lc_2 :
+  forall env t1 t2, check_red env t1 t2 -> lc t2.
+Proof.
+  intros env t1 t2 [t3 [H1 H2]].
+  eapply read_env3_lc_1; eassumption.
+Qed.
+
+Global Instance list_inc_list_same_Proper : Proper (list_same ==> list_same ==> iff) list_inc.
+Proof.
+  intros L1 L2 H12 L3 L4 H34; split; intros H x; specialize (H12 x); specialize (H34 x); specialize (H x); tauto.
+Qed.
+
+Lemma substb_fv2 :
+  forall t k u, fv t \subseteq fv (t [ k <- u ]).
+Proof.
+  induction t.
+  - intros; simpl. prove_list_inc.
+  - intros; simpl. reflexivity.
+  - intros; simpl. apply IHt.
+  - intros; simpl. rewrite <- IHt1, <- IHt2. reflexivity.
+Qed.
+
+Lemma read_env3_fv :
+  forall env t1 t2, read_env3 env t1 t2 -> fv t2 \subseteq in_fv_recL env t1.
+Proof.
+  intros env t1 t2 H. induction H.
+  - simpl. rewrite in_fv_recL_app, IHread_env3_1, IHread_env3_2. reflexivity.
+  - simpl. pick x \notin (L ++ fv t2 ++ env_ei_fv env) as Hx; rewrite !in_app_iff in Hx.
+    specialize (H0 x ltac:(tauto)).
+    rewrite <- substb_fv2 in H0.
+    intros y Hy. specialize (H0 y Hy).
+    rewrite in_fv_recL_substb in H0.
+    rewrite in_fv_recL_lam.
+    rewrite in_app_iff in H0; destruct H0 as [H0 | H0]; [assumption|].
+    rewrite in_fv_recL_iff in H0. inversion H0; subst.
+    + simpl in H1. intuition congruence.
+    + simpl in H1. destruct H1 as [-> | []].
+      rewrite env_ei_fv_None in H2 by tauto. congruence.
+  - intros y Hy; destruct Hy as [-> | []].
+    rewrite in_fv_recL_iff. constructor. simpl; tauto.
+  - etransitivity; [eassumption|].
+    intros y Hy; rewrite in_fv_recL_iff in *.
+    eapply in_fv_rec_env; try eassumption. simpl; tauto.
+  - intros y Hy; destruct Hy as [-> | []].
+    rewrite in_fv_recL_iff. constructor. simpl; tauto.
+Qed.
+
+Lemma check_red_update_env_helper :
+  forall env t1 t2 t ei2 x, env_wf env -> env_find env x = None -> lc t -> x \notin fv (read_env (rdei env) t) -> x \notin fv (read_env (rdei env) (read_envitem ei2)) -> read_env3 ((x, ELazy t) :: env) t1 t2 -> check_red ((x, ELazy t) :: env) t (read_envitem ei2) -> ~is_lazy ei2 -> exists t3, trans_refl_clos beta (t2 [ x := read_env2 env (read_envitem ei2) ]) t3 /\ read_env3 ((x, ei2) :: env) t1 t3.
+Proof.
+  intros env t1 t2 t ei2 x Hewf Hx Hlc Htcycle Heicycle H Hred Hlazy. induction H.
+  - destruct IHread_env3_1 as (t5 & Ht5a & Ht5b).
+    destruct IHread_env3_2 as (t6 & Ht6a & Ht6b).
+    exists (app t5 t6). split; [apply trans_refl_clos_beta_app; try assumption; apply substf_lc|constructor; assumption].
+    + eapply read_env3_lc_2; eassumption.
+    + eapply read_env2_lc; [|eapply check_red_lc_2; eassumption].
+      apply Hewf.
+    + eapply read_env3_lc_2; eassumption.
+    + eapply read_env2_lc; [|eapply check_red_lc_2; eassumption].
+      apply Hewf.
+  - pick y \notin (x :: L ++ fv (t2 [ x := read_env2 env (read_envitem ei2) ]) ++ fv t1 ++ env_ei_fv ((x, ei2) :: env)) as Hy.
+    simpl in Hy; rewrite !in_app_iff in Hy.
+    specialize (H0 y ltac:(tauto)).
+    destruct H0 as (t3 & Ht3a & Ht3b).
+    exists (lam (closeb 0 y t3)). split.
+    + apply trans_refl_clos_beta_lam with (x := y).
+      * tauto.
+      * apply closeb_lc_free.
+      * rewrite open_close_var; [|eapply read_env3_lc_2; eassumption].
+        rewrite substf_substb_free; [assumption|simpl; intuition congruence|].
+        apply read_env2_lc; [|eapply check_red_lc_2; eassumption].
+        apply Hewf.
+    + apply read_env3_lam_one with (x := y).
+      * tauto.
+      * apply closeb_lc_free.
+      * tauto.
+      * rewrite open_close_var; [|eapply read_env3_lc_2; eassumption].
+        assumption.
+  - exists (fvar x0). split; [simpl in *; repeat destruct freevar_eq_dec; try congruence; constructor|].
+    apply read_env3_fvar_free.
+    simpl in *. destruct freevar_eq_dec; congruence.
+  - simpl in H. destruct freevar_eq_dec.
+    + subst. injection H; intro; subst. simpl in *.
+      destruct Hred as (t2 & Ht2a & Ht2b).
+      rewrite read_env2_cons_lazy in Ht2a by assumption.
+      assert (H1 := H0); apply read_env3_read_env2_left in H1; [|rewrite env_wf_cons_inv; tauto].
+      eapply read_env3_beta in H1; [|rewrite read_env2_cons_lazy; eassumption].
+      destruct H1 as (t4 & Ht4a & Ht4b). exists t4.
+      split.
+      * rewrite substf_fv; [assumption|].
+        rewrite read_env3_fv; [|eassumption].
+        rewrite in_fv_recL_cons by tauto.
+        enough (x \notin in_fv_recL env t) by tauto.
+        intros H2.
+        apply acyclic_fv_recL_read_env2 in H2; try apply Hewf; tauto.
+      * eapply read_env3_fvar_bound; [simpl; destruct freevar_eq_dec; [reflexivity|congruence]|].
+        assert (Hx2 : x \notin in_fv_recL env (read_envitem ei2)) by
+            (intros H2; apply acyclic_fv_recL_read_env2 in H2; try apply Hewf; tauto).
+        rewrite read_env3_cons_notin by (exact Hx2).
+        rewrite <- read_env3_cons_notin by (exact Hx2).
+        eapply read_env3_compose; eassumption.
+    + destruct IHread_env3 as (t3 & Ht3a & Ht3b).
+      exists t3. split; [assumption|].
+      eapply read_env3_fvar_bound; [simpl; destruct freevar_eq_dec; [congruence|eassumption]|].
+      assumption.
+  - simpl in H. destruct freevar_eq_dec.
+    + subst. injection H; intro; subst. simpl in *.
+      destruct freevar_eq_dec; [|congruence].
+      exists (read_env2 env (read_envitem ei2)).
+      split; [constructor|].
+      eapply read_env3_fvar_bound; [simpl; destruct freevar_eq_dec; [reflexivity|congruence]|].
+      erewrite read_env3_cons_notin by (intros H2; apply acyclic_fv_recL_read_env2 in H2; try apply Hewf; tauto).
+      apply read_env3_read_env2_right; try apply Hewf. eapply check_red_lc_2; eassumption.
+    + exists (fvar x0).
+      simpl; destruct freevar_eq_dec; [congruence|].
+      split; [constructor|].
+      eapply read_env3_fvar_lazy.
+      simpl. destruct freevar_eq_dec; [congruence|]. eassumption.
+Qed.
+
+Lemma trans_refl_clos_beta_lc_left :
+  forall t1 t2, trans_refl_clos beta t1 t2 -> lc t2 -> lc t1.
+Proof.
+  intros t1 t2 H. destruct H.
+  - intros; assumption.
+  - intros _. apply beta_lc in H. tauto.
+Qed.
+
+Inductive lc_at : term -> nat -> Prop :=
+| lc_at_fvar : forall x k, lc_at (fvar x) k
+| lc_at_bvar : forall n k, n < k -> lc_at (bvar n) k
+| lc_at_lam : forall t k, lc_at t (S k) -> lc_at (lam t) k
+| lc_at_app : forall t1 t2 k, lc_at t1 k -> lc_at t2 k -> lc_at (app t1 t2) k.
+
+Lemma lc_at_substb_id :
+  forall t k1 k2 u, lc_at t k1 -> k1 <= k2 -> t [ k2 <- u ] = t.
+Proof.
+  induction t; intros k1 k2 u H1 H2.
+  - simpl. inversion H1; subst. destruct Nat.eq_dec; [lia|reflexivity].
+  - reflexivity.
+  - simpl. f_equal. inversion H1; subst.
+    eapply IHt; [eassumption|]. lia.
+  - simpl. inversion H1; subst. f_equal; eauto.
+Qed.
+
+Lemma lc_at_inc :
+  forall t k1 k2, lc_at t k1 -> k1 <= k2 -> lc_at t k2.
+Proof.
+  induction t; intros k1 k2 H1 H2.
+  - inversion H1; constructor; lia.
+  - constructor.
+  - inversion H1; subst; constructor.
+    eapply IHt; [eassumption|lia].
+  - inversion H1; subst; constructor; [eapply IHt1|eapply IHt2]; try eassumption; lia.
+Qed.
+
+Lemma lc_at_substb_lc_at :
+  forall t k u, lc_at u 0 -> lc_at t (S k) -> lc_at (t [ k <- u ]) k.
+Proof.
+  induction t; intros k u H1 H2.
+  - simpl. destruct Nat.eq_dec.
+    + eapply lc_at_inc; [eassumption|lia].
+    + inversion H2. constructor. lia.
+  - simpl; constructor.
+  - simpl. inversion H2; subst. constructor.
+    apply IHt; assumption.
+  - simpl. inversion H2; subst.
+    constructor; [apply IHt1 | apply IHt2]; assumption.
+Qed.
+
+Lemma lc_at_substb_lc_at2 :
+  forall t k u, lc_at (t [ k <- u ]) k -> lc_at t (S k).
+Proof.
+  induction t; intros k u H.
+  - simpl in *. destruct Nat.eq_dec.
+    + constructor. lia.
+    + inversion H. constructor. lia.
+  - simpl; constructor.
+  - simpl. inversion H; subst. constructor.
+    eapply IHt; eassumption.
+  - simpl. inversion H; subst.
+    constructor; [eapply IHt1 | eapply IHt2]; eassumption.
+Qed.
+
+Fixpoint size t :=
+  match t with
+  | bvar _ => 0
+  | fvar _ => 0
+  | lam t => S (size t)
+  | app t1 t2 => S (size t1 + size t2)
+  end.
+
+Lemma open_size :
+  forall t k x, size (t [ k <- fvar x ]) = size t.
+Proof.
+  induction t; intros k x; simpl.
+  - destruct Nat.eq_dec; reflexivity.
+  - reflexivity.
+  - rewrite IHt; reflexivity.
+  - rewrite IHt1, IHt2; reflexivity.
+Qed.
+
+Lemma lc_at_lc :
+  forall t, lc t <-> lc_at t 0.
+Proof.
+  intros t. split.
+  - intros H. induction H.
+    + constructor.
+    + constructor; assumption.
+    + constructor. pick x \notin L as Hx. eapply lc_at_substb_lc_at2. apply H0; eassumption.
+  - remember (size t) as n. revert t Heqn. refine (lt_wf_ind n (fun n => _) _). clear n. intros n Hrec t Hsize H.
+    destruct t.
+    + inversion H; lia.
+    + constructor.
+    + simpl in Hsize. subst.
+      inversion H; subst.
+      apply lc_lam with (L := nil).
+      intros x _. eapply Hrec; [|reflexivity|]; [rewrite open_size; lia|].
+      apply lc_at_substb_lc_at; [constructor|assumption].
+    + simpl in Hsize. subst. inversion H; subst.
+      constructor.
+      all: eapply Hrec; [|reflexivity|]; [lia|assumption].
+Qed.
+
+Lemma substf_lc2 :
+  forall t x u, lc (t [ x := u ]) -> lc t.
+Proof.
+  intros. rewrite lc_at_lc in *.
+  remember 0 as k. clear Heqk.
+  revert k H. induction t; intros k H; simpl in *.
+  - assumption.
+  - constructor.
+  - constructor. apply IHt. inversion H; subst; assumption.
+  - inversion H; subst. constructor; [apply IHt1 | apply IHt2]; assumption.
+Qed.
+
+Lemma check_red_update_env_easy :
+  forall env t1 t2 ei1 ei2 x,
+    env_wf ((x, ei1) :: env) -> x \notin fv (read_env (rdei env) (read_envitem ei2)) ->
+    check_red ((x, ei1) :: env) t1 t2 -> check_red ((x, ei1) :: env) (read_envitem ei1) (read_envitem ei2) ->
+    is_lazy ei1 -> ~ is_lazy ei2 -> check_red ((x, ei2) :: env) t1 t2.
+Proof.
+  intros env t1 t2 ei1 ei2 x Hewf Hcycle Ht Hei Hlazy1 Hlazy2.
+  destruct ei1; try solve [inversion Hlazy1].
+  simpl in *.
+  rewrite env_wf_cons_inv in Hewf.
+  assert (Hx : env_find env x = None) by tauto.
+  destruct Ht as [t3 [Ht1 Ht2]].
+  eapply check_red_update_env_helper in Ht2; try eassumption; try apply Hewf.
+  destruct Ht2 as (t4 & Ht4a & Ht4b).
+  exists t4. split; [|eassumption].
+  rewrite read_env2_cons_lazy in Ht1 by assumption. rewrite read_env2_cons_not_lazy by assumption.
+  eapply trans_refl_clos_compose; [|eassumption].
+  eapply trans_refl_clos_beta_substf.
+  - eapply trans_refl_clos_beta_lc_left; [eassumption|].
+    eapply substf_lc2; eapply trans_refl_clos_beta_lc_left; [eassumption|].
+    eapply read_env3_lc_2; eassumption.
+  - apply read_env2_lc; [|eapply check_red_lc_2; eassumption]. apply Hewf.
+  - assumption.
+  - constructor.
+Qed.
+
+
+
+(*
+Admitted.
+  revert t1 Ht1 Hei.
+  induction Ht2; intros t5 Ht5 [t6 [Hei1 Hei2]].
+  - admit.
+  - admit.
+  - exists (fvar x0). admit.
+  - destruct (IHHt2 Ht1) as [t5 [Ht5a Ht5b]].
+    destruct (freevar_eq_dec x x0).
+    + subst.
+      simpl in H. destruct freevar_eq_dec; [|congruence].
+      injection H; intro; subst. simpl in *.
+      exists t4. split.
+      * eapply trans_refl_clos_compose; [eassumption|].
+        admit.
+      * eapply read_env3_fvar_bound; [simpl in *; destruct freevar_eq_dec; [reflexivity|congruence]|].
+        admit.
+    + exists t5. split; [assumption|].
+      eapply read_env3_fvar_bound; simpl in *; [|eassumption].
+      destruct freevar_eq_dec; congruence.
+  - simpl in H. destruct freevar_eq_dec.
+    + subst. injection H; intro; subst.
+      exists t4. 
+
+  exists (t3 [ x := t4 ]).
+  split.
+  - rewrite read_env2_cons_not_lazy by assumption.
+    apply trans_refl_clos_beta_substf.
+    + admit.
+    + admit.
+    + admit.
+    + admit.
+  - 
+  unfold check_red in *.
+  rewrite read_env2_cons_lazy in Ht by (simpl; tauto).
+  destruct (in_dec freevar_eq_dec x (in_fv_recL env t1)).
+  - rewrite !read_env2_cons_not_lazy by tauto.
+    apply trans_refl_clos_beta_substf.
+    + admit.
+    + admit.
+    + rewrite read_env2_cons_lazy in Ht.
+      * eapply trans_refl_clos_compose; [apply Ht|].
+        rewrite !in_fv_recL_cons_In with (t := t1) by assumption. simpl.
+        apply trans_refl_clos_beta_same. apply read_env2_same_list_strong.
+        intros z Hz1 Hz2.
+        rewrite !list_diff_In_iff, !in_fv_recL_cons, !in_app_iff by assumption.
+        rewrite <- in_fv_recL_iff in Hz2. simpl.
+        admit.
+      * rewrite list_diff_In_iff. rewrite in_fv_recL_cons_In with (t := t1), in_app_iff by assumption.
+        tauto.
+    + rewrite in_fv_recL_cons_In with (t := t1) by assumption.
+      apply trans_refl_clos_beta_same. apply read_env2_same_list_strong.
+      intros z Hz1 Hz2.
+      rewrite list_diff_In_iff, in_app_iff, !in_fv_recL_iff. simpl. tauto.
+  - rewrite !read_env2_cons_not_lazy by tauto.
+    rewrite substf_fv with (x := x) (u := read_env2 env nil (read_envitem ei2)) by admit.
+    eapply trans_refl_clos_compose; [apply Ht|].
+    destruct (in_dec freevar_eq_dec x (in_fv_recL env t2)).
+    + rewrite read_env2_cons_not_lazy; [|left; rewrite list_diff_In_iff, !in_fv_recL_cons_same; tauto].
+      apply trans_refl_clos_beta_substf.
+      * admit.
+      * admit.
+      * rewrite !in_fv_recL_cons_In with (t := t2) by assumption.
+        rewrite !in_fv_recL_cons_notIn with (t := t1) by assumption. simpl.
+        apply trans_refl_clos_beta_same. apply read_env2_same_list_strong.
+        intros z Hz1 Hz2.
+        rewrite !list_diff_In_iff, !in_app_iff. rewrite <- in_fv_recL_iff in Hz2.
+        tauto.
+      * rewrite !in_fv_recL_cons_In with (t := t2) by assumption.
+        rewrite !in_fv_recL_cons_notIn with (t := t1) by assumption. simpl.
+        rewrite !in_fv_recL_cons_notIn with (t := t) in Hei by admit.
+        rewrite !in_fv_recL_cons_notIn with (t := read_envitem ei2) in Hei by admit.
+        simpl in Hei.
+        rewrite read_env2_cons_lazy in Hei by (simpl; tauto).
+        rewrite read_env2_cons_lazy in Hei by admit.
+        admit.
+    + rewrite substf_fv by admit.
+      rewrite read_env2_cons_lazy by (rewrite list_diff_In_iff, !in_fv_recL_cons_same; tauto).
+      rewrite !in_fv_recL_cons_notIn by assumption.
+      constructor.
+    split; [|split].
+    + admit. (* intros y Hy1 Hy2. rewrite in_app_iff.
+      rewrite in_fv_rec_cons in * by assumption.
+      destruct (in_fv_rec_dec env t1 x); [apply Ht in i; rewrite in_fv_rec_cons in i by assumption; tauto|].
+      left. apply Ht; rewrite in_fv_rec_cons by assumption; simpl; [|tauto].
+      destruct Hy1; [tauto|].
+      destruct Hy1 as [Hy1 | Hy1].
+      * left. admit.
+      * right. apply Hei.
+        -- rewrite in_fv_rec_cons by assumption. tauto.
+        -- rewrite in_fv_rec_cons in * by assumption; simpl in *. *)
+    + intros y Hy. rewrite in_app_iff in Hy. destruct Hy as [Hy | Hy].
+      * apply Ht in Hy.
+        apply Ht in i.
+        rewrite in_fv_rec_cons in * by assumption.
+        tauto.
+      * apply Hei in Hy.
+        apply Ht in i.
+        rewrite in_fv_rec_cons in * by assumption.
+        simpl in *.
+        intros [H | H]; [|tauto].
+        assert (~ in_fv_rec env y t) by tauto.
+        assert (~ in_fv_rec env x t1) by tauto.
+        admit.
+      * rewrite in_fv_rec_cons by (inversion Hunique; assumption).
+        admit.
+    + rewrite !read_env2_cons_not_lazy by tauto.
+      apply trans_refl_clos_beta_substf.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+  - exists L. split.
+    + intros y Hy.
+      rewrite in_fv_rec_cons by (inversion Hunique; assumption).
+      apply Ht in Hy. rewrite in_fv_rec_cons in Hy by (inversion Hunique; assumption). tauto.
+      intros [H | H].
+      * 
+      * 
+      rewrite fv_substf, in_app_iff.
+      admit.
+    + rewrite !read_env2_cons_not_lazy by tauto.
+      apply trans_refl_clos_beta_substf.
+      * admit.
+      * admit.
+      * rewrite !read_env2_cons_lazy in Ht by (simpl; tauto). apply Ht.
+      * admit.
+Admitted.
+
+
+Lemma check_red_update_env_easy :
+  forall env t1 t2 ei1 ei2 x,
+    unique_env ((x, ei1) :: env) -> check_red ((x, ei1) :: env) t1 t2 ->
+    check_red ((x, ei1) :: env) (read_envitem ei1) (read_envitem ei2) -> is_lazy ei1 -> ~ is_lazy ei2 -> check_red ((x, ei2) :: env) t1 t2.
+Proof.
+  intros env t1 t2 ei1 ei2 x Hunique Ht Hei Hlazy1 Hlazy2.
+  destruct ei1; try solve [inversion Hlazy1].
+  simpl in *.
+  assert (Hx : env_find env x = None) by (inversion Hunique; assumption).
+  unfold check_red in *.
+  rewrite read_env2_cons_lazy in Ht by (simpl; tauto).
+  destruct (in_dec freevar_eq_dec x (in_fv_recL env t1)).
+  - rewrite !read_env2_cons_not_lazy by tauto.
+    apply trans_refl_clos_beta_substf.
+    + admit.
+    + admit.
+    + rewrite read_env2_cons_lazy in Ht.
+      * eapply trans_refl_clos_compose; [apply Ht|].
+        rewrite !in_fv_recL_cons_In with (t := t1) by assumption. simpl.
+        apply trans_refl_clos_beta_same. apply read_env2_same_list_strong.
+        intros z Hz1 Hz2.
+        rewrite !list_diff_In_iff, !in_fv_recL_cons, !in_app_iff by assumption.
+        rewrite <- in_fv_recL_iff in Hz2. simpl.
+        admit.
+      * rewrite list_diff_In_iff. rewrite in_fv_recL_cons_In with (t := t1), in_app_iff by assumption.
+        tauto.
+    + rewrite in_fv_recL_cons_In with (t := t1) by assumption.
+      apply trans_refl_clos_beta_same. apply read_env2_same_list_strong.
+      intros z Hz1 Hz2.
+      rewrite list_diff_In_iff, in_app_iff, !in_fv_recL_iff. simpl. tauto.
+  - rewrite !read_env2_cons_not_lazy by tauto.
+    rewrite substf_fv with (x := x) (u := read_env2 env nil (read_envitem ei2)) by admit.
+    eapply trans_refl_clos_compose; [apply Ht|].
+    destruct (in_dec freevar_eq_dec x (in_fv_recL env t2)).
+    + rewrite read_env2_cons_not_lazy; [|left; rewrite list_diff_In_iff, !in_fv_recL_cons_same; tauto].
+      apply trans_refl_clos_beta_substf.
+      * admit.
+      * admit.
+      * rewrite !in_fv_recL_cons_In with (t := t2) by assumption.
+        rewrite !in_fv_recL_cons_notIn with (t := t1) by assumption. simpl.
+        apply trans_refl_clos_beta_same. apply read_env2_same_list_strong.
+        intros z Hz1 Hz2.
+        rewrite !list_diff_In_iff, !in_app_iff. rewrite <- in_fv_recL_iff in Hz2.
+        tauto.
+      * rewrite !in_fv_recL_cons_In with (t := t2) by assumption.
+        rewrite !in_fv_recL_cons_notIn with (t := t1) by assumption. simpl.
+        rewrite !in_fv_recL_cons_notIn with (t := t) in Hei by admit.
+        rewrite !in_fv_recL_cons_notIn with (t := read_envitem ei2) in Hei by admit.
+        simpl in Hei.
+        rewrite read_env2_cons_lazy in Hei by (simpl; tauto).
+        rewrite read_env2_cons_lazy in Hei by admit.
+        admit.
+    + rewrite substf_fv by admit.
+      rewrite read_env2_cons_lazy by (rewrite list_diff_In_iff, !in_fv_recL_cons_same; tauto).
+      rewrite !in_fv_recL_cons_notIn by assumption.
+      constructor.
+    split; [|split].
+    + admit. (* intros y Hy1 Hy2. rewrite in_app_iff.
+      rewrite in_fv_rec_cons in * by assumption.
+      destruct (in_fv_rec_dec env t1 x); [apply Ht in i; rewrite in_fv_rec_cons in i by assumption; tauto|].
+      left. apply Ht; rewrite in_fv_rec_cons by assumption; simpl; [|tauto].
+      destruct Hy1; [tauto|].
+      destruct Hy1 as [Hy1 | Hy1].
+      * left. admit.
+      * right. apply Hei.
+        -- rewrite in_fv_rec_cons by assumption. tauto.
+        -- rewrite in_fv_rec_cons in * by assumption; simpl in *. *)
+    + intros y Hy. rewrite in_app_iff in Hy. destruct Hy as [Hy | Hy].
+      * apply Ht in Hy.
+        apply Ht in i.
+        rewrite in_fv_rec_cons in * by assumption.
+        tauto.
+      * apply Hei in Hy.
+        apply Ht in i.
+        rewrite in_fv_rec_cons in * by assumption.
+        simpl in *.
+        intros [H | H]; [|tauto].
+        assert (~ in_fv_rec env y t) by tauto.
+        assert (~ in_fv_rec env x t1) by tauto.
+        admit.
+      * rewrite in_fv_rec_cons by (inversion Hunique; assumption).
+        admit.
+    + rewrite !read_env2_cons_not_lazy by tauto.
+      apply trans_refl_clos_beta_substf.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+  - exists L. split.
+    + intros y Hy.
+      rewrite in_fv_rec_cons by (inversion Hunique; assumption).
+      apply Ht in Hy. rewrite in_fv_rec_cons in Hy by (inversion Hunique; assumption). tauto.
+      intros [H | H].
+      * 
+      * 
+      rewrite fv_substf, in_app_iff.
+      admit.
+    + rewrite !read_env2_cons_not_lazy by tauto.
+      apply trans_refl_clos_beta_substf.
+      * admit.
+      * admit.
+      * rewrite !read_env2_cons_lazy in Ht by (simpl; tauto). apply Ht.
+      * admit.
+Admitted.
+*)
+
+(*
+Lemma check_red_update_env_easy :
+  forall env t1 t2 ei1 ei2 x,
+    unique_env ((x, ei1) :: env) -> check_red ((x, ei1) :: env) t1 t2 ->
+    check_red ((x, ei1) :: env) (read_envitem ei1) (read_envitem ei2) -> is_lazy ei1 -> ~ is_lazy ei2 -> check_red ((x, ei2) :: env) t1 t2.
+Proof.
+  intros env t1 t2 ei1 ei2 x Hunique Ht Hei Hlazy1 Hlazy2.
+  destruct Ht as [L Ht].
+  destruct Hei as [L2 Hei].
+  destruct ei1; try solve [inversion Hlazy1].
+  simpl in *.
+  assert (Hx : env_find env x = None) by (inversion Hunique; assumption).
+  destruct (in_dec freevar_eq_dec x L).
+  - exists (L ++ L2).
+    split; [|split].
+    + admit. (* intros y Hy1 Hy2. rewrite in_app_iff.
+      rewrite in_fv_rec_cons in * by assumption.
+      destruct (in_fv_rec_dec env t1 x); [apply Ht in i; rewrite in_fv_rec_cons in i by assumption; tauto|].
+      left. apply Ht; rewrite in_fv_rec_cons by assumption; simpl; [|tauto].
+      destruct Hy1; [tauto|].
+      destruct Hy1 as [Hy1 | Hy1].
+      * left. admit.
+      * right. apply Hei.
+        -- rewrite in_fv_rec_cons by assumption. tauto.
+        -- rewrite in_fv_rec_cons in * by assumption; simpl in *. *)
+    + intros y Hy. rewrite in_app_iff in Hy. destruct Hy as [Hy | Hy].
+      * apply Ht in Hy.
+        apply Ht in i.
+        rewrite in_fv_rec_cons in * by assumption.
+        tauto.
+      * apply Hei in Hy.
+        apply Ht in i.
+        rewrite in_fv_rec_cons in * by assumption.
+        simpl in *.
+        intros [H | H]; [|tauto].
+        assert (~ in_fv_rec env y t) by tauto.
+        assert (~ in_fv_rec env x t1) by tauto.
+        admit.
+      * rewrite in_fv_rec_cons by (inversion Hunique; assumption).
+        admit.
+    + rewrite !read_env2_cons_not_lazy by tauto.
+      apply trans_refl_clos_beta_substf.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+  - exists L. split.
+    + intros y Hy.
+      rewrite in_fv_rec_cons by (inversion Hunique; assumption).
+      apply Ht in Hy. rewrite in_fv_rec_cons in Hy by (inversion Hunique; assumption). tauto.
+      intros [H | H].
+      * 
+      * 
+      rewrite fv_substf, in_app_iff.
+      admit.
+    + rewrite !read_env2_cons_not_lazy by tauto.
+      apply trans_refl_clos_beta_substf.
+      * admit.
+      * admit.
+      * rewrite !read_env2_cons_lazy in Ht by (simpl; tauto). apply Ht.
+      * admit.
+Admitted.
+*)
+
+Lemma check_red_self :
+  forall env t, lc t -> env_wf env -> check_red env t t.
+Proof.
+  intros env t Hlc Hewf. exists (read_env2 env t).
+  split; [constructor|].
+  apply read_env3_read_env2_right; try apply Hewf; assumption.
+Qed.
+
+Inductive readf (lamnf : list (freevar * nfval_or_lam)) (env : list (freevar * envitem)) : term -> cont -> term -> Prop :=
+| readf_nil : forall t, readf lamnf env t KNil t
+| readf_app : forall v pi K t1 t3,
+    readf lamnf env (read_stack (app (read_nfval v) t1) pi) K t3 -> readf lamnf env t1 (KApp v pi K) t3
+| readf_update_lam : forall t1 x K t2 t3,
+    env_find lamnf x = None -> check_red env (lam t2) (lam (closeb 0 x t1)) ->
+    readf lamnf env (lam t2) K t3 -> readf lamnf env t1 (KUpdateLam t2 x K) t3
+| readf_update_lazy : forall x pi K t1 t2 t4,
+    env_find env x = Some (ELazy t4) -> check_red env t4 t1 ->
+    readf lamnf env (read_stack t1 pi) K t2 -> readf lamnf env t1 (KUpdateLazy x pi K) t2.
+
+Definition check_lam f ei :=
+  match ei with
+  | ELam t x => t = f x
+  | _ => True
+  end.
+
+Definition read_state st t2 :=
+  (exists t3, readf (st_lamnf st) (st_env st) (read_stack (read_envitem (st_code st)) (st_stack st)) (st_cont st) t3 /\ read_env (rdei (st_env st)) t3 t2)
+  /\ (exists f, check_lam f (st_code st) /\ Forall (fun '(x, ei) => check_lam f ei) (st_env st) /\ forall x body, env_find (st_lamnf st) x = Some body -> exists t1, read_env (rdei (st_env st)) (lam (f x)) t1 /\ trans_refl_clos beta t1 (lam (closeb 0 x (read_nfval_or_lam body)))).
+
+Lemma read_stack_env_unique :
+  forall env pi t1 t2 t3, read_stack_env env t1 pi t2 -> read_stack_env env t1 pi t3 -> t2 = t3.
+Proof.
+  intros env pi. induction pi; intros t1 t2 t3 H1 H2.
+  - inversion H1; inversion H2; subst.
+    reflexivity.
+  - inversion H1; inversion H2; subst.
+    assert (t4 = t8) by (eapply read_env_unique; eassumption). subst.
+    eapply IHpi; eassumption.
+Qed.
+
+Lemma readf_unique :
+  forall lamnf t K env t2 t3, readf lamnf t K env t2 -> readf lamnf t K env t3 -> t2 = t3.
+Proof.
+  intros lamnf t K env t2 t3 H. revert t3. induction H; intros t6 H6; inversion H6; subst.
+  - eauto using read_env_unique.
+  - apply IHreadf. assumption. (* assert (t2 = t4) by (eapply read_stack_env_unique; eassumption). subst; assumption. *)
+  - apply IHreadf. assumption.
+  - apply IHreadf. assumption. (* assert (t3 = t7) by (eapply read_stack_env_unique; eassumption). subst; assumption. *)
+Qed.
+
+Lemma red_not_blocked :
+  forall st, (st_stack st = nil /\ st_cont st = KNil) \/ exists st2, red st st2.
+Proof.
+  intros st. destruct st as [t pi e K W L].
+  destruct t as [v | t | body x].
+  - destruct pi; [|right; eexists; constructor].
+    destruct K.
+    + left; split; reflexivity.
+    + right; eexists; constructor.
+    + right; eexists; constructor.
+    + right; eexists; constructor.
+  - destruct t.
+    + admit.
+    + destruct (env_find e f) as [[| |]|] eqn:Henv.
+      * right; eexists; apply red_var_val; eassumption.
+      * right; eexists; apply red_var_lazy; eassumption.
+      * right; eexists; apply red_var_lam; eassumption.
+      * right; eexists; apply red_var_open; assumption.
+    + right. pick y \notin L.
+      eexists; econstructor; eassumption.
+    + right; eexists; constructor.
+  - destruct pi; [|right; pick y \notin L; eexists; econstructor; eassumption].
+    destruct K.
+    + left; split; reflexivity.
+    + right; eexists. apply red_cont_update_lazy_lam.
+    + right.
+      destruct (env_find W x) eqn:HWx.
+      * eexists; apply red_cont_update_lam_lam; eassumption.
+      * eexists; apply red_lam_deepen; assumption.
+    + right.
+      destruct (env_find W x) eqn:HWx.
+      * eexists; apply red_cont_app_lam; eassumption.
+      * eexists; apply red_lam_deepen; assumption.
+Abort.
+
+Lemma split_left : forall (A B : Prop), A /\ (A -> B) -> A /\ B.
+Proof.
+  intros; tauto.
+Qed.
+
+Lemma split_right : forall (A B : Prop), B /\ (B -> A) -> A /\ B.
+Proof.
+  intros; tauto.
+Qed.
+
+Ltac split_left := apply split_left; split; [|intro].
+Ltac split_right := apply split_right; split; [|intro].
+Tactic Notation "split_left" "as" ident(H) := apply split_left; split; [|intro H].
+Tactic Notation "split_right" "as" ident(H) := apply split_right; split; [|intro H].
+
+
+Lemma red_beta :
+  forall st st2 t, read_state st t -> red st st2 -> exists t2, read_state st2 t2 /\ trans_refl_clos beta t t2.
+Proof.
+  intros st st2 t Hread1 Hred.
+  inversion Hred; subst; unfold read_state in *; simpl in *.
+  - exists t. split; [assumption|constructor].
+  - exists t. split; [|constructor].
+    split; [apply Hread1|].
+    destruct Hread1 as [Hreadf1 [f Hf]].
+    exists (fun x => if freevar_eq_dec x y then t0 else f x).
+    split; [|split].
+    + destruct freevar_eq_dec; tauto.
+    + admit.
+    + admit.
+  - admit.
+  - exists t. split; [assumption|constructor].
+  - exists t; split; [|constructor].
+    split; [|apply Hread1].
+    admit.
+  - exists t. split; [|constructor].
+    split; [|apply Hread1].
+    admit.
+    (* econstructor.
+    + eassumption.
+    + eapply check_red_self. admit.
+    + *)
+  - exists t. split; [|constructor].
+    destruct Hread1 as [Hreadf1 [f Hf]].
+    assert (t0 = f y) by admit.
+    split; [|exists f; tauto].
+    admit.
+  - exists t. split; [|constructor].
+    split; [|apply Hread1].
+    destruct Hread1 as [[t3 [Hreadf1 Hreadenv1]] Hf].
+    exists t3. split; [|assumption].
+    constructor. apply Hreadf1.
+  - exists t. split; [|constructor].
+    destruct Hread1 as [[t3 [Hreadf1 Hreadenv1]] [f Hf]].
+    split; [|exists f; tauto].
+    exists t3; split; [|assumption].
+    econstructor.
+    + assumption.
+    + rewrite close_open by admit. eapply check_red_self. admit.
+    + assumption.
+  - exists t. split; [|constructor].
+    destruct Hread1 as [[t3 [Hreadf1 Hreadenv1]] [f Hf]].
+    inversion Hreadf1; subst.
+    split; [exists t3; split; assumption|].
+    exists f. tauto.
+  - destruct Hread1 as [[t3 [Hreadf1 Hreadenv1]] [f Hf]].
+    inversion Hreadf1; subst.
+    admit.
+  - destruct Hread1 as [[t3 [Hreadf1 Hreadenv1]] [f Hf]].
+    inversion Hreadf1; subst.
+    exists t. split; [|constructor].
+    assert (t0 = f x) by admit.
+    split.
+    + exists t3. split; [|assumption]. admit.
+    + exists f.
+      split; [assumption|].
+      split; [tauto|].
+      intros x1 body1.
+      destruct freevar_eq_dec.
+      * intro Hbody1; injection Hbody1; intro; subst. simpl.
+        admit.
+      * apply Hf.
+  - destruct Hread1 as [[t3 [Hreadf1 Hreadenv1]] [f Hf]].
+    inversion Hreadf1; subst.
+    exists t. split; [|constructor].
+    assert (t1 = f x) by admit.
+    split.
+    + exists t3. split; [|assumption]. admit.
+    + exists f.
+      split; [assumption|].
+      split; [tauto|].
+      intros x1 body1.
+      destruct freevar_eq_dec.
+      * intros Hbody1; injection Hbody1; intro; subst.
+        destruct Hf as (Hf1 & Hf2 & Hf3).
+        specialize (Hf3 y body0 H).
+        destruct Hf3 as (t7 & Hf3).
+        subst.
+        admit.
+      * apply Hf.
+  - destruct Hread1 as [[t3 [Hreadf1 Hreadenv1]] [f Hf]].
+    inversion Hreadf1; subst.
+    admit. (* exists t. split; [|constructor].
+    split; [assumption|].
+    exists f. split; [tauto|].
+    split; [|tauto]. *)
+  - destruct Hread1 as [[t3 [Hreadf1 Hreadenv1]] [f Hf]].
+    inversion Hreadf1; subst.
+    admit.
+    (* exists t. split; [assumption|constructor]. *)
 
 
 
@@ -860,23 +3911,6 @@ Inductive env_value :=
 Definition gterm := (term * list (freevar * env_value))%type.
 
 
-(* List inclusion *)
-
-Definition list_inc (L1 L2 : list freevar) := forall x, In x L1 -> In x L2.
-
-Lemma list_inc_trans :
-  forall L1 L2 L3, list_inc L1 L2 -> list_inc L2 L3 -> list_inc L1 L3.
-Proof.
-  intros; unfold list_inc in *; firstorder.
-Qed.
-
-Lemma list_inc_app_left :
-  forall L1 L2 L3, list_inc (L1 ++ L2) L3 <-> list_inc L1 L3 /\ list_inc L2 L3.
-Proof.
-  intros; unfold list_inc in *.
-  firstorder using in_app_iff.
-  rewrite in_app_iff in *; firstorder.
-Qed.
 
 Inductive elc : env_value -> Prop :=
 | elc_term : forall t, lc t -> elc (Env_term t)
@@ -896,7 +3930,7 @@ Fixpoint gterm_env_fv (e : list (freevar * env_value)) :=
 
 Definition gterm_fv (t : gterm) := fv (fst t) ++ gterm_env_fv (snd t).
 
-Ltac prove_list_inc := (let x := fresh "x" in intros x; unfold gterm_fv; simpl; try repeat (rewrite in_app_iff; simpl); tauto).
+Ltac prove_list_inc ::= (let x := fresh "x" in intros x; unfold gterm_fv; simpl; try repeat (rewrite in_app_iff; simpl); tauto).
 
 Definition efv_read1 t :=
   match t with
@@ -1220,42 +4254,25 @@ Proof.
         -- rewrite in_app_iff in *; tauto.
 Qed.
 
-
-Lemma trans_refl_clos_induction_rev :
-  forall {A : Type} (R : A -> A -> Prop) (P : A -> Prop) (x : A),
-    P x -> (forall y z, P y -> R y z -> P z) -> (forall y, trans_refl_clos R x y -> P y).
+Lemma gterm_redt_env_wf :
+  forall t1 t2 L Lwf, gterm_redt L t1 t2 -> gterm_fv t1 \subseteq L -> lc (fst t1) -> gterm_env_wf Lwf (snd t1) -> lc (fst t2) /\ gterm_env_wf Lwf (snd t2).
 Proof.
-  intros A R P x HPx HPind y Hy. revert HPx.
-  induction Hy; firstorder.
-Qed.
-
-Require Import Setoid.
-Require Import Morphisms.
-
-Global Instance list_inc_Reflexive : Reflexive list_inc.
-Proof.
-  firstorder.
-Qed.
-
-Global Instance list_inc_Transitive : Transitive list_inc.
-Proof.
-  firstorder.
-Qed.
-
-Global Instance list_inc_PreOrdered : PreOrder list_inc.
-Proof.
-  split; auto with typeclass_instances.
-Qed.
-
-Notation "L1 '\subseteq' L2" := (list_inc L1 L2) (at level 80, only parsing).
-Notation "L1 '⊆' L2" := (list_inc L1 L2) (at level 80).
-
-Global Instance app_list_inc_Proper : Proper (list_inc ++> list_inc ++> list_inc) (@Datatypes.app freevar).
-Proof.
-  intros L1 L2 H12 L3 L4 H34.
-  rewrite list_inc_app_left, H12, H34.
-  split; prove_list_inc.
-Qed.
+  intros t1 t2 L Lwf H. induction H.
+  - intros HL Hlc Hwf; simpl in *. inversion Hlc; subst.
+    assert (gterm_fv (t1, e1) \subseteq L) by (rewrite <- HL; simpl in *; prove_list_inc).
+    split; [constructor|]; tauto.
+  - intros HL Hlc Hwf; simpl in *; inversion Hlc; subst.
+    assert (gterm_fv (t1, e1) \subseteq L) by (rewrite <- HL; simpl in *; prove_list_inc).
+    split; [constructor|]; tauto.
+  - intros HL Hlc Hwf; simpl in *. inversion Hlc; subst.
+    split; [|constructor].
+    + apply lc_open_gen. apply lc_lam_body. assumption.
+    + admit.
+    + assumption.
+    + rewrite <- HL in H. unfold gterm_fv in H; simpl in *. rewrite !in_app_iff in *; tauto.
+  - intros HL Hlc Hwf; simpl in *. split; [constructor|assumption].
+  - intros HL Hlc Hwf; simpl in *. split; [|assumption].
+Admitted.
 
 (*
 Lemma gterm_read1_env_red :
@@ -1329,17 +4346,6 @@ Proof.
   - admit.
 Admitted.
 
-Lemma fv_substf :
-  forall x t u, fv (t [ x := u ]) \subseteq fv t ++ fv u.
-Proof.
-  intros x t u. induction t.
-  - simpl. prove_list_inc.
-  - simpl. destruct freevar_eq_dec; simpl; prove_list_inc.
-  - simpl. assumption.
-  - simpl. rewrite list_inc_app_left.
-    rewrite IHt1, IHt2.
-    split; prove_list_inc.
-Qed.
 
 Lemma fv_efv_read1 :
   forall t, fv (efv_read1 t) \subseteq efv t.
@@ -1359,7 +4365,7 @@ Proof.
       * admit.
       * rewrite (gterm_read1_env_redt _ _ _ H) by assumption. simpl.
         constructor.
-      * rewrite (gterm_read1_env_redt _ _ _ H) by admit. simpl.
+      * rewrite (gterm_read1_env_redt _ _ _ H) by (rewrite <- HL; prove_list_inc). simpl.
         eapply (gterm_read1_redt_2 _ _ _ _ H).
         -- apply gterm_env_wf_inv_term in Hwf. split; simpl; apply Hwf.
         -- eapply list_inc_trans; [|apply HL]. prove_list_inc.
@@ -1384,52 +4390,275 @@ Inductive env_value_varlam : env_value -> Prop :=
 | env_value_varlam_var : forall x, env_value_varlam (Env_term (fvar x))
 | env_value_varlam_lam : forall x t1 t2, env_value_varlam (Env_lam t1 x t2).
 
+Lemma env_value_varlam_dec :
+  forall u, { env_value_varlam u } + { ~ env_value_varlam u }.
+Proof.
+  intros u. destruct u as [t | ?].
+  - destruct t; (left; constructor) || (right; intro H; inversion H).
+  - left. constructor.
+Qed.
+
+Definition free_in_rec x t e := forall L, x \notin fv (gterm_reade L t e).
+
 Definition invariant1 L e t :=
   forall z u, (z, u) \in e ->
-    (env_value_varlam u /\ z \notin L) \/ (~ env_value_varlam u /\ (z \in L \/ forall L2, z \notin fv (gterm_reade L2 t e))).
+    (env_value_varlam u /\ z \notin L) \/ (~ env_value_varlam u /\ (z \in L \/ free_in_rec z t e)).
+
+Lemma gterm_reade_free :
+  forall L t e x u, x \notin fv t -> gterm_reade L t ((x, u) :: e) = gterm_reade L t e.
+Proof.
+  intros L t e x u Hx. simpl.
+  destruct in_dec.
+  - reflexivity.
+  - rewrite substf_fv; [reflexivity | assumption].
+Qed.
+
+Lemma gterm_reade_fv :
+  forall L e t, fv (gterm_reade L t e) \subseteq gterm_fv (t, e).
+Proof.
+  induction e as [|[x u] e].
+  - intros. unfold gterm_fv. simpl.
+    rewrite app_nil_r. reflexivity.
+  - intros. unfold gterm_fv in *. simpl in *.
+    destruct in_dec.
+    + rewrite IHe. prove_list_inc.
+    + rewrite IHe, fv_substf, fv_efv_read1. prove_list_inc.
+Qed.
+
+Lemma gterm_reade_free2 :
+  forall L1 L2 e t, (forall x, x \in gterm_env_fv e -> x \in L1 <-> x \in L2) -> gterm_reade L1 t e = gterm_reade L2 t e.
+Proof.
+  induction e as [|[y u] e].
+  - intros. reflexivity.
+  - intros t H. simpl.
+    assert (Hy := H y).
+    destruct (in_dec freevar_eq_dec y (gterm_env_fv ((y, u) :: e))) as [Hy1 | Hy1].
+    + specialize (Hy Hy1).
+      destruct in_dec; destruct in_dec; try tauto; apply IHe; intros x Hx; apply H; simpl; rewrite in_app_iff; tauto.
+    + simpl in Hy1. tauto.
+Qed.
+
+
+Lemma free_in_rec_cons :
+  forall x t e y u, x <> y -> y \notin gterm_env_fv e -> free_in_rec x t ((y, u) :: e) <-> free_in_rec x (t [y := efv_read1 u]) e.
+Proof.
+  intros x t e y u H1 H2. split.
+  - intros Hfree L. specialize (Hfree (list_remove y L)).
+    simpl in *. destruct in_dec; rewrite list_remove_correct in *; [tauto|].
+    erewrite gterm_reade_free2; [eassumption|].
+    intros z. rewrite list_remove_correct.
+    intuition congruence.
+  - intros Hfree L. specialize (Hfree L).
+    simpl. destruct in_dec.
+    + rewrite gterm_reade_substf in Hfree by assumption.
+      rewrite fv_substf2. intros [Hx | Hx]; subst; [|apply Hfree; eassumption].
+      congruence.
+    + assumption.
+Qed.
+
+Lemma free_in_rec_cons_same :
+  forall x t e u, x \notin gterm_env_fv e -> free_in_rec x t ((x, u) :: e) <-> x \notin fv t.
+Proof.
+  intros x t e u Hx. split.
+  - intros Hfree. specialize (Hfree (x :: nil)).
+    simpl in Hfree. destruct freevar_eq_dec; [|tauto].
+    revert t Hfree. induction e as [|[y v] e].
+    + simpl in *. intros; assumption.
+    + simpl in *. intros t H; destruct freevar_eq_dec; [intuition congruence|].
+      apply IHe in H; [|rewrite in_app_iff in *; tauto].
+      rewrite fv_substf2. intros [Hx2 | Hx2]; subst; [|apply H; eassumption]. congruence.
+  - intros H L. simpl.
+    destruct in_dec.
+    + rewrite gterm_reade_fv. unfold gterm_fv; simpl. rewrite in_app_iff; tauto.
+    + rewrite gterm_reade_fv, substf_fv by assumption. unfold gterm_fv; simpl. rewrite in_app_iff; tauto.
+Qed.
 
 Lemma invariant1_cons :
-  forall L e t x u, invariant1 L e t -> invariant1 L ((x, u) :: e) t.
-Admitted.
+  forall L e t x u, x \notin L -> x \notin gterm_fv (t, e) -> invariant1 L e t -> invariant1 L ((x, u) :: e) t.
+Proof.
+  intros L e t x u HL Hx Hinv.
+  intros z v Hzv.
+  destruct Hzv as [Hzv | Hzv].
+  - injection Hzv; intros ? ?; subst.
+    destruct (env_value_varlam_dec v).
+    + left; tauto.
+    + right. split; [assumption|].
+      right. rewrite free_in_rec_cons_same; unfold gterm_fv in Hx; rewrite in_app_iff in Hx; tauto.
+  - specialize (Hinv z v Hzv).
+    destruct Hinv as [Hinv | Hinv]; [tauto|].
+    right. split; [tauto|].
+    destruct Hinv as [? [Hinv | Hinv]]; [tauto|]. right.
+    intros L2. rewrite gterm_reade_free by (unfold gterm_fv in *; rewrite in_app_iff in *; tauto).
+    apply Hinv.
+Qed.
+
+
+Lemma invariant1_cons_inv :
+  forall L e t x u, x \notin gterm_env_fv e -> invariant1 L ((x, u) :: e) t ->
+               invariant1 L e t /\ invariant1 L e (t [x := efv_read1 u]) /\ ((env_value_varlam u /\ x \notin L) \/ (~ env_value_varlam u /\ (x \in L \/ (x \notin fv t)))).
+Proof.
+  intros L e t x u Hx Hinv.
+  split; [|split].
+  - intros z v Hzv.
+    specialize (Hinv z v ltac:(simpl; tauto)).
+    destruct Hinv as [Hinv | Hinv]; [tauto|]. right.
+    destruct Hinv as [Hvarlam [Hinv | Hinv]]; [tauto|]. split; [assumption|right].
+    intros L2. specialize (Hinv (x :: L2)).
+    simpl in Hinv. destruct freevar_eq_dec; [|auto].
+    erewrite gterm_reade_free2 in Hinv; [eassumption|].
+    intros y Hy; simpl in *; intuition congruence.
+  - intros z v Hzv.
+    specialize (Hinv z v ltac:(simpl; tauto)).
+    destruct Hinv as [Hinv | Hinv]; [tauto|]. right.
+    destruct Hinv as [Hvarlam [Hinv | Hinv]]; [tauto|]. split; [assumption|right].
+    intros L2. specialize (Hinv (list_remove x L2)).
+    simpl in Hinv. destruct in_dec; [rewrite list_remove_correct in *; tauto|].
+    erewrite gterm_reade_free2 in Hinv; [eassumption|].
+    intros y Hy; simpl in *; rewrite list_remove_correct; intuition congruence.
+  - specialize (Hinv x u ltac:(simpl; tauto)).
+    destruct Hinv as [Hinv | Hinv]; [tauto|]. right.
+    split; [tauto|]. destruct Hinv as [Hvarlam [Hinv | Hinv]]; [tauto|].
+    right. rewrite free_in_rec_cons_same in Hinv; assumption.
+Qed.
+
 
 Lemma gterm_redt_preserve_invariant1 :
-  forall L1 t1 t2, gterm_redt L1 t1 t2 -> forall L2 L3 t3, gterm_wf L2 t1 -> gterm_fv t1 \subseteq L1 -> invariant1 L3 (snd t1) t3 -> invariant1 L3 (snd t2) t3.
+  forall L1 t1 t2, gterm_redt L1 t1 t2 -> forall L2 L3 t3, gterm_wf L2 t1 -> gterm_fv t1 \subseteq L1 -> fv t3 \subseteq L1 -> L3 \subseteq L1 -> invariant1 L3 (snd t1) t3 -> invariant1 L3 (snd t2) t3.
 Proof.
   intros L1 t1 t2 H. induction H.
-  - intros L2 L3 t4 Hwf HL Hinv; simpl in *.
-    eapply IHgterm_redt.
-    + admit.
+  - intros L2 L3 t4 Hwf HL Hfv3 HL3 Hinv; simpl in *.
+    eapply IHgterm_redt; try assumption.
+    + destruct Hwf as [Hwft Hwfe]; simpl in *. split; [|eassumption].
+      simpl. inversion Hwft; assumption.
     + unfold gterm_fv in *; simpl in *. rewrite <- HL; prove_list_inc.
-    + assumption.
-  - admit.
+  - intros L2 L3 t4 Hwf HL Hfv3 HL3 Hinv; simpl in *.
+    eapply IHgterm_redt; try assumption.
+    + destruct Hwf as [Hwft Hwfe]; simpl in *. split; [|eassumption].
+      simpl. inversion Hwft; assumption.
+    + unfold gterm_fv in *; simpl in *. rewrite <- HL; prove_list_inc.
   - simpl.
-    intros L2 L3 t3 Hwf Hfv Hinv z u Hzu.
-Admitted.
+    intros L2 L3 t3 Hwf HL Hfv3 HL3 Hinv.
+    apply invariant1_cons.
+    + rewrite HL3. assumption.
+    + unfold gterm_fv in *; simpl in *.
+      rewrite !list_inc_app_left in HL; destruct HL as [[HL1 HL2] HLe].
+      rewrite Hfv3, HLe, in_app_iff. tauto.
+    + assumption.
+  - simpl. intros; assumption.
+  - simpl. intros; assumption.
+Qed.
+
+Lemma gterm_env_find_In :
+  forall e x u, gterm_env_find x e = Some u -> In (x, u) e.
+Proof.
+  induction e as [|[y v] e].
+  - intros; simpl in *. congruence.
+  - intros; simpl in *.
+    destruct freevar_eq_dec.
+    + left; congruence.
+    + right; apply IHe. assumption.
+Qed.
+
+Lemma gterm_env_In_fv :
+  forall e x u, In (x, u) e -> x \in gterm_env_fv e.
+Proof.
+  induction e as [|[y v] e].
+  - intros; simpl in *; tauto.
+  - intros; simpl in *. destruct H as [H | H]; rewrite in_app_iff; [|eauto].
+    left; congruence.
+Qed.
+
+Lemma gterm_env_find_In_iff :
+  forall e L x u, gterm_env_wf L e -> gterm_env_find x e = Some u <-> In (x, u) e.
+Proof.
+  induction e as [|[y v] e].
+  - intros; simpl in *. split; [congruence | tauto].
+  - intros; simpl in *.
+    destruct freevar_eq_dec.
+    + split; [intuition congruence|].
+      intros [? | Hin2]; [congruence|].
+      assert (~ (y \in gterm_env_fv e)) by (inversion H; subst; repeat (simpl in *; rewrite !in_app_iff in * ); tauto).
+      subst.
+      apply gterm_env_In_fv in Hin2. tauto.
+    + apply gterm_env_wf_inv_common in H. split.
+      * intros H1; rewrite IHe in H1; [right; apply H1 | apply H].
+      * intros [H1 | H1]; [congruence|].
+        apply <- IHe; [assumption | apply H].
+Qed.
+
+
+Lemma gterm_reade_var_appears :
+  forall e t L x, In x L -> In x (fv t) -> In x (fv (gterm_reade L t e)).
+Proof.
+  induction e as [|[y v] e].
+  - intros; simpl. assumption.
+  - intros t L x Hx1 Hx2; simpl in *.
+    destruct in_dec.
+    + apply IHe; assumption.
+    + apply IHe; [assumption|].
+      eapply fv_substf2 in Hx2.
+      destruct Hx2 as [Hx2 | Hx2]; [|apply Hx2].
+      congruence.
+Qed.
+
+Lemma gterm_reade_env_find :
+  forall e L Lwf t x u, gterm_env_wf Lwf e -> gterm_env_find x e = Some u -> x \notin L -> gterm_reade L (t ^ x) e = gterm_reade L (t ^^ (efv_read1 u)) e.
+Proof.
+  induction e as [|[y v] e].
+  - intros; simpl in *; congruence.
+  - intros L Lwf t x w Hwf Hu Hx; simpl in *.
+    destruct in_dec.
+    + destruct freevar_eq_dec; [congruence|]. apply gterm_env_wf_inv_common in Hwf. eapply IHe; (apply Hwf || assumption).
+    + destruct freevar_eq_dec.
+      * subst. injection Hu; intro; subst.
+        apply gterm_env_wf_inv_common in Hwf.
+        rewrite substb_substf; [|destruct Hwf as (? & Hwf & ?); inversion Hwf; simpl; [|apply lc_lam_body]; assumption].
+        simpl. destruct freevar_eq_dec; [|tauto].
+        rewrite substb_substf; [|destruct Hwf as (? & Hwf & ?); inversion Hwf; simpl; [|apply lc_lam_body]; assumption].
+        f_equal. f_equal.
+        rewrite substf_fv; [reflexivity|]. rewrite fv_efv_read1. rewrite in_app_iff in *; tauto.
+      * apply gterm_env_wf_inv_common in Hwf.
+        assert (lc (efv_read1 v)) by (destruct Hwf as (? & Hwf & ?); inversion Hwf; simpl; [|apply lc_lam_body]; assumption).
+        rewrite !substb_substf by assumption.
+        simpl. destruct freevar_eq_dec; [congruence|].
+        erewrite IHe; [|apply Hwf|eassumption|assumption].
+        f_equal. f_equal.
+        rewrite substf_fv; [reflexivity|].
+        rewrite fv_efv_read1. apply gterm_env_find_fv in Hu.
+        rewrite in_app_iff in *; firstorder.
+Qed.
 
 Lemma gterm_reade_red_env_1 :
-  forall L1 e1 e2, gterm_red_env L1 e1 e2 -> forall L2, gterm_env_wf L2 e1 -> gterm_env_fv e1 \subseteq L1 -> (forall t3 L3, fv t3 \subseteq L1 -> invariant1 L3 e1 t3 -> gterm_reade L3 t3 e1 = gterm_reade L3 t3 e2).
+  forall L1 e1 e2, gterm_red_env L1 e1 e2 -> forall L2, gterm_env_wf L2 e1 -> gterm_env_fv e1 \subseteq L1 -> (forall t3 L3, lc t3 -> fv t3 \subseteq L1 -> invariant1 L3 e1 t3 -> gterm_reade L3 t3 e1 = gterm_reade L3 t3 e2).
 Proof.
   unfold invariant1.
-  intros L1 t1 t2 H. induction H; intros L2 Hwf HL t4 L4 Hinc HL4; simpl in *.
+  intros L1 t1 t2 H. induction H; intros L2 Hwf HL t4 L4 Hlc4 Hinc HL4; simpl in *.
   - assert (Heq : gterm_reade L4 t4 e1 = gterm_reade L4 t4 e2).
     { rewrite (gterm_reade_env_redt _ _ _ _ H); [reflexivity | assumption]. }
     destruct in_dec; [assumption|].
     destruct (HL4 x (Env_term t1) ltac:(tauto)) as [[H1 _] | [H1 [H2 | H2]]].
     + inversion H1; subst.
-      assert (H2 : e1 = e2 /\ exists u, env_value_varlam u /\ In (x0, u) e2 /\ t2 = efv_read1 u).
+      assert (H2 : e1 = e2 /\ exists u, env_value_varlam u /\ gterm_env_find x0 e2 = Some u /\ t2 = efv_read1 u).
       {
         inversion H; subst.
-        * split; [reflexivity|]. exists (Env_term (fvar y)). split; [constructor|]. split; [|reflexivity].
-          admit.
-        * split; [reflexivity|]. exists (Env_lam t1 y t0). split; [constructor|]. split; [|reflexivity].
-          admit.
+        all: split; [reflexivity|].
+        all: eexists; split; [|split]; [|eassumption|]; [constructor | reflexivity].
       }
       destruct H2 as [Heqe [u H2]]. rewrite Heqe.
-      specialize (HL4 x0 u ltac:(rewrite Heqe; tauto)).
+      specialize (HL4 x0 u ltac:(right; apply gterm_env_find_In; rewrite Heqe; tauto)).
       destruct HL4 as [[_ H3] | ?]; [|tauto].
-      admit.
+      destruct H2 as (Hvarlam & Hfind & ->).
+      eapply gterm_redt_env_wf in H; simpl in *.
+      * rewrite <- !open_close with (k := 0) (x := x) (t := t4) by (apply H || assumption || constructor).
+        eapply gterm_reade_env_find; [|assumption|assumption]. apply H.
+      * rewrite <- HL. prove_list_inc.
+      * constructor.
+      * apply gterm_env_wf_inv_term in Hwf. apply Hwf.
     + tauto.
-    + rewrite !substf_fv by admit. assumption.
+    + enough (x \notin fv t4) by (rewrite !substf_fv; assumption).
+      specialize (H2 (x :: nil)). simpl in *. destruct freevar_eq_dec; [|simpl in *; tauto].
+      intros H4; apply H2.
+      apply gterm_reade_var_appears; simpl; tauto.
   - destruct in_dec.
     + rewrite (gterm_reade_env_redt _ _ _ _ H); [reflexivity | assumption].
     + rewrite (gterm_reade_env_redt _ _ _ _ H); [reflexivity|].
@@ -1443,24 +4672,34 @@ Proof.
       * apply Hwf2.
       * eapply list_inc_trans; [|apply HL]. prove_list_inc.
       * assumption.
+      * assumption.
       * intros z u Hu. specialize (HL4 z u ltac:(tauto)).
         destruct HL4 as [? | [? [? | HL4]]]; try tauto.
         right; split; [assumption|]; right.
         intros L5. specialize (HL4 (x :: L5)).
-        destruct in_dec; [|simpl in *; tauto].
-        admit.
+        simpl in HL4. destruct freevar_eq_dec; [|simpl in *; auto].
+        rewrite gterm_reade_free2 with (L2 := L5) in HL4; [assumption|].
+        intros w Hw; simpl. split; [|tauto].
+        intros [-> | ?]; [|tauto].
+        rewrite in_app_iff in Hwf2. tauto.
     + assert (Hwf2 := gterm_env_wf_inv_common Hwf).
       eapply IHgterm_red_env.
       * apply Hwf2.
       * eapply list_inc_trans; [|apply HL]. prove_list_inc.
+      * apply substf_lc; [assumption|].
+        destruct Hwf2 as (? & Hwf2 & ?); inversion Hwf2; simpl; [|apply lc_lam_body]; assumption.
       * rewrite fv_substf, list_inc_app_left, fv_efv_read1. split; [assumption|].
         rewrite <- HL; prove_list_inc.
       * intros z u Hu. specialize (HL4 z u ltac:(tauto)).
         destruct HL4 as [? | [? [? | HL4]]]; try tauto.
         right; split; [assumption|]; right.
-        intros L5.
-        admit.
-Admitted.
+        intros L5. specialize (HL4 (list_remove x L5)).
+        simpl in HL4. destruct in_dec; [rewrite list_remove_correct in *; tauto|].
+        rewrite gterm_reade_free2 with (L2 := L5) in HL4; [assumption|].
+        intros w Hw; simpl. rewrite list_remove_correct.
+        split; [tauto|]. intros; split; [assumption|].
+        intros ->; rewrite in_app_iff in Hwf2. tauto.
+Qed.
 
 (*
 specialize (HL4 z u ltac:(tauto)).
@@ -1504,6 +4743,7 @@ Admitted.
 Inductive env_respects_red : list (freevar * env_value) -> Prop :=
 | env_respects_red_nil : env_respects_red nil
 | env_respects_red_cons_term :
+        
     forall x t e, env_respects_red e -> env_respects_red ((x, Env_term t) :: e)
 | env_respects_red_cons_lam :
     forall x y t1 t2 e L,
@@ -1513,18 +4753,33 @@ Inductive env_respects_red : list (freevar * env_value) -> Prop :=
 
 
 Lemma env_respects_red_cons_lam_same :
-  forall x y t e, body t -> env_respects_red e -> env_respects_red ((x, Env_lam t y (t ^ y)) :: e).
+  forall x y t e L, gterm_env_wf L e -> env_respects_red e -> env_respects_red ((x, Env_lam t y (t ^ y)) :: e).
 Proof.
-  intros x y t e Hbody He.
-  admit.
-  (*
-  apply env_respects_red_cons_lam with (L := fv t).
+  intros x y t e Lwf Hwf He.
+  pose (L := map fst (filter (fun p => if env_value_varlam_dec (snd p) then false else true) e)).
+  apply env_respects_red_cons_lam with (L := L).
   - assumption.
   - unfold invariant1. intros.
-
-    destruct (in_dec freevar_eq_dec z (fv t)); tauto.
-  - constructor. *)
-Admitted.
+    destruct (in_dec freevar_eq_dec z L) as [Hz | Hz].
+    + right. split; [|left; assumption].
+      unfold L in Hz. rewrite in_map_iff in Hz.
+      destruct Hz as [[? v] [? Hz]]; simpl in *; subst.
+      rewrite filter_In in Hz.
+      destruct Hz as [Hz1 Hz2]; simpl in *.
+      destruct env_value_varlam_dec; [congruence|].
+      enough (u = v) by congruence.
+      rewrite <- gterm_env_find_In_iff in H, Hz1 by eassumption.
+      congruence.
+    + left. split; [|assumption].
+      unfold L in Hz. rewrite in_map_iff in Hz.
+      destruct (env_value_varlam_dec u) as [Hu | Hu]; [assumption|].
+      exfalso. apply Hz.
+      exists (z, u); simpl.
+      split; [reflexivity|].
+      rewrite filter_In. split; [assumption|]. simpl.
+      destruct env_value_varlam_dec; auto.
+  - constructor.
+Qed.
 
 Lemma env_respects_red_preserve_redt :
   forall L t1 t2, gterm_redt L t1 t2 -> env_respects_red (snd t1) -> env_respects_red (snd t2).
@@ -1538,34 +4793,132 @@ Proof.
   - intros; simpl in *; auto.
 Qed.
 
-Lemma env_respects_red_preserve_red_env :
-  forall L e1 e2, gterm_red_env L e1 e2 -> env_respects_red e1 -> env_respects_red e2.
+Lemma substb_fv :
+  forall u k v, fv (u [k <- v]) \subseteq fv u ++ fv v.
 Proof.
-  intros L t1 t2 H. induction H.
-  - intros; simpl in *. constructor.
-    apply env_respects_red_preserve_redt in H; simpl in *; [|inversion H0]; assumption.
-  - intros; simpl in *.
-    inversion H0; subst.
+  induction u; intros; simpl.
+  - destruct Nat.eq_dec.
+    + reflexivity.
+    + simpl. prove_list_inc.
+  - prove_list_inc.
+  - apply IHu.
+  - rewrite IHu1, IHu2. prove_list_inc.
+Qed.
+
+Lemma red_env_preserve_invariant1 :
+  forall L1 e1 e2, gterm_red_env L1 e1 e2 -> forall L2 L3 t3, gterm_env_wf L2 e1 -> gterm_env_fv e1 \subseteq L1 -> fv t3 \subseteq L1 -> L3 \subseteq L1 -> invariant1 L3 e1 t3 -> exists L4, L4 \subseteq L3 /\ invariant1 L4 e2 t3.
+Proof.
+  intros L1 e1 e2 H. induction H.
+  - intros L2 L3 t3 Hwf HL1 HL2 HL3 Hinv1.
+    apply gterm_env_wf_inv_term in Hwf.
+    apply invariant1_cons_inv in Hinv1; [|rewrite in_app_iff in Hwf; tauto].
+
+    admit.
+  - intros L2 L3 t4 Hwf HL1 HL2 HL3 Hinv1.
+    exists L3. split; [reflexivity|]. intros z u Hzu. destruct Hzu as [Hzu | Hzu].
+    + inversion Hzu; intros; subst.
+      specialize (Hinv1 z (Env_lam t3 y t1) ltac:(simpl; tauto)).
+      destruct Hinv1 as [Hinv1 | [Hinv1 ?]]; [|exfalso; apply Hinv1; constructor].
+      left. split; [constructor | apply Hinv1].
+    + apply gterm_env_wf_inv_lam in Hwf.
+      apply invariant1_cons_inv in Hinv1; [|repeat (rewrite !in_app_iff in Hwf; simpl in Hwf); tauto].
+      simpl in *.
+      assert (Hinv2 := gterm_redt_preserve_invariant1 _ _ _ H _ L3 (t4 [x := lam t3]) ltac:(split; apply Hwf)).
+      simpl in Hinv2.
+      specialize (Hinv2 ltac:(rewrite <- HL1; prove_list_inc)).
+      rewrite fv_substf, list_inc_app_left in Hinv2.
+      specialize (Hinv2 ltac:(split; [assumption|rewrite <- HL1; prove_list_inc]) HL3 ltac:(apply Hinv1)).
+      specialize (Hinv2 z u Hzu).
+      rewrite free_in_rec_cons by admit. simpl.
+      assumption.
+  - intros L2 L3 t3 Hwf HL1 HL2 HL3 Hinv1.
+    exists (list_remove x L3). split; [intros ?; rewrite list_remove_correct; tauto|].
+    intros z u Hzu. destruct Hzu as [Hzu | Hzu].
+    + left. inversion Hzu; subst.
+      split; [constructor|]. rewrite list_remove_correct. tauto.
+    + specialize (Hinv1 z u ltac:(simpl; tauto)).
+      simpl in *. rewrite list_remove_correct.
+      enough (x <> z) by tauto.
+      admit.
+  - intros L2 L3 t3 Hwf HL1 HL2 HL3 Hinv1.
+    destruct u as [y u].
+    apply gterm_env_wf_inv_common in Hwf.
+    apply invariant1_cons_inv in Hinv1; [|rewrite in_app_iff in Hwf; tauto].
+    destruct (IHgterm_red_env (y :: efv u ++ L2) L3 (t3 [y := efv_read1 u])) as [L4 [HLinc HL4]].
+    + apply Hwf.
+    + rewrite <- HL1. simpl. prove_list_inc.
+    + rewrite fv_substf, fv_efv_read1. apply list_inc_app_left. split; [assumption | rewrite <- HL1; prove_list_inc].
+    + assumption.
+    + apply Hinv1.
+    + destruct (in_dec freevar_eq_dec y L3) as [Hy | Hy].
+      * exists (y :: L4). split; [intros z [Hz | Hz]; subst; auto|].
+        intros z v Hzv. destruct Hzv as [Hzv | Hzv].
+        -- inversion Hzv; subst.
+           right. simpl; tauto.
+        -- specialize (HL4 z v Hzv).
+           assert (y <> z) by admit.
+           destruct HL4 as [HL4 | HL4]; [left; split; [|intros [? | ?]; subst]; tauto|].
+           right. split; [tauto|].
+           destruct HL4 as [Hvl [HL4 | HL4]]; [left; simpl; tauto|].
+           right. intros L5. specialize (HL4 L5).
+           simpl. destruct in_dec; [|assumption].
+           rewrite gterm_reade_substf in HL4 by admit.
+           rewrite fv_substf2. intros Hz; destruct Hz as [Hz | Hz]; [eauto|apply HL4; apply Hz].
+      * exists L4. split; [assumption|].
+        intros z v Hzv. destruct Hzv as [Hzv | Hzv].
+        -- inversion Hzv; subst.
+           destruct Hinv1 as (? & ? & [Hinv1 | Hinv1]).
+           ++ left. intuition.
+           ++ right. split; [tauto|]. right.
+             rewrite free_in_rec_cons_same by admit.
+             tauto.
+        -- specialize (HL4 z v Hzv).
+           rewrite free_in_rec_cons by admit.
+           assumption.
+Admitted.
+
+Axiom cheat : False. Ltac cheat := exfalso; apply cheat.
+
+Lemma env_respects_red_preserve_red_env :
+  forall L e1 e2, gterm_red_env L e1 e2 -> gterm_env_fv e1 \subseteq L -> forall L2, gterm_env_wf L2 e1 -> env_respects_red e1 -> env_respects_red e2.
+Proof.
+  intros L e1 e2 H HL. induction H.
+  - intros L2 Hwf He; simpl in *. constructor.
+    apply env_respects_red_preserve_redt in H; simpl in *; [|inversion He]; assumption.
+  - intros L2 Hwf He; simpl in *.
+    inversion He; subst.
     apply env_respects_red_cons_lam with (L := L0).
     + apply env_respects_red_preserve_redt in H; simpl in *; auto.
-    + admit.
+    + inversion Hwf; subst.
+      eapply (gterm_redt_preserve_invariant1 _ (t1, e1) (t2, e2)); try eassumption.
+      * split; simpl; eassumption.
+      * rewrite <- HL. unfold gterm_fv; simpl. prove_list_inc.
+      * rewrite <- HL, substb_fv; simpl. prove_list_inc.
+      * admit.
     + eapply trans_refl_clos_compose.
+      * erewrite <- (gterm_reade_env_redt _ _ _ _ H); [eassumption|].
+        rewrite <- HL, substb_fv; simpl. prove_list_inc.
+      * (* erewrite (gterm_reade_env_redt _ _ _ _ H); [|rewrite <- HL; prove_list_inc].
+        simpl. apply (gterm_read1_redt_2 _ _ _ _ H). *)
+        admit.
+  - intros L2 Hwf He; simpl in *.
+    eapply env_respects_red_cons_lam_same.
+    + inversion Hwf; subst. eassumption.
+    + inversion He. assumption.
+  - intros L2 Hwf He. inversion He; subst.
+    + constructor. eapply IHgterm_red_env; [rewrite <- HL; simpl; prove_list_inc| |assumption].
+      inversion Hwf; eassumption.
+    + econstructor.
+      * eapply IHgterm_red_env; [rewrite <- HL; simpl; prove_list_inc| |assumption]. inversion Hwf; eassumption.
       * admit.
-      * admit.
-  - intros; simpl in *.
-    apply env_respects_red_cons_lam_same.
-    + admit.
-    + inversion H0. assumption.
-  - intros. inversion H0; subst.
-    + constructor. auto.
-    + econstructor; [auto| |].
-      * admit.
-      * erewrite gterm_reade_red_env_1 in H5; try eassumption.
+      * erewrite gterm_reade_red_env_1 in H4; try eassumption.
         -- eapply trans_refl_clos_compose; [eassumption|].
            admit.
-        -- admit.
-        -- admit.
-        -- admit.
+        -- inversion Hwf. eassumption.
+        -- rewrite <- HL. simpl. prove_list_inc.
+        -- apply gterm_env_wf_inv_lam in Hwf.
+           apply lc_open_gen. apply Hwf.
+        -- rewrite <- HL. simpl. rewrite substb_fv; simpl. prove_list_inc.
 Qed.
 
 
