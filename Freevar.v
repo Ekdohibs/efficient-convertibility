@@ -12,6 +12,26 @@ Lemma freevar_eq_dec : forall (v1 v2 : freevar), { v1 = v2 } + { v1 <> v2 }.
 Proof.
   apply Nat.eq_dec.
 Qed.
+
+Lemma freevar_eq_dec_eq :
+  forall v1 v2 (P : v1 = v2), freevar_eq_dec v1 v2 = left P.
+Proof.
+  intros v1 v2 H. subst. destruct freevar_eq_dec; [|exfalso; tauto].
+  f_equal. erewrite UIP_nat. reflexivity.
+Qed.
+
+Lemma freevar_eq_dec_eq_ifte :
+  forall (A : Type) (ifso ifelse : A) v1 v2, v1 = v2 -> (if freevar_eq_dec v1 v2 then ifso else ifelse) = ifso.
+Proof.
+  intros. destruct freevar_eq_dec; tauto.
+Qed.
+
+Lemma freevar_eq_dec_neq_ifte :
+  forall (A : Type) (ifso ifelse : A) v1 v2, v1 <> v2 -> (if freevar_eq_dec v1 v2 then ifso else ifelse) = ifelse.
+Proof.
+  intros. destruct freevar_eq_dec; tauto.
+Qed.
+
 Lemma fresh : forall (L : list freevar), { x | x \notin L }.
 Proof.
   intros L.
@@ -28,10 +48,11 @@ Global Opaque freevar.
 
 Notation "'forall' x '∉' L , P" := (forall (x : freevar), ~ In x L -> P) (at level 200, x ident, only printing).
 
-Tactic Notation "pick" ident(x) "\notin" constr(L) "as" ident(H) := destruct (fresh L) as [x H].
-Tactic Notation "pick" ident(x) "\notin" constr(L) := (let H := fresh "H" in pick x \notin L as H).
-Tactic Notation "pick" ident(x) "∉" constr(L) "as" ident(H) := destruct (fresh L) as [x H].
-Tactic Notation "pick" ident(x) "∉" constr(L) := (let H := fresh "H" in pick x \notin L as H).
+Tactic Notation "pick" ident(x) "\notin" uconstr(L) "as" ident(H) := refine (match (fresh L) with exist _ x H => _ end).
+Tactic Notation "pick" ident(x) "\notin" uconstr(L) := (let H := fresh "H" in pick x \notin L as H).
+Tactic Notation "pick" ident(x) "∉" uconstr(L) "as" ident(H) := (pick x \notin L as H).
+Tactic Notation "pick" ident(x) "∉" uconstr(L) := (let H := fresh "H" in pick x \notin L as H).
+
 
 
 Definition list_remove x L := filter (fun y => if freevar_eq_dec x y then false else true) L.
@@ -75,3 +96,100 @@ Proof.
   rewrite list_same_inc_iff in *.
   split; apply list_diff_inc_Proper; tauto.
 Qed.
+
+
+Lemma notin_app_iff :
+  forall (x : freevar) L1 L2, x \notin L1 ++ L2 <-> x \notin L1 /\ x \notin L2.
+Proof.
+  intros. rewrite in_app_iff. tauto.
+Qed.
+
+Lemma notin_app_l :
+  forall (x : freevar) L1 L2, x \notin L1 ++ L2 -> x \notin L1.
+Proof.
+  intros. rewrite notin_app_iff in *. tauto.
+Qed.
+
+Lemma notin_app_r :
+  forall (x : freevar) L1 L2, x \notin L1 ++ L2 -> x \notin L2.
+Proof.
+  intros. rewrite notin_app_iff in *. tauto.
+Qed.
+
+Lemma notin_cons1 :
+  forall (x y : freevar) L, x \notin y :: L -> x <> y.
+Proof.
+  intros ? ? ? ? ->. simpl in *. tauto.
+Qed.
+
+Lemma notin_cons2 :
+  forall (x y : freevar) L, x \notin y :: L -> y <> x.
+Proof.
+  intros ? ? ? ? ->. simpl in *. tauto.
+Qed.
+
+Lemma notin_one :
+  forall (x y : freevar), y <> x -> x \notin (y :: nil).
+Proof.
+  intros. simpl. tauto.
+Qed.
+
+Lemma qed_opaque_helper {A : Type} (x : A) : { y | y = x }.
+Proof.
+  exists x. reflexivity.
+Qed.
+Definition qed_opaque {A : Type} (x : A) : A := proj1_sig (qed_opaque_helper x).
+Definition qed_opaque_eq (A : Type) (x : A) : qed_opaque x = x := proj2_sig (qed_opaque_helper x).
+Global Opaque qed_opaque qed_opaque_eq.
+
+Definition Bound (L : list freevar) : list freevar := qed_opaque L.
+Definition Bound_eq (L : list freevar) : Bound L = L := qed_opaque_eq _ L.
+Global Opaque Bound.
+
+Ltac bound := (let L := fresh "L" in evar (L : list freevar); let r := constr:(Bound L) in subst L; exact r).
+
+Ltac use_fresh_aux x L HxL :=
+  let L := (eval hnf in L) in
+  lazymatch L with
+  | ?L1 ++ ?L2 => use_fresh_aux x L2 (notin_app_r x L1 L2 HxL)
+  | ?y :: ?L2 => use_fresh_aux x L2 (notin_app_r x (y :: nil) L2 HxL)
+  | _ =>
+    match goal with
+    | [ |- x \notin ?L2 ] => refine (notin_app_l _ L2 _ HxL)
+    | [ |- x \in ?L2 -> False ] => refine (notin_app_l _ L2 _ HxL)
+    | [ |- x <> ?y ] => refine (notin_cons1 _ y _ HxL)
+    | [ |- ?y <> x ] => refine (notin_cons2 _ y _ HxL)
+    | [ |- ?y \notin (x :: nil) ] => refine (notin_one _ _ (notin_cons1 _ y _ HxL))
+    | [ H : x \in ?L2 |- _ ] => exfalso; refine (notin_app_l _ L2 _ HxL H)
+    | [ H : x = ?y |- _ ] => exfalso; refine (notin_cons1 _ y _ HxL H)
+    | [ H : ?y = x |- _ ] => exfalso; refine (notin_cons2 _ y _ HxL H)
+    | [ H : ?y \in (x :: nil) |- _ ] => exfalso; refine (notin_one _ _ (notin_cons1 _ y _ HxL) H)
+    end
+  end.
+
+Ltac use_fresh x :=
+  lazymatch goal with
+  | [ H : x \notin Bound ?L |- _ ] =>
+    use_fresh_aux x L (@eq_ind _ _ (fun L2 => x \notin L2) H _ (Bound_eq L));
+    (* Move the list freevar goal to the shelf *)
+    lazymatch goal with
+    | [ |- list freevar ] => shelve
+    end
+  | [ H : x \in Bound ?L -> False |- _ ] =>
+    use_fresh_aux x L (@eq_ind _ _ (fun L2 => x \notin L2) H _ (Bound_eq L));
+    (* Move the list freevar goal to the shelf *)
+    lazymatch goal with
+    | [ |- list freevar ] => shelve
+    end
+  end.
+
+Ltac specialize_fresh H x :=
+  match type of H with
+  | forall y, y \notin ?L -> _ =>
+    let H2 := fresh in
+    assert (H2 : x \notin L) by use_fresh x;
+    specialize (H x H2); clear H2
+  end.
+
+Tactic Notation "pick" "fresh" ident(x) "as" ident(H) := pick x \notin (Bound _) as H.
+Tactic Notation "pick" "fresh" ident(x) := pick x \notin (Bound _).

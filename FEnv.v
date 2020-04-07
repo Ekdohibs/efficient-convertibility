@@ -332,3 +332,14 @@ Proof.
   intros env1 env2 He x1 x2 -> u1 u2 ->.
   rewrite !update_env_same. rewrite He. reflexivity.
 Qed.
+
+Lemma Forall_env_find :
+  forall A (P : freevar * A -> Prop) L x t, Forall P L -> env_find L x = Some t -> P (x, t).
+Proof.
+  intros. induction L as [|[y u] L].
+  - simpl in *. congruence.
+  - simpl in *. destruct freevar_eq_dec.
+    + injection H0. intros; subst. rewrite Forall_cons_iff in H. tauto.
+    + apply IHL; [rewrite Forall_cons_iff in H; tauto|]. assumption.
+Qed.
+

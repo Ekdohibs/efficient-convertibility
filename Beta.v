@@ -20,7 +20,7 @@ Proof.
     + apply substb_lc; assumption.
   - split; constructor; tauto.
   - split; constructor; tauto.
-  - split; apply lc_lam with (L := L); firstorder.
+  - split; apply lc_lam with (L := L) ; firstorder.
 Qed.
 
 Lemma beta_subst :
@@ -32,11 +32,13 @@ Proof.
     + apply substf_lc; auto.
   - intros; simpl; constructor; auto using substf_lc.
   - intros; simpl; constructor; auto using substf_lc.
-  - intros; simpl; apply beta_lam with (L := x :: L).
-    intros y Hy; simpl in Hy.
-    specialize (H0 y (ltac:(tauto))).
+  - intros; simpl.
+    eapply beta_lam with (L := Bound _); intros y Hy.
+    specialize_fresh H0 y.
     rewrite !substb_substf in H0 by auto.
-    simpl in H0. destruct freevar_eq_dec; tauto.
+    simpl in H0. rewrite freevar_eq_dec_neq_ifte in H0 by use_fresh y.
+    assumption.
+Unshelve. all: exact nil.
 Qed.
 
 Lemma beta_subst2 :
@@ -51,23 +53,22 @@ Proof.
       intros; constructor; [assumption | apply substf_lc; assumption].
     + eapply star_map_impl with (f := fun t => app _ t); [|eauto].
       intros; constructor; [assumption | apply substf_lc; assumption].
-  - simpl.
-    pick y \notin (x :: L ++ fv t ++ fv u1 ++ fv u2) as Hy; simpl in Hy.
-    rewrite !in_app_iff in Hy.
-    rewrite <- (close_open t 0 y), !closeb_substf_free by intuition.
-    eapply star_map_impl with (f := fun t => lam (closeb 0 y t)); [|intuition].
-    + intros t3 t4 Hbeta1.
-      apply beta_lam with (L := fv t3 ++ fv t4).
-      intros z Hz; rewrite in_app_iff in *.
-      rewrite !open_close by (constructor || apply beta_lc in Hbeta1; tauto).
-      apply beta_subst; [constructor | auto].
+  - simpl. pick fresh y as Hy.
+    rewrite <- (close_open t 0 y), !closeb_substf_free by use_fresh y.
+    eapply star_map_impl with (f := fun t => lam (closeb 0 y t)); [|apply H0; use_fresh y].
+    intros t3 t4 Hbeta1.
+    apply beta_lam with (L := nil).
+    intros z _.
+    rewrite !open_close by (constructor || apply beta_lc in Hbeta1; tauto).
+    apply beta_subst; [constructor | auto].
+Unshelve. all: exact nil.
 Qed.
 
 Lemma beta_lam_one :
   forall x t1 t2, x \notin fv t1 -> x \notin fv t2 -> beta (t1 ^ x) (t2 ^ x) -> beta (lam t1) (lam t2).
 Proof.
   intros x t1 t2 Hx1 Hx2 Hbeta.
-  apply beta_lam with (L := fv t1 ++ fv t2). intros y Hy; rewrite in_app_iff in Hy.
+  apply beta_lam with (L := nil). intros y _.
   rewrite substb_is_substf with (x := x) (t := t1) by assumption.
   rewrite substb_is_substf with (x := x) (t := t2) by assumption.
   apply beta_subst; [constructor|assumption].
@@ -118,17 +119,16 @@ Proof.
       intros; constructor; firstorder using parallel_beta_lc.
     + eapply star_map_impl with (f := fun t => app t3 t); [|eassumption].
       intros; constructor; firstorder using parallel_beta_lc.
-  - pick x \notin (L ++ fv t1 ++ fv t2).
-    rewrite !in_app_iff in *.
-    rewrite <- (close_open t1 0 x), <- (close_open t2 0 x) by tauto.
-    apply star_map_impl with (RA := beta) (f := fun t => lam (closeb 0 x t)).
-    + intros t3 t4 Hbeta.
-      apply beta_lam with (L := fv t3 ++ fv t4).
-      intros y Hy; rewrite in_app_iff in *.
-      rewrite !open_close by (constructor || apply beta_lc in Hbeta; tauto).
-      apply beta_subst; [constructor | auto].
-    + auto.
+  - pick fresh x.
+    rewrite <- (close_open t1 0 x), <- (close_open t2 0 x) by use_fresh x.
+    apply star_map_impl with (RA := beta) (f := fun t => lam (closeb 0 x t)); [|apply H0; use_fresh x].
+    intros t3 t4 Hbeta.
+    apply beta_lam with (L := nil).
+    intros y _.
+    rewrite !open_close by (constructor || apply beta_lc in Hbeta; tauto).
+    apply beta_subst; [constructor | auto].
   - econstructor; constructor; auto.
+Unshelve. all: exact nil.
 Qed.
 
 
@@ -139,6 +139,14 @@ Lemma star_beta_lc :
   forall t1 t2, star beta t1 t2 -> lc t1 -> lc t2.
 Proof.
   intros t1 t2 H. induction H; firstorder using beta_lc.
+Qed.
+
+Lemma star_beta_lc_left :
+  forall t1 t2, star beta t1 t2 -> lc t2 -> lc t1.
+Proof.
+  intros t1 t2 H. destruct H.
+  - intros; assumption.
+  - intros _. apply beta_lc in H. tauto.
 Qed.
 
 Lemma star_beta_app :
@@ -163,8 +171,7 @@ Proof.
   rewrite <- (close_open t1 0 x), <- (close_open t2 0 x) by tauto.
   eapply star_map_impl with (f := fun t => lam (closeb 0 x t)); [|eassumption].
   intros t3 t4 Hbeta1.
-  apply beta_lam with (L := fv t1 ++ fv t2).
-  intros y Hy; rewrite in_app_iff in *.
+  eapply beta_lam with (L := nil). intros y _.
   rewrite !open_close by (constructor || apply beta_lc in Hbeta1; tauto).
   apply beta_subst; [constructor | auto].
 Qed.
@@ -191,11 +198,13 @@ Proof.
   - rewrite substb_fv. simpl. reflexivity.
   - simpl. rewrite IHbeta. reflexivity.
   - simpl. rewrite IHbeta. reflexivity.
-  - pick x \notin (L ++ fv t2) as Hx. rewrite in_app_iff in Hx. specialize (H0 x ltac:(tauto)).
+  - pick fresh x as Hx.
+    specialize_fresh H0 x.
     simpl. rewrite substb_fv with (t := t1) in H0.
     rewrite <- substb_fv2 in H0.
     intros z Hz. specialize (H0 z Hz). rewrite in_app_iff in H0; simpl in H0.
-    intuition congruence.
+    intuition (subst z; use_fresh x).
+Unshelve. all: exact nil.
 Qed.
 
 Lemma star_beta_fv :

@@ -160,10 +160,10 @@ Qed.
 Lemma substb_lc : forall t u, body t -> lc u -> lc (t ^^ u).
 Proof.
   intros t u [L Ht] Hu.
-  pick x ∉ (L ++ fv t).
-  rewrite in_app_iff in *.
-  rewrite substb_is_substf with (x := x); [|tauto].
-  apply substf_lc; intuition.
+  pick fresh x as Hx.
+  rewrite substb_is_substf with (x := x) by (use_fresh x).
+  apply substf_lc; [apply Ht; use_fresh x | apply Hu].
+Unshelve. all: exact nil.
 Qed.
 
 Lemma lc_open_gen :
@@ -214,12 +214,12 @@ Proof.
   - simpl. destruct freevar_eq_dec; simpl; try destruct Nat.eq_dec; simpl; congruence.
   - simpl. f_equal; auto.
   - simpl. f_equal.
-    match goal with [ |- ?t1 = ?t2 ] => pick y \notin (x :: L ++ fv t1 ++ fv t2 ++ fv t) end.
-    simpl in *; rewrite !in_app_iff in *.
-    apply (open_inj y); try tauto.
-    rewrite open_close_core by (tauto || discriminate).
-    rewrite substf_substb_free by (simpl; intuition).
-    intuition.
+    pick fresh y.
+    apply (open_inj y); try use_fresh y.
+    rewrite open_close_core by (use_fresh y || tauto || discriminate).
+    rewrite substf_substb_free by (assumption || apply notin_one; use_fresh y).
+    apply H0; [use_fresh y | assumption].
+Unshelve. all: exact nil.
 Qed.
 
 Lemma substf_id :

@@ -260,6 +260,43 @@ Proof.
   intros z1 z2 -> e1 e2 H12 x H. simpl in *. specialize (H12 x). tauto.
 Qed.
 
+(* List concatenation *)
+Lemma concat_In :
+  forall (A : Type) (L : list (list A)) x, In x (concat L) <-> exists l, In x l /\ In l L.
+Proof.
+  intros A L x. induction L.
+  - simpl. firstorder.
+  - simpl. rewrite in_app_iff.
+    split.
+    + intros [H | H]; [|firstorder]. exists a. tauto.
+    + intros (l & H1 & [H2 | H2]); [subst; tauto|].
+      right. apply IHL. exists l. tauto.
+Qed.
+
+Lemma concat_incl :
+  forall A (L : list (list A)) L2, concat L \subseteq L2 <-> Forall (fun L3 => L3 \subseteq L2) L.
+Proof.
+  induction L.
+  - intros L2. simpl. split.
+    + intros. constructor.
+    + intros _ y Hy. simpl in Hy. tauto.
+  - intros L2. simpl. rewrite list_inc_app_left. rewrite Forall_cons_iff. f_equiv. apply IHL.
+Qed.
+
+
+
+(* Induction on length of a list *)
+Lemma list_length_ind (A : Type) (P : list A -> Prop) (H0 : P nil) (HS : forall x L, (forall L2, length L = length L2 -> P L2) -> P (x :: L)) : forall L, P L.
+Proof.
+  intros L. remember (length L) as n. revert L Heqn. induction n.
+  - intros L. destruct L.
+    + intros; apply H0.
+    + simpl; intros; congruence.
+  - intros L. destruct L.
+    + simpl; intros; congruence.
+    + simpl; intros H; injection H; intros; subst. apply HS. apply IHn.
+Qed.
+
 (* Smallest integer above all others in a list *)
 
 Fixpoint smallest_above l :=
