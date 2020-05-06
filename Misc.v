@@ -11,6 +11,19 @@ Notation "x '\notin' L" := (~ In x L) (at level 80, only parsing).
 Notation "x ∈ L" := (x \in L) (at level 80).
 Notation "x ∉ L" := (x \notin L) (at level 80).
 
+Fixpoint index {A : Type} (dec : forall x y : A, {x = y} + {x <> y}) L x :=
+  match L with
+  | nil => None
+  | y :: L => if dec x y then Some 0 else option_map S (index dec L x)
+  end.
+
+Lemma nth_error_map :
+  forall (A B : Type) (f : A -> B) L n, nth_error (map f L) n = match nth_error L n with Some x => Some (f x) | None => None end.
+Proof.
+  intros A B f L. induction L as [|a L]; intros [|n]; simpl; try reflexivity.
+  apply IHL.
+Qed.
+
 (* Map for association lists *)
 
 Definition map_assq {A B C : Type} (f : A -> B -> C) (L : list (A * B)) := map (fun '(x, u) => (x, f x u)) L.
@@ -132,6 +145,100 @@ Proof.
   - simpl. split; intros; [tauto|constructor].
   - rewrite Forall_cons_iff, IHL. simpl.
     firstorder congruence.
+Qed.
+
+Lemma Forall_and :
+  forall (A : Type) (P Q : A -> Prop) L, Forall P L /\ Forall Q L <-> Forall (fun x => P x /\ Q x) L.
+Proof.
+  intros A P Q L. induction L as [|x L].
+  - simpl. repeat split; constructor.
+  - simpl. rewrite !Forall_cons_iff, <- IHL. tauto.
+Qed.
+
+Lemma Forall2_cons_iff :
+  forall (A B : Type) (P : A -> B -> Prop) x y L1 L2, Forall2 P (x :: L1) (y :: L2) <-> P x y /\ Forall2 P L1 L2.
+Proof.
+  intros. split.
+  - intros H. inversion H. tauto.
+  - intros [H1 H2]. constructor; assumption.
+Qed.
+
+Lemma Forall2_map_eq :
+  forall (A B C : Type) (f : A -> C) (g : B -> C) L1 L2, map f L1 = map g L2 <-> Forall2 (fun u v => f u = g v) L1 L2.
+Proof.
+  intros A B C f g L1 L2. split.
+  - intros Heq. revert L2 Heq; induction L1 as [|x L1]; intros [|y L2] Heq; simpl in *; try congruence.
+    + constructor.
+    + injection Heq as Heq1 Heq2. constructor; [assumption|].
+      apply IHL1. assumption.
+  - intros H. induction H.
+    + reflexivity.
+    + simpl. f_equal; assumption.
+Qed.
+
+Lemma Forall2_map_left :
+  forall (A B C : Type) (P : A -> B -> Prop) (f : C -> A) L1 L2, Forall2 P (map f L1) L2 <-> Forall2 (fun u v => P (f u) v) L1 L2.
+Proof.
+  intros A B C P f L1 L2. revert L2; induction L1 as [|x L1]; intros [|y L2].
+  - simpl. split; intros; constructor.
+  - simpl. split; intros H; inversion H.
+  - simpl. split; intros H; inversion H.
+  - simpl. rewrite !Forall2_cons_iff, IHL1. reflexivity.
+Qed.
+
+Lemma Forall2_comm :
+  forall (A B : Type) (P : A -> B -> Prop) L1 L2, Forall2 P L1 L2 <-> Forall2 (fun u v => P v u) L2 L1.
+Proof.
+  intros A B P L1 L2. revert L2; induction L1 as [|x L1]; intros [|y L2].
+  - simpl. split; intros; constructor.
+  - simpl. split; intros H; inversion H.
+  - simpl. split; intros H; inversion H.
+  - simpl. rewrite !Forall2_cons_iff, IHL1. reflexivity.
+Qed.
+
+Lemma Forall2_map_right :
+  forall (A B C : Type) (P : A -> B -> Prop) (f : C -> B) L1 L2, Forall2 P L1 (map f L2) <-> Forall2 (fun u v => P u (f v)) L1 L2.
+Proof.
+  intros A B C P f L1 L2. revert L2; induction L1 as [|x L1]; intros [|y L2].
+  - simpl. split; intros; constructor.
+  - simpl. split; intros H; inversion H.
+  - simpl. split; intros H; inversion H.
+  - simpl. rewrite !Forall2_cons_iff, IHL1. reflexivity.
+Qed.
+
+Lemma Forall2_map_same :
+  forall (A : Type) (P : A -> A -> Prop) L, Forall2 P L L <-> Forall (fun x => P x x) L.
+Proof.
+  intros A P L. induction L as [|x L].
+  - split; constructor.
+  - rewrite Forall2_cons_iff, Forall_cons_iff, IHL. reflexivity.
+Qed.
+
+(* Forall using quantifiers *)
+
+Lemma forall_cons_iff :
+  forall (A : Type) (P : A -> Prop) a L, (forall x, x \in (a :: L) -> P x) <-> P a /\ (forall x, x \in L -> P x).
+Proof.
+  intros. simpl. firstorder congruence.
+Qed.
+
+Lemma forall_map :
+  forall (A B : Type) (P : B -> Prop) (f : A -> B) L, (forall x, x \in map f L -> P x) <-> (forall x, x \in L -> P (f x)).
+Proof.
+  intros. rewrite <- !Forall_forall. rewrite Forall_map. reflexivity.
+Qed.
+
+Lemma forall_pair :
+  forall (A B : Type) (P : A -> B -> Prop) L, (forall x y, (x, y) \in L -> P x y) <-> (forall xy, xy \in L -> P (fst xy) (snd xy)).
+Proof.
+  intros. split; [|firstorder].
+  intros H [x y] ?; firstorder.
+Qed.
+
+Lemma forall_pair2 :
+  forall (A B : Type) (P : A * B -> Prop) L, (forall xy, xy \in L -> P xy) <-> (forall x y, (x, y) \in L -> P (x, y)).
+Proof.
+  intros. split; [firstorder|]. intros H [x y] ?; firstorder.
 Qed.
 
 (* List inclusion and equivalence *)
@@ -271,6 +378,14 @@ Proof.
     + intros [H | H]; [|firstorder]. exists a. tauto.
     + intros (l & H1 & [H2 | H2]); [subst; tauto|].
       right. apply IHL. exists l. tauto.
+Qed.
+
+Lemma concat_map_In :
+  forall (A B : Type) (f : A -> list B) L x, In x (concat (map f L)) <-> exists u, In x (f u) /\ In u L.
+Proof.
+  intros. rewrite concat_In. split.
+  - intros (l & Hx & Hl). rewrite in_map_iff in Hl. destruct Hl as (u & <- & Hu); exists u; split; assumption.
+  - intros (u & Hx & Hu). exists (f u). split; [assumption|apply in_map; assumption].
 Qed.
 
 Lemma concat_incl :

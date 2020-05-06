@@ -98,6 +98,53 @@ Proof.
 Qed.
 
 
+
+Inductive distinct : list freevar -> nat -> list freevar -> Prop :=
+| distinct_nil : forall L, distinct L 0 nil
+| distinct_cons : forall L1 L2 x n, x \notin L1 -> distinct (x :: L1) n L2 -> distinct L1 (S n) (x :: L2).
+
+Fixpoint fresh_list L n :=
+  match n with
+  | O => nil
+  | S n => let x := proj1_sig (fresh L) in x :: fresh_list (x :: L) n
+  end.
+
+Lemma fresh_list_distinct :
+  forall n L, distinct L n (fresh_list L n).
+Proof.
+  induction n as [|n]; intros L; simpl.
+  - constructor.
+  - constructor.
+    + destruct fresh. simpl. assumption.
+    + apply IHn.
+Qed.
+
+Lemma distinct_distinct :
+  forall n x L1 L2, distinct L1 n L2 -> x \in L1 -> x \in L2 -> False.
+Proof.
+  intros n x L1 L2 H. induction H.
+  - simpl. tauto.
+  - simpl in *. intros H1 [-> | H2]; tauto.
+Qed.
+
+Lemma distinct_incl :
+  forall n L1 L2 L, L2 \subseteq L1 -> distinct L1 n L -> distinct L2 n L.
+Proof.
+  intros n L1 L2 L Hinc H. revert L2 Hinc. induction H; intros L3 Hinc.
+  - constructor.
+  - constructor.
+    + rewrite Hinc. assumption.
+    + apply IHdistinct. rewrite Hinc. prove_list_inc.
+Qed.
+
+Lemma distinct_length :
+  forall n L1 L2, distinct L1 n L2 -> length L2 = n.
+Proof.
+  intros n L1 L2 H. induction H.
+  - reflexivity.
+  - simpl. f_equal. assumption.
+Qed.
+
 Lemma notin_app_iff :
   forall (x : freevar) L1 L2, x \notin L1 ++ L2 <-> x \notin L1 /\ x \notin L2.
 Proof.
@@ -193,3 +240,17 @@ Ltac specialize_fresh H x :=
 
 Tactic Notation "pick" "fresh" ident(x) "as" ident(H) := pick x \notin (Bound _) as H.
 Tactic Notation "pick" "fresh" ident(x) := pick x \notin (Bound _).
+
+Tactic Notation "pickn" constr(n) "distinct" ident(xs) "\notin" uconstr(L) "as" ident(H) :=
+  refine ((fun xs (H : distinct L n xs) => _) (fresh_list L n) (fresh_list_distinct n L)).
+Tactic Notation "pickn" constr(n) "distinct" ident(xs) "\notin" uconstr(L) :=
+  (let H := fresh "H" in pickn n distinct xs \notin L as H).
+Tactic Notation "pickn" constr(n) "distinct" ident(xs) "∉" uconstr(L) "as" ident(H) :=
+  (pickn n distinct xs \notin L as H).
+Tactic Notation "pickn" constr(n) "distinct" ident(xs) "∉" uconstr(L) :=
+  (pickn n distinct xs \notin L).
+
+Tactic Notation "pickn" constr(n) "distinct" "fresh" ident(xs) "as" ident(H) :=
+  pickn n distinct xs \notin (Bound _) as H.
+Tactic Notation "pickn" constr(n) "distinct" "fresh" ident(x) :=
+  pickn n distinct xs \notin (Bound _).
