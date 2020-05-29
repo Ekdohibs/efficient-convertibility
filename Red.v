@@ -7,15 +7,18 @@ Require Import FEnv.
 Inductive nfval :=
 | NFFreeVar : freevar -> nfval
 | NFStructApp : nfval -> nfval_or_lam -> nfval
+| NFStructMatch : nfval -> list (list freevar * nfval_or_lam) -> nfval
 
 with nfval_or_lam :=
 | NFVal : nfval -> nfval_or_lam
-| NFLam : freevar -> nfval_or_lam -> nfval_or_lam.
+| NFLam : freevar -> nfval_or_lam -> nfval_or_lam
+| NFConstr : nat -> list nfval_or_lam -> nfval_or_lam.
 
 Inductive envitem :=
 | EVal : nfval -> envitem
 | ELazy : term -> envitem
-| ELam : term -> freevar -> envitem.
+| ELam : term -> freevar -> envitem
+| EConstr : nat -> list freevar -> envitem.
 
 Inductive cont :=
 | KNil : cont
