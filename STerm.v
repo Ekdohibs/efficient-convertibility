@@ -3,6 +3,9 @@ Require Import Arith.
 Require Import Freevar.
 Require Import Misc.
 Require Import Psatz.
+Require Import Star.
+Require Import Coq.Logic.Eqdep_dec.
+
 
 Definition renaming := list nat.
 Fixpoint renv (L : renaming) (n : nat) : nat :=
@@ -303,11 +306,13 @@ Proof.
   intros [|n]; unfold comp; simpl; [reflexivity|f_equal; lia].
 Qed.
 
+
 Inductive beta : term -> term -> Prop :=
 | beta_app1 : forall t1 t2 t3, beta t1 t2 -> beta (app t1 t3) (app t2 t3)
 | beta_app2 : forall t1 t2 t3, beta t1 t2 -> beta (app t3 t1) (app t3 t2)
 | beta_abs : forall t1 t2, beta t1 t2 -> beta (abs t1) (abs t2)
 | beta_redex : forall t1 t2, beta (app (abs t1) t2) (subst1 t2 t1).
+
 
 Inductive deep_flag := shallow | deep.
 Lemma deep_flag_eq_dec : forall (df1 df2 : deep_flag), { df1 = df2 } + { df1 <> df2 }.
@@ -359,12 +364,14 @@ Proof.
   intros [|] v; simpl; reflexivity.
 Qed.
 
+
 Inductive out t :=
 | out_ret : t -> out t
 | out_div : out t.
 
 Arguments out_ret {t} _.
 Arguments out_div {t}.
+
 
 Inductive ext : deep_flag -> Type :=
 | ext_term : forall df, term -> ext df
@@ -375,6 +382,7 @@ Inductive ext : deep_flag -> Type :=
 Arguments ext_term {df} _.
 Arguments ext_app {df} _ _.
 Arguments ext_appnf {df} _ _.
+
 
 Inductive red : forall df, ext df -> out (val df) -> Prop :=
 | red_var : forall df n, red df (ext_term (var n)) (out_ret (val_nf (nvar n))) (* Free variables reduce to themselves *)
@@ -424,32 +432,14 @@ CoInductive cored : forall df, ext df -> out (val df) -> Prop :=
 | cored_appnf_abort : forall df v, cored df (ext_appnf v out_div) out_div
 | cored_appnf : forall df v1 v2, cored df (ext_appnf v1 (out_ret (vald_nf v2))) (out_ret (val_nf (napp v1 v2))).
 
+
 CoInductive infred {A : Type} (R : A -> A -> Prop) : A -> Prop :=
 | infred_step : forall x y, R x y -> infred R y -> infred R x.
 CoInductive costar {A : Type} (R : A -> A -> Prop) : A -> option A -> Prop :=
 | costar_refl : forall x, costar R x (Some x)
 | costar_step : forall x y z, R x y -> costar R y z -> costar R x z.
-CoInductive costarT {A : Type} (R : A -> A -> Prop) : A -> option A -> Prop :=
-| costarT_refl : forall x, costarT R x (Some x)
-| costarT_step : forall x y z, R x y -> costarT R y z -> costarT R x z
-| costarT_comp : forall w x y z, R w x -> costarT R x y -> (forall v, y = Some v -> costarT R v z) -> costarT R w z.
 Definition costarP {A : Type} (R : A -> A -> Prop) x y :=
   exists H, H x y /\ forall x1 y1, H x1 y1 -> y1 = Some x1 \/ exists z, R x1 z /\ H z y1.
-Definition costarPT {A : Type} (R : A -> A -> Prop) x y :=
-  exists H, H x y /\ forall x1 y1, H x1 y1 -> y1 = Some x1 \/ (exists z, R x1 z /\ H z y1) \/ exists z1 z2, R x1 z1 /\ H z1 z2 /\ (forall v, z2 = Some v -> H v y1).
-
-Inductive costarZ_gen {A : Type} (R : A -> A -> Prop) (H : A -> option A -> Prop) : A -> option A -> Prop :=
-| costarZ_gen_refl : forall x, costarZ_gen R H x (Some x)
-| costarZ_gen_step : forall x y z, R x y -> H y z -> costarZ_gen R H x z
-| costarZ_gen_comp : forall x y z, costarZ_gen R H x y -> (forall w, y = Some w -> costarZ_gen R H w z) -> costarZ_gen R H x z.
-Definition costarZ {A : Type} (R : A -> A -> Prop) x y :=
-  exists H, H x y /\ forall x1 y1, H x1 y1 -> costarZ_gen R H x1 y1.
-Inductive costarW_gen {A : Type} (R : A -> A -> Prop) (H : A -> option A -> Prop) : A -> option A -> Prop :=
-| costarW_gen_refl : forall x, costarW_gen R H x (Some x)
-| costarW_gen_step : forall x y z, R x y -> H y z -> costarW_gen R H x z
-| costarW_gen_comp : forall x y z, costarW_gen R H x y -> (forall w, y = Some w -> H w z) -> costarW_gen R H x z.
-Definition costarW {A : Type} (R : A -> A -> Prop) x y :=
-  exists H, H x y /\ forall x1 y1, H x1 y1 -> costarW_gen R H x1 y1.
 
 Lemma costarP_costar :
   forall A (R : A -> A -> Prop) x y, costarP R x y -> costar R x y.
@@ -460,140 +450,6 @@ Proof.
   - econstructor; [eassumption|]. apply IH. exists H; split; assumption.
 Qed.
 
-Lemma costarPT_costarT :
-  forall A (R : A -> A -> Prop) x y, costarPT R x y -> costarT R x y.
-Proof.
-  intros A R. cofix IH. intros x y (H & H1 & H2).
-  apply H2 in H1. destruct H1 as [H1 | [(z & HR & H1) | (z1 & z2 & HR & H1a & H1b)]].
-  - subst. constructor.
-  - econstructor; [eassumption|]. apply IH. exists H; split; assumption.
-  - eapply costarT_comp; [eassumption| |].
-    + apply IH. exists H; split; eassumption.
-    + intros v ->. apply IH. exists H; split; [|eassumption]. apply H1b. reflexivity.
-Qed.
-
-Lemma costarT_comp1 :
-  forall A (R : A -> A -> Prop) x y z, costarT R x y -> (forall v, y = Some v -> costarT R v z) -> costarT R x z.
-Proof.
-  intros A R. cofix IH. intros x y z H1 H2. inversion H1; subst.
-  - apply H2. reflexivity.
-  - eapply costarT_step; [eassumption|]. eapply IH; eassumption.
-  - eapply costarT_comp; [eassumption|eassumption|].
-    intros v Hv; eapply IH.
-    + apply H3. assumption.
-    + assumption.
-Qed.
-
-Lemma costarT_costarP :
-  forall A (R : A -> A -> Prop) x y, costarT R x y -> costarP R x y.
-Proof.
-  intros A R x y H. exists (costarT R).
-  split; [assumption|]. intros x1 y1 H1. inversion H1; subst.
-  - left; reflexivity.
-  - right; eexists; split; eassumption.
-  - right; eexists; split; [eassumption|].
-    eapply costarT_comp1; eassumption.
-Qed.
-
-Lemma costarZ_gen_mono : forall A (R : A -> A -> Prop) (H1 H2 : A -> option A -> Prop) x y,
-    (forall x y, H1 x y -> H2 x y) -> costarZ_gen R H1 x y -> costarZ_gen R H2 x y.
-Proof.
-  intros A R H1 H2 x y H12 Hgen. induction Hgen.
-  - apply costarZ_gen_refl.
-  - eapply costarZ_gen_step; [eassumption|]. apply H12. assumption.
-  - eapply costarZ_gen_comp; [eassumption|]. eassumption.
-Qed.
-
-Lemma costarW_gen_mono : forall A (R : A -> A -> Prop) (H1 H2 : A -> option A -> Prop) x y,
-    (forall x y, H1 x y -> H2 x y) -> costarW_gen R H1 x y -> costarW_gen R H2 x y.
-Proof.
-  intros A R H1 H2 x y H12 Hgen. induction Hgen.
-  - apply costarW_gen_refl.
-  - eapply costarW_gen_step; [eassumption|]. apply H12. assumption.
-  - eapply costarW_gen_comp; [eassumption|]. intros w Hw. apply H12. apply H; assumption.
-Qed.
-
-Lemma costarZ_comp :
-  forall A (R : A -> A -> Prop) x y z, costarZ R x y -> (forall v, y = Some v -> costarZ R v z) -> costarZ R x z.
-Proof.
-  intros A R x y z H1 H2. destruct y as [y|].
-  - specialize (H2 y eq_refl). destruct H1 as (H1 & H1a & H1b). destruct H2 as (H2 & H2a & H2b).
-    exists (fun u v => H1 u v \/ H2 u v \/ exists w, H1 u (Some w) /\ H2 w v).
-    split.
-    + right. right. exists y. split; assumption.
-    + clear x y z H1a H2a. intros x z [Hxz | [Hxz | (y & Hxy & Hyz)]].
-      * eapply costarZ_gen_mono; [|apply H1b; assumption].
-        intros; tauto.
-      * eapply costarZ_gen_mono; [|apply H2b; assumption].
-        intros; tauto.
-      * eapply costarZ_gen_comp.
-        -- eapply costarZ_gen_mono; [|apply H1b; apply Hxy].
-           intros; tauto.
-        -- intros w [= <-]. eapply costarZ_gen_mono; [|apply H2b; apply Hyz].
-           intros; tauto.
-  - destruct H1 as (H1 & H1a & H1b). exists (fun u v => H1 u v \/ H1 u None).
-    split; [right; assumption|]. clear x z H1a H2.
-    intros x y [Hxy | Hxy].
-    + eapply costarZ_gen_mono; [|apply H1b; assumption].
-      intros; tauto.
-    + apply H1b in Hxy. remember None as z; revert Heqz; induction Hxy.
-      * discriminate.
-      * intros ->. eapply costarZ_gen_step; [eassumption|]. right. assumption.
-      * intros ->. eapply costarZ_gen_comp; [eapply costarZ_gen_mono; [|eassumption]; intros; tauto|].
-        intros; apply H0; [assumption | reflexivity].
-Qed.
-
-Lemma costarW_comp :
-  forall A (R : A -> A -> Prop) x y z, costarW R x y -> (forall v, y = Some v -> costarW R v z) -> costarW R x z.
-Proof.
-  intros A R x y z H1 H2. destruct y as [y|].
-  - specialize (H2 y eq_refl). destruct H1 as (H1 & H1a & H1b). destruct H2 as (H2 & H2a & H2b).
-    exists (fun u v => H1 u v \/ H2 u v \/ exists w, H1 u (Some w) /\ H2 w v).
-    split.
-    + right. right. exists y. split; assumption.
-    + clear x y z H1a H2a. intros x z [Hxz | [Hxz | (y & Hxy & Hyz)]].
-      * eapply costarW_gen_mono; [|apply H1b; assumption].
-        intros; tauto.
-      * eapply costarW_gen_mono; [|apply H2b; assumption].
-        intros; tauto.
-      * eapply costarW_gen_comp.
-        -- eapply costarW_gen_mono; [|apply H1b; apply Hxy].
-           intros; tauto.
-        -- intros w [= <-]. tauto.
-  - destruct H1 as (H1 & H1a & H1b). exists (fun u v => H1 u v \/ H1 u None).
-    split; [right; assumption|]. clear x z H1a H2.
-    intros x y [Hxy | Hxy].
-    + eapply costarW_gen_mono; [|apply H1b; assumption].
-      intros; tauto.
-    + apply H1b in Hxy. remember None as z; revert Heqz; induction Hxy.
-      * discriminate.
-      * intros ->. eapply costarW_gen_step; [eassumption|]. right. assumption.
-      * intros ->. eapply costarW_gen_comp; [eapply costarW_gen_mono; [|eassumption]; intros; tauto|].
-        intros. right. apply H. assumption.
-Qed.
-
-
-Lemma costarZ_costarP :
-  forall A (R : A -> A -> Prop) x y, costarZ R x y -> costarP R x y.
-Proof.
-  intros A R x y H. exists (costarZ R).
-  split; [assumption|]. clear x y H. intros x y H. destruct H as (H & H1 & H2).
-  apply H2 in H1. induction H1.
-  - left. reflexivity.
-  - right. exists y. split; [assumption|]. eexists; split; eassumption.
-  - destruct IHcostarZ_gen as [-> | (w & Hw1 & Hw2)].
-    + apply H3. reflexivity.
-    + right. exists w; split; [assumption|].
-      eapply costarZ_comp; [eassumption|].
-      intros v ->. specialize (H0 v eq_refl).
-      exists (fun u v => H u v \/ costarZ_gen R H u v).
-      split; [right; assumption|].
-      intros s t [Hst | Hst].
-      * eapply costarZ_gen_mono; [|apply H2; assumption]; intros; tauto.
-      * eapply costarZ_gen_mono; [|apply Hst; assumption]; intros; tauto.
-Qed.
-
-
 Definition read_out {df} (o : out (val df)) := match o with out_div => None | out_ret v => Some (read_val v) end.
 Definition read_ext {df} (e : ext df) :=
   match e with
@@ -602,9 +458,6 @@ Definition read_ext {df} (e : ext df) :=
   | ext_appnf v1 o => match read_out o with Some t2 => Some (app (read_nfval v1) t2) | None => None end
   | extd_abs o => match read_out o with Some t => Some (abs t) | None => None end
   end.
-
-Require Import Star.
-Require Import Coq.Logic.Eqdep_dec.
 
 Lemma red_star_beta :
   forall df e o, red df e o -> forall t1 t2, read_ext e = Some t1 -> read_out o = Some t2 -> star beta t1 t2.
@@ -670,23 +523,6 @@ Proof.
     apply IH. assumption.
 Qed.
 
-Lemma costarT_map_impl :
-  forall (A B : Type) (RA : A -> A -> Prop) (RB : B -> B -> Prop) (f : A -> B),
-    (forall x y : A, RA x y -> RB (f x) (f y)) ->
-    forall x y, costarT RA x y -> costarT RB (f x) (match y with None => None | Some y => Some (f y) end).
-Proof.
-  intros A B RA RB f H. cofix IH. intros x y Hx. inversion Hx; subst.
-  - constructor.
-  - econstructor; [apply H; eassumption|].
-    apply IH. assumption.
-  - econstructor; [apply H; eassumption| |].
-    + apply IH. eassumption.
-    + destruct y0 as [y1|]; intros v; [|discriminate]; intros [= <-].
-      apply IH. apply H2. reflexivity.
-Defined.
-Print costarT_map_impl.
-Eval cbv in costarT_map_impl.
-
 Lemma costar_compose :
   forall (A : Type) (R : A -> A -> Prop) x y z,
     costar R x y -> (forall w, y = Some w -> costar R w z) -> costar R x z.
@@ -710,47 +546,6 @@ Proof.
 Qed.
 
 Definition respectful {A : Type} (R : A -> A -> Prop) (f : A -> A) := forall x y, R x y -> R (f x) (f y).
-
-(*
-Lemma red_div_beta :
-  forall t df e o, cored df e o -> read_ext e = Some t -> costarPT (fun x y => beta x y \/ x = y) t (read_out o).
-Proof.
-  intros t df e o H Ht.
-  exists (fun x y => exists df e o f, cored df e o /\ option_map f (read_ext e) = Some x /\ y = option_map f (read_out o) /\ respectful beta f).
-  split; [exists df; exists e; exists o; exists id; split; [assumption|split; rewrite option_map_id; [assumption|split; [reflexivity|intros x y Hxy; assumption]]]|].
-  clear t df e o H Ht. intros t y (df & e & o & f & H & Ht & -> & Hf);
-  inversion H; subst; simpl in *; unexistT; subst; simpl in *; try congruence; injection Ht; intros; subst.
-  - left. rewrite read_val_nf. reflexivity.
-  - left. reflexivity.
-  - right. right.
-    eexists. eexists. split; [right; reflexivity|]. split.
-    + eexists. eexists. eexists. exists (fun t1 => f (abs t1)).
-      split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. intros x y Hxy. apply Hf. apply beta_abs. assumption.
-    + intros v Hv. destruct o1; simpl in Hv; [|discriminate]. injection Hv; intros; subst.
-      eexists. eexists. eexists. exists f.
-      split; [exact H6|]. split; [reflexivity|]. split; [reflexivity|]. assumption.
-  - left. reflexivity.
-  - right. right.
-    eexists. eexists. split; [right; reflexivity|]. split.
-    + eexists. eexists. eexists. exists (fun t3 => f (app t3 t2)).
-      split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. intros x y Hxy. apply Hf. apply beta_app1. assumption.
-    + intros v Hv. destruct o1; simpl in Hv; [|discriminate]. injection Hv; intros; subst.
-      eexists. eexists. eexists. exists f.
-      split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
-  - right. right.
-    eexists. eexists. split; [right; reflexivity|]. split.
-    + eexists. eexists. eexists. exists (fun t3 => f (app (read_nfval v) t3)).
-      split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. intros x y Hxy. apply Hf. apply beta_app2. assumption.
-    + intros w Hw. destruct o1; simpl in Hw; [|discriminate]. injection Hw; intros; subst.
-      eexists. eexists. eexists. exists f.
-      split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
-  - right. left.
-    exists (f (subst1 t1 t2)). split; [left; apply Hf; apply beta_redex|].
-    eexists. eexists. eexists. exists f.
-    split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
-  - left. rewrite read_val_nf. reflexivity.
-Qed.
- *)
 
 Fixpoint size t :=
   match t with
@@ -983,6 +778,8 @@ Proof.
   apply costarPTn_costarP. eapply red_div_beta_aux; eassumption.
 Qed.
 
+
+
 Inductive clo :=
 | mkclo : term -> list clo -> clo.
 
@@ -991,14 +788,6 @@ Fixpoint shift_clo (c : clo) : clo :=
   | mkclo t l => mkclo (ren_term (shiftn (length l)) t) (map shift_clo l)
   end.
 
-(*
-Fixpoint read_env (e : list term) t : term :=
-  match e with
-  | nil => t
-  | u :: e => subst1 u (read_env e t)
-  end.
- *)
-
 Definition read_env (e : list term) :=
   fun n => match nth_error e n with Some u => u | None => var (n - length e) end.
 
@@ -1006,9 +795,7 @@ Fixpoint read_clo (c : clo) : term :=
   match c with
   | mkclo t l =>
     let nl := map read_clo l in
-    (*     subst (fun n => match nth_error nl n with Some u => u | None => var (n - length nl) end) t *)
     subst (read_env nl) t
-(*    read_env nl t *)
   end.
 
 Fixpoint clo_ind2 (P : clo -> Prop) (H : forall t l, Forall P l -> P (mkclo t l)) (c : clo) : P c :=
@@ -1182,7 +969,7 @@ Proof.
   - rewrite read_valE_nf. constructor.
 Qed.
 
-
+(*
 Inductive redE : forall df, list clo -> extE df -> out (valE df) -> Prop :=
 | redE_var_bound : forall df env n t2 env2 o,
     nth_error env n = Some (mkclo t2 env2) ->
@@ -1213,7 +1000,7 @@ Inductive redE : forall df, list clo -> extE df -> out (valE df) -> Prop :=
     redE df env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
 | redE_appnf_abort : forall df env v, redE df env (extE_appnf v out_div) out_div
 | redE_appnf : forall df env v1 v2, redE df env (extE_appnf v1 (out_ret (valEd_nf v2))) (out_ret (valE_nf (napp v1 v2))).
-
+*)
 
 
 
@@ -1307,263 +1094,3 @@ Proof.
   intros e t H.
   exact (red_shallow_deep_abs_aux shallow e _ H eq_refl t eq_refl).
 Qed.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-(*
-Require Import Coq.Arith.Wf_nat.
-Lemma red_div_beta2 :
-  forall t df e o, cored df e o -> read_ext e = Some t ->
-              costarZ beta t (read_out o).
-Proof.
-  intros t df e o H Ht.
-  exists (fun x y => exists df e o f, cored df e o /\ option_map f (read_ext e) = Some x /\
-                         y = option_map f (read_out o) /\ respectful beta f).
-  split.
-  {
-    exists df; exists e; exists o; exists id. splits 4.
-    - assumption.
-    - rewrite option_map_id. assumption.
-    - rewrite option_map_id. reflexivity.
-    - intros x y Hxy. exact Hxy.
-  }
-  clear t df e o H Ht. intros x y (df & e & o & f & H & Hx & -> & Hf).
-  rewrite read_ext_with_size_read_ext in Hx.
-  destruct (read_ext_with_size e) as [[re n]|] eqn:Heqre; simpl in *; [|congruence]. simpl in Hx; injection Hx as Hx; subst x.
-  revert df re e o f H Hf Heqre. induction n as [n IHn] using lt_wf_ind. intros df re e o f H Hf Heqre.
-  inversion H; subst; simpl in *; unexistT; subst; simpl in *; try congruence; injection Heqre; intros; subst.
-  - rewrite read_val_nf. apply costarZ_gen_refl.
-  - apply costarZ_gen_refl.
-  - eapply costarZ_gen_comp.
-    + eapply IHn with (f := fun t1 => f (abs t1)); [|exact H4| |reflexivity]; [lia|].
-      intros x y Hxy. apply Hf. apply beta_abs. assumption.
-    + intros w Hw. destruct o1; simpl in Hw; [|discriminate]. injection Hw; intros; subst.
-      eapply IHn with (f := f); [|exact H6|assumption|reflexivity]. simpl. lia.
-      split; [exact H6|]. split; [reflexivity|]. split; [reflexivity|]. assumption.
-  - left. reflexivity.
-  - right. right.
-    eexists. eexists. split; [right; reflexivity|]. split.
-    + eexists. eexists. eexists. exists (fun t3 => f (app t3 t2)).
-      split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. intros x y Hxy. apply Hf. apply beta_app1. assumption.
-    + intros v Hv. destruct o1; simpl in Hv; [|discriminate]. injection Hv; intros; subst.
-      eexists. eexists. eexists. exists f.
-      split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
-  - right. right.
-    eexists. eexists. split; [right; reflexivity|]. split.
-    + eexists. eexists. eexists. exists (fun t3 => f (app (read_nfval v) t3)).
-      split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. intros x y Hxy. apply Hf. apply beta_app2. assumption.
-    + intros w Hw. destruct o1; simpl in Hw; [|discriminate]. injection Hw; intros; subst.
-      eexists. eexists. eexists. exists f.
-      split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
-  - right. left.
-    exists (f (subst1 t1 t2)). split; [left; apply Hf; apply beta_redex|].
-    eexists. eexists. eexists. exists f.
-    split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
-  - left. rewrite read_val_nf. reflexivity.
-Qed.
-*)
-
-(*
-  cofix IH. intros t df e o H Ht;
-              inversion H; subst; simpl in *; unexistT; subst; simpl in *; try congruence; injection Ht; intros; subst.
-  - rewrite read_val_nf; simpl. constructor.
-  - constructor.
-  - eapply costarT_comp with (y := match read_out o1 with | Some y => Some (abs y) | None => None end); [right; reflexivity| |].
-    + eapply costarT_map_impl; [|eapply IH; [exact H4|reflexivity]].
-      intros u1 u2 [Hu|Hu]; [left; constructor; assumption|right; congruence].
-    + intros w. destruct o1; simpl; [|discriminate]; intros [= <-].
-      eapply IH; [exact H6|reflexivity].
-  - constructor.
-  - admit.
-  - admit.
-  - eapply costarT_step; [left; apply beta_redex|].
-    eapply IH; [apply H3|]. reflexivity.
-  - rewrite read_val_nf; simpl. constructor.
-Qed.
-
-  - inversion H5; subst. injection Ht; intros; subst.
-    eapply infred_map_impl with (RA := beta) (f := abs); [intros; constructor; assumption|].
-    admit.
-  - 
-  - admit.
-
-  - apply inj_pair2_eq_dec in H1; [|apply deep_flag_eq_dec].
-    apply inj_pair2_eq_dec in H3; [|apply deep_flag_eq_dec].
-    subst. simpl in *. congruence.
-  - apply inj_pair2_eq_dec in H3; [|apply deep_flag_eq_dec].
-    subst. simpl in *. congruence.
-  - apply inj_pair2_eq_dec in H0; [|apply deep_flag_eq_dec].
-    apply inj_pair2_eq_dec in H1; [|apply deep_flag_eq_dec].
-    subst. simpl in *. congruence.
-  - apply inj_pair2_eq_dec in H2; [|apply deep_flag_eq_dec].
-    subst. simpl in *. congruence.
-  - apply inj_pair2_eq_dec in H0; [|apply deep_flag_eq_dec].
-    apply inj_pair2_eq_dec in H1; [|apply deep_flag_eq_dec].
-    subst. simpl in *. congruence.
-  - apply inj_pair2_eq_dec in H0; [|apply deep_flag_eq_dec].
-    apply inj_pair2_eq_dec in H2; [|apply deep_flag_eq_dec].
-    subst. simpl in *. congruence.
-  - apply inj_pair2_eq_dec in H2; [|apply deep_flag_eq_dec].
-    subst. simpl in *. congruence.
-  - 
-
-
-  cofix IH. intros df e H. inversion H; subst; intros u Hu; simpl in *.
-  - apply inj_pair2_eq_dec in H1; [|apply deep_flag_eq_dec].
-    apply inj_pair2_eq_dec in H3; [|apply deep_flag_eq_dec].
-    subst. injection Hu; intros; subst.
-    eapply infred_map_impl with (RA := beta) (f := abs); [intros; constructor; assumption|].
-    destruct o1.
-    + admit.
-    + eapply IH; [exact H4|]. reflexivity.
-  - congruence.
-  - admit.
-  - congruence.
-  - admit.
-  - admit.
-  - congruence.
-Qed.
-
-    rewrite read_val_nf in Hu2; simpl in Hu2.
-    injection Hu1; injection Hu2; intros; subst. constructor.
-  - injection Hu1; injection Hu2; intros; subst. constructor.
-  - destruct o1.
-    + simpl in *. eapply star_compose.
-      * injection Hu1; intros; subst. eapply star_map_impl with (RA := beta); [intros; constructor; assumption|].
-        apply IHred1; reflexivity.
-      * apply IHred2; [reflexivity|assumption].
-    + inversion H0; subst.
-      apply inj_pair2_eq_dec in H1; [|apply deep_flag_eq_dec].
-      subst; simpl in *; congruence.
-  - congruence.
-  - injection Hu1; injection Hu2; intros; subst. constructor.
-  - destruct o1.
-    + simpl in *. eapply star_compose.
-      * injection Hu1; intros; subst.
-        eapply star_map_impl with (f := fun t => app t t2) (RA := beta); [intros; constructor; assumption|].
-        eapply IHred1; reflexivity.
-      * apply IHred2; [reflexivity|assumption].
-    + inversion H0; subst.
-      apply inj_pair2_eq_dec in H4; [|apply deep_flag_eq_dec].
-      subst; simpl in *; congruence.
-  - congruence.
-  - destruct o1.
-    + simpl in *. eapply star_compose.
-      * injection Hu1; intros; subst.
-        eapply star_map_impl with (f := fun t => app _ t) (RA := beta); [intros; constructor; assumption|].
-        eapply IHred1; reflexivity.
-      * apply IHred2; [reflexivity|assumption].
-    + inversion H0; subst.
-      apply inj_pair2_eq_dec in H4; [|apply deep_flag_eq_dec].
-      subst; simpl in *; congruence.
-  - injection Hu1; intros; subst.
-    econstructor; [apply beta_redex|].
-    apply IHred; [reflexivity|assumption].
-  - congruence.
-  - injection Hu1; injection Hu2; intros; subst.
-    rewrite read_val_nf. simpl. constructor.
-Qed.
-*)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-(* STerms *)
-
-Inductive sterm :=
-| sbvar : nat -> sterm
-| sevar : nat -> sterm
-| sfvar : freevar -> sterm
-| slam : sterm -> sterm
-| sapp : sterm -> sterm -> sterm.
-
-Inductive sitem :=
-| sitem1 : sterm -> sitem
-| sitem2 : sterm -> sterm -> sitem.
-
-Definition readitem si :=
-  match si with
-  | sitem1 t => t
-  | sitem2 t1 t2 => t1
-  end.
-
-Fixpoint ssubstb k u t :=
-  match t with
-  | sbvar n => if Nat.eq_dec n k then u else sbvar n
-  | sevar n => sevar n
-  | sfvar x => sfvar x
-  | slam t => slam (ssubstb (S k) u t)
-  | sapp t1 t2 => sapp (ssubstb k u t1) (ssubstb k u t2)
-  end.
-
-Fixpoint sshifte k off t :=
-  match t with
-  | sbvar n => sbvar n
-  | sevar n => if le_lt_dec k n then sevar (off + n) else sevar n
-  | sfvar x => sfvar x
-  | slam t => slam (sshifte k off t)
-  | sapp t1 t2 => sapp (sshifte k off t1) (sshifte k off t2)
-  end.
-
-Definition sishifte k off si :=
-  match si with
-  | sitem1 t => sitem1 (sshifte k off t)
-  | sitem2 t1 t2 => sitem2 (sshifte k off t1) (sshifte k off t2)
-  end.
-
-Fixpoint seshifte k off e :=
-  match e with
-  | nil => nil
-  | si :: e => sishifte k off si :: seshifte k off e
-  end.
-
-Inductive sterm_red : list sterm -> sterm -> sterm -> list sterm -> Prop :=
-| sterm_red_var : forall env n t, nth_error env n = Some t -> sterm_red env (sevar n) t nil
-| sterm_red_app1 : forall env t1 t2 t3 e, sterm_red env t1 t2 e -> sterm_red env (sapp t1 t3) (sapp t2 t3) e
-| sterm_red_app2 : forall env t1 t2 t3 e, sterm_red env t1 t2 e -> sterm_red env (sapp t3 t1) (sapp t3 t2) e
-| sterm_red_lam : forall env t1 t2 e, sterm_red env t1 t2 e -> sterm_red env (slam t1) (slam t2) e
-| sterm_red_redex : forall env t1 t2, sterm_red env (sapp (slam t1) t2) (ssubstb 0 (sevar (length env)) t1) (t2 :: nil).
-
-Inductive sterme_red : list sterm -> list sitem -> list sitem -> Prop :=
-| sterme_red_promote : forall env t rest, sterme_red env (sitem1 t :: rest) (sitem2 t t :: rest)
-| sterme_red_env : forall env si e1 e2, sterme_red (env ++ readitem si :: nil) e1 e2 -> sterme_red env (si :: e1) (si :: e2)
-| sterme_red_red1 :
-    forall env t1 t2 e rest,
-      sterm_red env t1 t2 e ->
-      sterme_red env (sitem1 t1 :: rest) (map sitem1 e ++ sitem1 t2 :: seshifte (length env) (length e) rest)
-| sterme_red_red2 :
-    forall env t1 t2 t3 e rest,
-      sterm_red env t1 t2 e ->
-      sterme_red env (sitem2 t3 t1 :: rest) (map sitem1 e ++ sitem2 t3 t2 :: seshifte (length env) (length e) rest).
