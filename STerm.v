@@ -119,8 +119,71 @@ Defined.
 Definition renv_comp L1 L2 := proj1_sig (renv_comp_def L1 L2).
 Definition renv_comp_correct L1 L2 : forall n, renv (renv_comp L1 L2) n = renv L1 (renv L2 n) := proj2_sig (renv_comp_def L1 L2).
 
+Lemma renv_ext :
+  forall L1 L2, (forall n, renv L1 n = renv L2 n) -> L1 = L2.
+Proof.
+  induction L1 as [|x1 L1]; destruct L2 as [|x2 L2].
+  - intros; reflexivity.
+  - intros H. specialize (H x2). simpl in H.
+    destruct le_lt_dec; lia.
+  - intros H. specialize (H x1). simpl in H.
+    destruct le_lt_dec; lia.
+  - intros H. assert (x1 = x2).
+    + assert (H1 := H x1). assert (H2 := H x2).
+      simpl in *.
+      repeat destruct le_lt_dec; lia.
+    + subst. f_equal. apply IHL1.
+      intros n. specialize (H (x2 + n)).
+      simpl in H. destruct le_lt_dec; [|lia].
+      replace (x2 + n - x2) with n in H by lia.
+      lia.
+Qed.
+
+Definition shiftn k : renaming := k :: nil.
+Lemma renv_shiftn :
+  forall k n, renv (shiftn k) n = if le_lt_dec k n then S n else n.
+Proof.
+  intros k n. simpl. destruct le_lt_dec; lia.
+Qed.
+
+Definition comp {A B C : Type} (f : B -> C) (g : A -> B) x := f (g x).
+Definition scons {A : Type} (x : A) (f : nat -> A) n := match n with 0 => x | S n => f n end.
+
+Definition id_ren : renaming := nil.
 
 
+Definition pointwise_eq {A B : Type} (f g : A -> B) := forall x, f x = g x.
+Infix ".=" := pointwise_eq (at level 70).
+
+Lemma scons_0_S : scons 0 S .= id.
+Proof.
+  intros [|n]; reflexivity.
+Qed.
+
+Lemma comp_l : forall (A B : Type) (f : A -> B), comp id f .= f.
+Proof.
+  intros A B f x; unfold comp. reflexivity.
+Qed.
+
+Lemma comp_r : forall (A B : Type) (f : A -> B), comp f id .= f.
+Proof.
+  intros A B f x; unfold comp. reflexivity.
+Qed.
+
+Lemma comp_scons : forall (A B : Type) (x : A) f (g : A -> B), comp g (scons x f) .= scons (g x) (comp g f).
+Proof.
+  intros A B x f g [|n]; unfold comp; simpl; reflexivity.
+Qed.
+
+Lemma scons_comp_id : forall (A : Type) (f : nat -> A), scons (f 0) (comp f S) .= f.
+Proof.
+  intros A f [|n]; unfold comp; simpl; reflexivity.
+Qed.
+
+Lemma scons_comp_S : forall (A : Type) (x : A) f, comp (scons x f) S .= f.
+Proof.
+  intros A x f n. unfold comp; simpl. reflexivity.
+Qed.
 
 
 
@@ -130,25 +193,121 @@ Inductive term :=
 | abs : term -> term
 | app : term -> term -> term.
 
-Fixpoint ren (r : renaming) t :=
+Fixpoint ren_term (r : renaming) t :=
   match t with
   | var n => var (renv r n)
-  | abs t => abs (ren (lift r) t)
-  | app t1 t2 => app (ren r t1) (ren r t2)
+  | abs t => abs (ren_term (lift r) t)
+  | app t1 t2 => app (ren_term r t1) (ren_term r t2)
   end.
 
-Fixpoint subst t k u :=
+Fixpoint subst us t :=
   match t with
-  | var n => if Nat.eq_dec k n then u else var n
-  | abs t => abs (subst t (S k) (ren (plus_ren 1) u))
-  | app t1 t2 => app (subst t1 k u) (subst t2 k u)
+  | var n => us n
+  | abs t => abs (subst (scons (var 0) (comp (ren_term (plus_ren 1)) us)) t)
+  | app t1 t2 => app (subst us t1) (subst us t2)
   end.
+
+Definition subst1 u t := subst (scons u (fun n => var n)) t.
+
+Lemma subst_ext :
+  forall t us1 us2, (forall n, us1 n = us2 n) -> subst us1 t = subst us2 t.
+Proof.
+  induction t; intros us1 us2 H; simpl.
+  - apply H.
+  - f_equal. apply IHt. intros [|n]; simpl; [reflexivity|unfold comp; f_equal; apply H].
+  - f_equal; [apply IHt1|apply IHt2]; assumption.
+Qed.
+
+Definition ren r := fun n => var (renv r n).
+
+Lemma ren_term_is_subst :
+  forall t r, ren_term r t = subst (ren r) t.
+Proof.
+  induction t; intros r; simpl.
+  - reflexivity.
+  - f_equal. rewrite IHt. apply subst_ext.
+    intros [|n]; simpl.
+    + unfold ren. rewrite lift_renv. reflexivity.
+    + unfold ren. rewrite lift_renv. unfold comp. simpl. f_equal. f_equal. lia.
+  - f_equal; [apply IHt1|apply IHt2].
+Qed.
+
+Lemma unfold_subst :
+  forall t us, subst us t =
+          match t with
+          | var n => us n
+          | abs t => abs (subst (scons (var 0) (comp (subst (ren (plus_ren 1))) us)) t)
+          | app t1 t2 => app (subst us t1) (subst us t2)
+          end.
+Proof.
+  destruct t; intros us; simpl.
+  - reflexivity.
+  - f_equal. apply subst_ext. intros [|n]; simpl; [reflexivity|].
+    unfold comp; simpl. rewrite ren_term_is_subst. reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma ren_ren :
+  forall t r1 r2, ren_term r1 (ren_term r2 t) = ren_term (renv_comp r1 r2) t.
+Proof.
+  induction t; intros r1 r2; simpl.
+  - rewrite renv_comp_correct. reflexivity.
+  - f_equal. rewrite IHt. f_equal.
+    apply renv_ext.
+    intros [|n]; rewrite !lift_renv, !renv_comp_correct, !lift_renv; reflexivity.
+  - rewrite IHt1, IHt2. reflexivity.
+Qed.
+
+Lemma ren_subst :
+  forall t r us, ren_term r (subst us t) = subst (comp (ren_term r) us) t.
+Proof.
+  induction t; intros r us; simpl.
+  - unfold comp; simpl. rewrite ren_term_is_subst. reflexivity.
+  - f_equal. rewrite IHt. unfold comp. apply subst_ext.
+    intros [|n]; simpl.
+    + rewrite lift_renv. reflexivity.
+    + rewrite !ren_ren. f_equal.
+      apply renv_ext. intros [|m]; rewrite !renv_comp_correct, lift_renv; simpl; lia.
+  - rewrite IHt1, IHt2. reflexivity.
+Qed.
+
+Lemma subst_ren :
+  forall t r us, subst us (ren_term r t) = subst (comp (subst us) (ren r)) t.
+Proof.
+  induction t; intros r us; simpl.
+  - unfold comp; simpl. reflexivity.
+  - f_equal. rewrite IHt. unfold comp. apply subst_ext.
+    intros [|n]; simpl.
+    + rewrite lift_renv. reflexivity.
+    + rewrite lift_renv. simpl. reflexivity.
+  - rewrite IHt1, IHt2. reflexivity.
+Qed.
+
+Lemma subst_subst :
+  forall t us1 us2, subst us2 (subst us1 t) = subst (comp (subst us2) us1) t.
+Proof.
+  induction t; intros us1 us2; simpl.
+  - unfold comp. reflexivity.
+  - f_equal. rewrite IHt. unfold comp. apply subst_ext.
+    intros [|n]; simpl; [reflexivity|].
+    rewrite ren_subst. rewrite subst_ren. apply subst_ext.
+    intros m; unfold comp; simpl. f_equal. f_equal. lia.
+  - rewrite IHt1, IHt2. reflexivity.
+Qed.
+
+Lemma subst_id :
+  forall t, subst (fun n => var n) t = t.
+Proof.
+  induction t; simpl; f_equal; try assumption.
+  erewrite subst_ext; [eassumption|].
+  intros [|n]; unfold comp; simpl; [reflexivity|f_equal; lia].
+Qed.
 
 Inductive beta : term -> term -> Prop :=
 | beta_app1 : forall t1 t2 t3, beta t1 t2 -> beta (app t1 t3) (app t2 t3)
 | beta_app2 : forall t1 t2 t3, beta t1 t2 -> beta (app t3 t1) (app t3 t2)
 | beta_abs : forall t1 t2, beta t1 t2 -> beta (abs t1) (abs t2)
-| beta_redex : forall t1 t2, beta (app (abs t1) t2) (subst t1 0 t2).
+| beta_redex : forall t1 t2, beta (app (abs t1) t2) (subst1 t2 t1).
 
 Inductive deep_flag := shallow | deep.
 Lemma deep_flag_eq_dec : forall (df1 df2 : deep_flag), { df1 = df2 } + { df1 <> df2 }.
@@ -236,7 +395,7 @@ Inductive red : forall df, ext df -> out (val df) -> Prop :=
     red df (ext_appnf v o1) o2 ->
     red df (ext_app (out_ret (vals_nf v)) t2) o2
 | red_app1_abs : forall df t1 t2 o,
-    red df (ext_term (subst t1 0 t2)) o ->
+    red df (ext_term (subst1 t2 t1)) o ->
     red df (ext_app (out_ret (vals_abs t1)) t2) o
 | red_appnf_abort : forall df v, red df (ext_appnf v out_div) out_div
 | red_appnf : forall df v1 v2, red df (ext_appnf v1 (out_ret (vald_nf v2))) (out_ret (val_nf (napp v1 v2))).
@@ -260,7 +419,7 @@ CoInductive cored : forall df, ext df -> out (val df) -> Prop :=
     cored df (ext_appnf v o1) o2 ->
     cored df (ext_app (out_ret (vals_nf v)) t2) o2
 | cored_app1_abs : forall df t1 t2 o,
-    cored df (ext_term (subst t1 0 t2)) o ->
+    cored df (ext_term (subst1 t2 t1)) o ->
     cored df (ext_app (out_ret (vals_abs t1)) t2) o
 | cored_appnf_abort : forall df v, cored df (ext_appnf v out_div) out_div
 | cored_appnf : forall df v1 v2, cored df (ext_appnf v1 (out_ret (vald_nf v2))) (out_ret (val_nf (napp v1 v2))).
@@ -434,38 +593,6 @@ Proof.
       * eapply costarZ_gen_mono; [|apply Hst; assumption]; intros; tauto.
 Qed.
 
-Lemma costarW_costarP :
-  forall A (R : A -> A -> Prop) x y, costarW R x y -> costarP R x y.
-Proof.
-  intros A R x y H. exists (costarW R).
-  split; [assumption|]. clear x y H. intros x y H. destruct H as (H & H1 & H2).
-  apply H2 in H1. induction H1.
-  - left. reflexivity.
-  - right. exists y. split; [assumption|]. eexists; split; eassumption.
-  - destruct IHcostarW_gen as [-> | (w & Hw1 & Hw2)].
-Abort. (*
-    + apply H3. reflexivity.
-    + right. exists w; split; [assumption|].
-      eapply costarW_comp; [eassumption|].
-      intros v ->. specialize (H0 v eq_refl).
-      exists (fun u v => H u v \/ costarZ_gen R H u v).
-      split; [right; assumption|].
-      intros s t [Hst | Hst].
-      * eapply costarZ_gen_mono; [|apply H2; assumption]; intros; tauto.
-      * eapply costarZ_gen_mono; [|apply Hst; assumption]; intros; tauto.
-Qed.
-*)
-
-
-Lemma costarPT_costarP :
-  forall A (R : A -> A -> Prop) x y, costarPT R x y -> costarP R x y.
-Proof.
-  intros A R x y H. exists (costarPT R). split; [assumption|]. clear x y H.
-  intros x y (H & H1 & H2). apply H2 in H1. destruct H1 as [H1 | [H1 | H1]].
-  - left; assumption.
-  - right. destruct H1 as (z & Hz1 & Hz2). exists z. split; [assumption|]. exists H. split; assumption.
-  - admit.
-Abort.
 
 Definition read_out {df} (o : out (val df)) := match o with out_div => None | out_ret v => Some (read_val v) end.
 Definition read_ext {df} (e : ext df) :=
@@ -618,7 +745,7 @@ Proof.
       eexists. eexists. eexists. exists f.
       split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
   - right. left.
-    exists (f (subst t1 0 t2)). split; [left; apply Hf; apply beta_redex|].
+    exists (f (subst1 t1 t2)). split; [left; apply Hf; apply beta_redex|].
     eexists. eexists. eexists. exists f.
     split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
   - left. rewrite read_val_nf. reflexivity.
@@ -826,7 +953,7 @@ Proof.
       eexists. eexists. eexists. exists f.
       split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
   - right. left.
-    exists (f (subst t1 0 t2, 2 * size (subst t1 0 t2))).
+    exists (f (subst1 t2 t1, 2 * size (subst1 t2 t1))).
     split; [apply Hf; left; apply beta_redex|].
     eexists. eexists. eexists. exists f.
     split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
@@ -855,6 +982,352 @@ Proof.
   rewrite read_out_with_size_read_out.
   apply costarPTn_costarP. eapply red_div_beta_aux; eassumption.
 Qed.
+
+Inductive clo :=
+| mkclo : term -> list clo -> clo.
+
+Fixpoint shift_clo (c : clo) : clo :=
+  match c with
+  | mkclo t l => mkclo (ren_term (shiftn (length l)) t) (map shift_clo l)
+  end.
+
+(*
+Fixpoint read_env (e : list term) t : term :=
+  match e with
+  | nil => t
+  | u :: e => subst1 u (read_env e t)
+  end.
+ *)
+
+Definition read_env (e : list term) :=
+  fun n => match nth_error e n with Some u => u | None => var (n - length e) end.
+
+Fixpoint read_clo (c : clo) : term :=
+  match c with
+  | mkclo t l =>
+    let nl := map read_clo l in
+    (*     subst (fun n => match nth_error nl n with Some u => u | None => var (n - length nl) end) t *)
+    subst (read_env nl) t
+(*    read_env nl t *)
+  end.
+
+Fixpoint clo_ind2 (P : clo -> Prop) (H : forall t l, Forall P l -> P (mkclo t l)) (c : clo) : P c :=
+  match c with
+  | mkclo t l => H t l ((fix H2 (l : _) : Forall P l :=
+              match l with
+              | nil => @Forall_nil _ _
+              | cons c l => @Forall_cons _ _ c l (clo_ind2 P H c) (H2 l)
+              end) l)
+  end.
+
+Lemma read_shift_clo :
+  forall c, read_clo (shift_clo c) = ren_term (plus_ren 1) (read_clo c).
+Proof.
+  induction c using clo_ind2.
+  simpl. rewrite ren_subst, subst_ren. eapply subst_ext.
+  intros n. unfold comp, read_env. simpl.
+  rewrite !nth_error_map, !map_length.
+  destruct (nth_error l n) as [c|] eqn:Hn.
+  - destruct le_lt_dec; [rewrite <- nth_error_None in *; congruence|].
+    rewrite Hn. rewrite Forall_forall in H. apply H.
+    eapply nth_error_In; eassumption.
+  - destruct le_lt_dec; [|rewrite nth_error_None in Hn; lia].
+    replace (nth_error l _) with (@None clo) by (symmetry; apply nth_error_None; lia).
+    unfold ren_term. rewrite plus_ren_correct. f_equal. lia.
+Qed.
+
+Inductive valE : deep_flag -> Type :=
+| valEs_nf : nfval -> valE shallow
+| valEs_abs : term -> list clo -> valE shallow
+| valEd_nf : nfval_or_lam -> valE deep.
+
+Definition read_valE {df} (v : valE df) : val df :=
+  match v with
+  | valEs_nf v => vals_nf v
+  | valEs_abs t v => vals_abs (subst (scons (var 0) (comp (ren_term (plus_ren 1)) (read_env (map read_clo v)))) t)
+  | valEd_nf v => vald_nf v
+  end.
+
+Definition valE_nf {df} v : valE df :=
+  match df with
+  | shallow => valEs_nf v
+  | deep => valEd_nf (nval v)
+  end.
+
+Lemma read_valE_nf :
+  forall df v, read_valE (@valE_nf df v) = val_nf v.
+Proof.
+  intros [|] v; simpl; reflexivity.
+Qed.
+
+Inductive extE : deep_flag -> Type :=
+| extE_term : forall df, term -> extE df
+| extE_app : forall df, out (valE shallow) -> term -> extE df
+| extE_appnf : forall df, nfval -> out (valE deep) -> extE df
+| extEd_abs : out (valE deep) -> extE deep.
+
+Arguments extE_term {df} _.
+Arguments extE_app {df} _ _.
+Arguments extE_appnf {df} _ _.
+
+Definition out_map {A B : Type} (f : A -> B) (o : out A) : out B :=
+  match o with
+  | out_ret x => out_ret (f x)
+  | out_div => out_div
+  end.
+
+Definition read_extE {df} env (e : extE df) : ext df :=
+  match e with
+  | extE_term t => ext_term (read_clo (mkclo t env))
+  | extE_app o1 t2 => ext_app (out_map read_valE o1) (read_clo (mkclo t2 env))
+  | extE_appnf v1 o2 => ext_appnf v1 (out_map read_valE o2)
+  | extEd_abs o => extd_abs (out_map read_valE o)
+  end.
+
+Inductive redE : forall df, list clo -> extE df -> out (valE df) -> Prop :=
+| redE_var_bound : forall df env n t2 env2 o,
+    nth_error env n = Some (mkclo t2 env2) ->
+    redE df env2 (extE_term t2) o ->
+    redE df env (extE_term (var n)) o
+| redE_var_free : forall df env n,
+    nth_error env n = None ->
+    redE df env (extE_term (var n)) (out_ret (valE_nf (nvar (n - length env))))
+| redE_abs_shallow : forall t env,
+    redE shallow env (extE_term (abs t)) (out_ret (valEs_abs t env))
+| redE_abs_deep : forall t env o1 o2,
+    redE deep (mkclo (var 0) nil :: map shift_clo env) (extE_term (ren_term (shiftn (S (length env))) t)) o1 ->
+    redE deep env (extEd_abs o1) o2 ->
+    redE deep env (extE_term (abs t)) o2
+| redE_abs1_abort : forall env, redE deep env (extEd_abs out_div) out_div
+| redE_abs1 : forall env v, redE deep env (extEd_abs (out_ret (valEd_nf v))) (out_ret (valEd_nf (nlam v)))
+| redE_app : forall df env t1 o1 t2 o2,
+    redE shallow env (extE_term t1) o1 ->
+    redE df env (extE_app o1 t2) o2 ->
+    redE df env (extE_term (app t1 t2)) o2
+| redE_app1_abort : forall df env t2, redE df env (extE_app out_div t2) out_div
+| redE_app1_nf : forall df env v o1 t2 o2,
+    redE deep env (extE_term t2) o1 ->
+    redE df env (extE_appnf v o1) o2 ->
+    redE df env (extE_app (out_ret (valEs_nf v)) t2) o2
+| redE_app1_abs : forall df env env2 t1 t2 o,
+    redE df (mkclo t2 env :: env2) (extE_term t1) o ->
+    redE df env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
+| redE_appnf_abort : forall df env v, redE df env (extE_appnf v out_div) out_div
+| redE_appnf : forall df env v1 v2, redE df env (extE_appnf v1 (out_ret (valEd_nf v2))) (out_ret (valE_nf (napp v1 v2))).
+
+CoInductive coredE : forall df, list clo -> extE df -> out (valE df) -> Prop :=
+| coredE_var_bound : forall df env n t2 env2 o,
+    nth_error env n = Some (mkclo t2 env2) ->
+    coredE df env2 (extE_term t2) o ->
+    coredE df env (extE_term (var n)) o
+| coredE_var_free : forall df env n,
+    nth_error env n = None ->
+    coredE df env (extE_term (var n)) (out_ret (valE_nf (nvar (n - length env))))
+| coredE_abs_shallow : forall t env,
+    coredE shallow env (extE_term (abs t)) (out_ret (valEs_abs t env))
+| coredE_abs_deep : forall t env o1 o2,
+    coredE deep (mkclo (var 0) nil :: map shift_clo env) (extE_term (ren_term (shiftn (S (length env))) t)) o1 ->
+    coredE deep env (extEd_abs o1) o2 ->
+    coredE deep env (extE_term (abs t)) o2
+| coredE_abs1_abort : forall env, coredE deep env (extEd_abs out_div) out_div
+| coredE_abs1 : forall env v, coredE deep env (extEd_abs (out_ret (valEd_nf v))) (out_ret (valEd_nf (nlam v)))
+| coredE_app : forall df env t1 o1 t2 o2,
+    coredE shallow env (extE_term t1) o1 ->
+    coredE df env (extE_app o1 t2) o2 ->
+    coredE df env (extE_term (app t1 t2)) o2
+| coredE_app1_abort : forall df env t2, coredE df env (extE_app out_div t2) out_div
+| coredE_app1_nf : forall df env v o1 t2 o2,
+    coredE deep env (extE_term t2) o1 ->
+    coredE df env (extE_appnf v o1) o2 ->
+    coredE df env (extE_app (out_ret (valEs_nf v)) t2) o2
+| coredE_app1_abs : forall df env env2 t1 t2 o,
+    coredE df (mkclo t2 env :: env2) (extE_term t1) o ->
+    coredE df env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
+| coredE_appnf_abort : forall df env v, coredE df env (extE_appnf v out_div) out_div
+| coredE_appnf : forall df env v1 v2, coredE df env (extE_appnf v1 (out_ret (valEd_nf v2))) (out_ret (valE_nf (napp v1 v2))).
+
+Arguments nth_error : simpl nomatch.
+Lemma redE_red :
+  forall df env e o, redE df env e o -> red df (read_extE env e) (out_map read_valE o).
+Proof.
+  intros df env e o H. induction H; simpl in *.
+  - unfold read_env. rewrite nth_error_map, H. assumption.
+  - unfold read_env. rewrite nth_error_map, H, map_length, read_valE_nf. constructor.
+  - constructor.
+  - rewrite subst_ren in IHredE1.
+    econstructor; [|eassumption].
+    erewrite subst_ext; [eassumption|].
+    intros [|n]; unfold comp, read_env; [reflexivity|].
+    unfold ren. rewrite renv_shiftn.
+    destruct le_lt_dec; simpl; rewrite !nth_error_map, !map_length; destruct nth_error as [u|] eqn:Hu.
+    + assert (Hu2 : nth_error env n <> None) by congruence; rewrite nth_error_Some in Hu2; lia.
+    + assert (HSn : nth_error env (S n) = None) by (apply nth_error_None; lia); rewrite HSn.
+      unfold ren_term. simpl. destruct (length env); f_equal; simpl; lia.
+    + rewrite read_shift_clo. reflexivity.
+    + rewrite nth_error_None in Hu. lia.
+  - constructor.
+  - constructor.
+  - econstructor; eassumption.
+  - constructor.
+  - econstructor; eassumption.
+  - econstructor.
+    unfold subst1. rewrite subst_subst.
+    erewrite subst_ext; [eassumption|].
+    unfold comp, read_env.
+    intros [|n]; simpl.
+    + reflexivity.
+    + rewrite subst_ren; unfold comp; simpl.
+      erewrite subst_ext; [apply subst_id|]; intros; f_equal; lia.
+  - constructor.
+  - rewrite read_valE_nf. constructor.
+Qed.
+
+
+Inductive redE : forall df, list clo -> extE df -> out (valE df) -> Prop :=
+| redE_var_bound : forall df env n t2 env2 o,
+    nth_error env n = Some (mkclo t2 env2) ->
+    redE df env2 (extE_term t2) o ->
+    redE df env (extE_term (var n)) o
+| redE_var_free : forall df env n,
+    nth_error env n = None ->
+    redE df env (extE_term (var n)) (out_ret (valE_nf (nvar (n - length env))))
+| redE_abs_shallow : forall t env,
+    redE shallow env (extE_term (abs t)) (out_ret (valEs_abs t env))
+| redE_abs_deep : forall t env o1 o2,
+    redE deep (mkclo (var 0) nil :: map shift_clo env) (extE_term (ren_term (shiftn (S (length env))) t)) o1 ->
+    redE deep env (extEd_abs o1) o2 ->
+    redE deep env (extE_term (abs t)) o2
+| redE_abs1_abort : forall env, redE deep env (extEd_abs out_div) out_div
+| redE_abs1 : forall env v, redE deep env (extEd_abs (out_ret (valEd_nf v))) (out_ret (valEd_nf (nlam v)))
+| redE_app : forall df env t1 o1 t2 o2,
+    redE shallow env (extE_term t1) o1 ->
+    redE df env (extE_app o1 t2) o2 ->
+    redE df env (extE_term (app t1 t2)) o2
+| redE_app1_abort : forall df env t2, redE df env (extE_app out_div t2) out_div
+| redE_app1_nf : forall df env v o1 t2 o2,
+    redE deep env (extE_term t2) o1 ->
+    redE df env (extE_appnf v o1) o2 ->
+    redE df env (extE_app (out_ret (valEs_nf v)) t2) o2
+| redE_app1_abs : forall df env env2 t1 t2 o,
+    redE df (mkclo t2 env :: env2) (extE_term t1) o ->
+    redE df env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
+| redE_appnf_abort : forall df env v, redE df env (extE_appnf v out_div) out_div
+| redE_appnf : forall df env v1 v2, redE df env (extE_appnf v1 (out_ret (valEd_nf v2))) (out_ret (valE_nf (napp v1 v2))).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Definition ext_shallow_to_deep (e : ext shallow) : ext deep :=
+  match e return ext deep with
+  | ext_term t => ext_term t
+  | ext_app o1 t2 => ext_app o1 t2
+  | ext_appnf v1 o2 => ext_appnf v1 o2
+  | extd_abs t => extd_abs t
+  end.
+
+Lemma red_shallow_deep_val_aux :
+  forall df e o,
+    red df e o -> forall (p : df = shallow) v, (match p in _ = df return out (val df) with eq_refl => o end) = out_ret (vals_nf v) ->
+    red deep (ext_shallow_to_deep (match p in _ = df return ext df with eq_refl => e end)) (out_ret (vald_nf (nval v))).
+Proof.
+  intros df e o H.
+  induction H; try destruct df; intros p; try discriminate p; rewrite (UIP_dec deep_flag_eq_dec p eq_refl);
+    intros nv Ho; try discriminate Ho; simpl.
+  - injection Ho as Ho; subst. constructor.
+  - econstructor; [eassumption|].
+    eapply (IHred2 eq_refl). assumption.
+  - econstructor; [eassumption|].
+    eapply (IHred2 eq_refl). assumption.
+  - econstructor.
+    eapply (IHred eq_refl). eassumption.
+  - injection Ho as Ho; subst. constructor.
+Qed.
+
+Lemma red_shallow_deep_val :
+  forall e v, red shallow e (out_ret (vals_nf v)) ->
+         red deep (ext_shallow_to_deep e) (out_ret (vald_nf (nval v))).
+Proof.
+  intros e v H.
+  exact (red_shallow_deep_val_aux shallow e _ H eq_refl v eq_refl).
+Qed.
+
+Lemma red_shallow_deep_abs_aux :
+  forall df e o,
+    red df e o -> forall (p : df = shallow) t, (match p in _ = df return out (val df) with eq_refl => o end) = out_ret (vals_abs t) ->
+    forall o2, red deep (ext_term (abs t)) o2 -> red deep (ext_shallow_to_deep (match p in _ = df return ext df with eq_refl => e end)) o2.
+Proof.
+  intros df e o H.
+  induction H; try destruct df; intros p; try discriminate p; rewrite (UIP_dec deep_flag_eq_dec p eq_refl);
+    intros nt Ho; try discriminate Ho; simpl.
+  - injection Ho as Ho; subst. intros; assumption.
+  - intros o3. specialize (IHred2 eq_refl nt Ho o3). simpl in IHred2.
+    intros Hred. econstructor; [eassumption|]. apply IHred2; assumption.
+  - intros o3. specialize (IHred2 eq_refl nt Ho o3). simpl in IHred2.
+    intros Hred. econstructor; [eassumption|]. apply IHred2; assumption.
+  - intros o3. specialize (IHred eq_refl nt Ho o3). simpl in IHred.
+    intros Hred. constructor. apply IHred; assumption.
+Qed.
+
+Lemma red_shallow_deep_abs :
+  forall e t,
+    red shallow e (out_ret (vals_abs t)) ->
+    forall o, red deep (ext_term (abs t)) o -> red deep (ext_shallow_to_deep e) o.
+Proof.
+  intros e t H.
+  exact (red_shallow_deep_abs_aux shallow e _ H eq_refl t eq_refl).
+Qed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 (*
 Require Import Coq.Arith.Wf_nat.
@@ -902,7 +1375,7 @@ Proof.
       eexists. eexists. eexists. exists f.
       split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
   - right. left.
-    exists (f (subst t1 0 t2)). split; [left; apply Hf; apply beta_redex|].
+    exists (f (subst1 t1 t2)). split; [left; apply Hf; apply beta_redex|].
     eexists. eexists. eexists. exists f.
     split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
   - left. rewrite read_val_nf. reflexivity.
