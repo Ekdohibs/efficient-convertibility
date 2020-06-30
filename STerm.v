@@ -983,8 +983,8 @@ Inductive redE : forall df, list freevar -> list clo -> extE df -> out (valE df)
 | redE_abs_shallow : forall t xs env,
     redE shallow xs env (extE_term (abs t)) (out_ret (valEs_abs t env))
 | redE_abs_deep : forall t x xs env o1 o2,
-    x \in xs ->
-    redE deep (list_remove x xs) (clo_var x :: env) (extE_term t) o1 ->
+    x \notin xs ->
+    redE deep (x :: xs) (clo_var x :: env) (extE_term t) o1 ->
     redE deep xs env (extEd_abs x t o1) o2 ->
     redE deep xs env (extE_term (abs t)) o2
 | redE_abs1_abort : forall x t xs env, redE deep xs env (extEd_abs x t out_div) out_div
@@ -1083,9 +1083,9 @@ Qed.
  *)
 
 Lemma redE_closed :
-  forall df xs xs2 env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> redE df xs2 env e o -> outE_closed xs o.
+  forall df xs env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> redE df xs env e o -> outE_closed xs o.
 Proof.
-  intros df xs xs2 env e o Henv He H. revert xs Henv He; induction H; intros nxs Henv He; simpl in *; inversion He; subst.
+  intros df xs env e o Henv He H. induction H; simpl in *; inversion He; subst.
   - apply nth_error_In, Henv in H. destruct H as [H1 H2]. inversion H1; subst.
     apply IHredE; [|constructor; assumption].
     intros c Hc; split; [apply H6; assumption|].
@@ -1122,16 +1122,15 @@ Proof.
 Qed.
 
 Lemma redE_red :
-  forall df xs xs2 env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> (forall x, x \in xs -> x \notin xs2) -> redE df xs2 env e o -> red df (read_extE xs env e) (out_map (read_valE xs) o).
+  forall df xs env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> redE df xs env e o -> red df (read_extE xs env e) (out_map (read_valE xs) o).
 Proof.
-  intros df xs xs2 env e o Henv He Hdisj H. revert xs Henv He Hdisj; induction H; intros nxs Henv He Hdisj; simpl in *; inversion He; subst.
+  intros df xs env e o Henv He H. induction H; simpl in *; inversion He; subst.
   - unfold read_env. rewrite nth_error_map, H.
     apply nth_error_In, Henv in H. destruct H as [H1 H2]. inversion H1; subst.
     apply IHredE.
     + intros c Hc. split; [apply H6; assumption|].
       simpl in H2. rewrite concat_incl, Forall_map, Forall_forall in H2. apply H2; eassumption.
     + constructor. assumption.
-    + assumption.
   - unfold read_env. rewrite nth_error_map, H. constructor.
   - inversion H1; subst.
     erewrite subst_closed_at_ext; [constructor|eassumption|].
@@ -1139,19 +1138,18 @@ Proof.
     rewrite !nth_error_map; destruct nth_error as [u|] eqn:Hu.
     + (* rewrite read_shift_clo; [reflexivity|]. apply Henv. eapply nth_error_In; eassumption. *) reflexivity.
     + apply nth_error_None in Hu. lia.
-  - econstructor; [|apply IHredE2; [assumption|constructor|assumption]].
+  - econstructor; [|apply IHredE2; [assumption|constructor]].
     erewrite subst_closed_at_ext.
-    + apply IHredE1; [|constructor; inversion H4; assumption|].
-      * intros c [<- | Hc]; [split; [constructor|simpl; prove_list_inc]|].
-        split; [apply Henv; assumption|].
-        etransitivity; [apply Henv; assumption|]. prove_list_inc.
-      * intros y [<- | Hy]; rewrite list_remove_correct; [tauto|]. specialize (Hdisj y); tauto.
+    + apply IHredE1; [|constructor; inversion H4; assumption].
+      intros c [<- | Hc]; [split; [constructor|simpl; prove_list_inc]|].
+      split; [apply Henv; assumption|].
+      etransitivity; [apply Henv; assumption|]. prove_list_inc.
     + inversion H4; eassumption.
     + intros [|n] Hn; unfold comp, read_env; simpl; [destruct freevar_eq_dec; congruence|].
       rewrite !nth_error_map; destruct nth_error as [u|] eqn:Hu; [|apply nth_error_None in Hu; lia].
       apply nth_error_In, Henv in Hu. destruct Hu as [Hu1 Hu2].
       rewrite read_shift_clo; [reflexivity| |apply Hu1].
-      rewrite Hu2. intros Hx. apply Hdisj in Hx. tauto.
+      rewrite Hu2. assumption.
     + inversion H4; subst; assumption.
     + eapply redE_closed; [| |eassumption].
       * intros c [<- | Hc]; [split; [constructor|simpl; prove_list_inc]|].
@@ -1173,7 +1171,6 @@ Proof.
       destruct nth_error eqn:Hu; [|split; simpl; [constructor; [assumption|intros; apply Henv; assumption] | rewrite concat_incl, Forall_map, Forall_forall; intros; apply Henv; assumption]].
       eapply Henv, nth_error_In; eassumption.
     + simpl in H6. constructor. apply H6.
-    + assumption.
     + simpl in H6. apply H6.
     + unfold comp, read_env.
       intros [|n] Hn; simpl.
