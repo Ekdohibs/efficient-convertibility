@@ -1326,32 +1326,32 @@ Inductive eiM :=
 | eiM_val : nfvalx -> eiM.
 Definition memM := list (freevar * eiM).
 
-Definition redEs df env e o := exists L, redE df L env e o.
+Definition memdom (m : memM) := map fst m.
 
-Inductive read_eiM (res : freevar -> option clo) : eiM -> clo -> Prop :=
+Inductive read_eiM (res : freevar -> option clo) xs : eiM -> clo -> Prop :=
 | read_eiM_lazy : forall t ys vs,
     map Some vs = map res ys ->
-    read_eiM res (eiM_lazy t ys) (clo_term t vs)
+    read_eiM res xs (eiM_lazy t ys) (clo_term t vs)
 | read_eiM_abs1 : forall t ys u ws vs,
     map Some vs = map res ys ->
-    redEs shallow ws (extE_term u) (out_ret (valEs_abs t vs)) ->
-    read_eiM res (eiM_abs1 t ys) (clo_term u ws)
+    redE shallow xs ws (extE_term u) (out_ret (valEs_abs t vs)) ->
+    read_eiM res xs (eiM_abs1 t ys) (clo_term u ws)
 | read_eiM_abs2 : forall t ys u ws v vs,
     map Some vs = map res ys ->
-    redEs deep ws (extE_term u) (out_ret (valEd_abs t vs v)) ->
-    read_eiM res (eiM_abs2 t ys v) (clo_term u ws)
+    redE deep xs ws (extE_term u) (out_ret (valEd_abs t vs v)) ->
+    read_eiM res xs (eiM_abs2 t ys v) (clo_term u ws)
 | read_eiM_val : forall u ws v,
-    redEs shallow ws (extE_term u) (out_ret (valE_nf v)) ->
-    read_eiM res (eiM_val v) (clo_term u ws)
+    redE shallow xs ws (extE_term u) (out_ret (valE_nf v)) ->
+    read_eiM res xs (eiM_val v) (clo_term u ws)
 | read_eiM_var : forall y,
-    read_eiM res (eiM_val (nxvar y)) (clo_var y).
+    read_eiM res xs (eiM_val (nxvar y)) (clo_var y).
 
 Definition read_memM (m : memM) (res : freevar -> option clo) :=
-  (forall x u, env_find m x = Some u -> exists v, res x = Some v /\ read_eiM res u v) /\
+  (forall x u, env_find m x = Some u -> exists v, res x = Some v /\ read_eiM res (memdom m) u v) /\
   (forall x, env_find m x = None -> res x = None).
 
 Lemma read_memM_Some :
-  forall m res x u v, read_memM m res -> env_find m x = Some u -> res x = Some v -> read_eiM res u v.
+  forall m res x u v, read_memM m res -> env_find m x = Some u -> res x = Some v -> read_eiM res (memdom m) u v.
 Proof.
   intros m res x u v Hread Hm Hres. apply Hread in Hm.
   destruct Hm as (v2 & Hx2 & Hv2). congruence.
@@ -1601,10 +1601,10 @@ Proof.
 Qed.
 
 Lemma compat_res_read_eiM :
-  forall res1 res2 u c,
-    compat_res res1 res2 -> read_eiM res1 u c -> read_eiM res2 u c.
+  forall res1 res2 xs u c,
+    compat_res res1 res2 -> read_eiM res1 xs u c -> read_eiM res2 xs u c.
 Proof.
-  intros res1 res2 u c H1 H2. inversion H2; subst; econstructor; try eassumption.
+  intros res1 res2 xs u c H1 H2. inversion H2; subst; econstructor; try eassumption.
   all: eapply nenv_compat_list; eassumption.
 Qed.
 
@@ -1655,14 +1655,30 @@ Proof.
 Qed.
 *)
 
+Lemma update_env_in_fst :
+  forall {A : Type} (env : list (freevar * A)) x u v, env_find env x = Some u -> map fst (update_env env x v) = map fst env.
+Proof.
+  induction env as [|[y w] env]; intros x u v H.
+  - simpl in H. congruence.
+  - simpl in *. destruct freevar_eq_dec.
+    + simpl. congruence.
+    + simpl. f_equal. eapply IHenv; eassumption.
+Qed.
+
 Lemma read_memM_update :
-  forall m res x c u, read_memM m res -> res x = Some c -> read_eiM res u c -> read_memM (update_env m x u) res.
+  forall m res x c u, read_memM m res -> res x = Some c -> read_eiM res (memdom m) u c -> read_memM (update_env m x u) res.
 Proof.
   intros m res x c u Hmem Hres Hread.
+  assert (Hdom : memdom (update_env m x u) = memdom m).
+  {
+    unfold memdom in *.
+    destruct (env_find m x) as [v|] eqn:Hv; [|apply Hmem in Hv; congruence].
+    erewrite update_env_in_fst; [reflexivity|eassumption].
+  }
   split.
   - intros y v Hy. rewrite env_find_update_env in Hy. destruct freevar_eq_dec.
-    + injection Hy; intros; subst. exists c. split; assumption.
-    + apply Hmem. assumption.
+    + injection Hy; intros; subst. exists c. rewrite Hdom; split; assumption.
+    + rewrite Hdom; apply Hmem. assumption.
   - intros y Hy. rewrite env_find_update_env in Hy. destruct freevar_eq_dec.
     + congruence.
     + apply Hmem. assumption.
