@@ -990,38 +990,38 @@ Definition getvalEd_nf (v : valE deep) : nfvalx_or_lam :=
   | valEs_abs _ _ => nxval (nxvar (proj1_sig (fresh nil)))
   end.
 
-Inductive redE : forall df, list freevar -> list clo -> extE df -> out (valE df) -> Prop :=
-| redE_var_bound : forall df xs xs2 env n t2 env2 o,
-    nth_error env n = Some (clo_term xs2 t2 env2) ->
-    redE df xs2 env2 (extE_term t2) o ->
-    redE df xs env (extE_term (var n)) o
-| redE_var_free : forall df x xs env n,
+Inductive redE : forall df, list freevar -> list freevar -> list clo -> extE df -> out (valE df) -> Prop :=
+| redE_var_bound : forall df xs xs2 dom env n t2 env2 o,
+    nth_error env n = Some (clo_term xs2 t2 env2) -> xs2 \subseteq dom ->
+    redE df xs2 dom env2 (extE_term t2) o ->
+    redE df xs dom env (extE_term (var n)) o
+| redE_var_free : forall df x xs dom env n,
     nth_error env n = Some (clo_var x) ->
-    redE df xs env (extE_term (var n)) (out_ret (valE_nf (nxvar x)))
-| redE_abs_shallow : forall t xs env,
-    redE shallow xs env (extE_term (abs t)) (out_ret (valEs_abs t env))
-| redE_abs_deep : forall t x xs env o1 o2,
-    x \notin xs ->
-    redE deep (x :: xs) (clo_var x :: env) (extE_term t) o1 ->
-    redE deep xs env (extEd_abs x t o1) o2 ->
-    redE deep xs env (extE_term (abs t)) o2
-| redE_abs1_abort : forall x t xs env, redE deep xs env (extEd_abs x t out_div) out_div
-| redE_abs1 : forall x t xs env v, redE deep xs env (extEd_abs x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
-| redE_app : forall df xs env t1 o1 t2 o2,
-    redE shallow xs env (extE_term t1) o1 ->
-    redE df xs env (extE_app o1 t2) o2 ->
-    redE df xs env (extE_term (app t1 t2)) o2
-| redE_app1_abort : forall df xs env t2, redE df xs env (extE_app out_div t2) out_div
-| redE_app1_nf : forall df xs env v o1 t2 o2,
-    redE deep xs env (extE_term t2) o1 ->
-    redE df xs env (extE_appnf v o1) o2 ->
-    redE df xs env (extE_app (out_ret (valE_nf v)) t2) o2
-| redE_app1_abs : forall df xs xs2 env env2 t1 t2 o,
-    xs \subseteq xs2 ->
-    redE df xs (match t2 with var n => match nth_error env n with Some c => c | _ => clo_term xs2 t2 env end | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
-    redE df xs env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
-| redE_appnf_abort : forall df xs env v, redE df xs env (extE_appnf v out_div) out_div
-| redE_appnf : forall df xs env v1 v2, redE df xs env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2)))).
+    redE df xs dom env (extE_term (var n)) (out_ret (valE_nf (nxvar x)))
+| redE_abs_shallow : forall t xs dom env,
+    redE shallow xs dom env (extE_term (abs t)) (out_ret (valEs_abs t env))
+| redE_abs_deep : forall t x xs dom env o1 o2,
+    x \notin xs -> x \in dom ->
+    redE deep (x :: xs) dom (clo_var x :: env) (extE_term t) o1 ->
+    redE deep xs dom env (extEd_abs x t o1) o2 ->
+    redE deep xs dom env (extE_term (abs t)) o2
+| redE_abs1_abort : forall x t xs dom env, redE deep xs dom env (extEd_abs x t out_div) out_div
+| redE_abs1 : forall x t xs dom env v, redE deep xs dom env (extEd_abs x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
+| redE_app : forall df xs dom env t1 o1 t2 o2,
+    redE shallow xs dom env (extE_term t1) o1 ->
+    redE df xs dom env (extE_app o1 t2) o2 ->
+    redE df xs dom env (extE_term (app t1 t2)) o2
+| redE_app1_abort : forall df xs dom env t2, redE df xs dom env (extE_app out_div t2) out_div
+| redE_app1_nf : forall df xs dom env v o1 t2 o2,
+    redE deep xs dom env (extE_term t2) o1 ->
+    redE df xs dom env (extE_appnf v o1) o2 ->
+    redE df xs dom env (extE_app (out_ret (valE_nf v)) t2) o2
+| redE_app1_abs : forall df xs xs2 dom env env2 t1 t2 o,
+    xs \subseteq xs2 -> xs2 \subseteq dom ->
+    redE df xs dom (match t2 with var n => match nth_error env n with Some c => c | _ => clo_term xs2 t2 env end | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
+    redE df xs dom env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
+| redE_appnf_abort : forall df xs dom env v, redE df xs dom env (extE_appnf v out_div) out_div
+| redE_appnf : forall df xs dom env v1 v2, redE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2)))).
 
 (*
 CoInductive coredE : forall df, list clo -> extE df -> out (valE df) -> Prop :=
@@ -1174,13 +1174,13 @@ Qed.
 
 
 Lemma redE_xs_mono_rec :
-  forall df xs env e o, redE df xs env e o -> forall xs2 env2 e2, xs2 \subseteq xs -> Forall2 clo_sub env2 env -> extE_sub df e2 e -> exists o2, outE_sub df o2 o /\ redE df xs2 env2 e2 o2.
+  forall df xs dom env e o, redE df xs dom env e o -> forall xs2 env2 e2, xs2 \subseteq xs -> Forall2 clo_sub env2 env -> extE_sub df e2 e -> exists o2, outE_sub df o2 o /\ redE df xs2 dom env2 e2 o2.
 Proof.
-  intros df xs env e o H; induction H; intros xs3 env3 e3 Hxs3 Henv3 He3; inversion He3; unexistT; subst.
+  intros df xs dom env e o H; induction H; intros xs3 env3 e3 Hxs3 Henv3 He3; inversion He3; unexistT; subst.
   - destruct (nth_error_Forall2_rev Henv3 H) as (u & Hu1 & Hu2).
     inversion Hu2; subst.
     destruct (IHredE xs1 env1 (extE_term t2)) as (o2 & Hsub & HredE); [assumption|assumption|constructor|].
-    exists o2. split; [assumption|]. econstructor; eassumption.
+    exists o2. split; [assumption|]. econstructor; try eassumption. etransitivity; eassumption.
   - destruct (nth_error_Forall2_rev Henv3 H) as (u & Hu1 & Hu2).
     inversion Hu2; subst.
     eexists. split; [|eapply redE_var_free; eassumption]. constructor. constructor.
@@ -1201,7 +1201,7 @@ Proof.
     destruct (IHredE2 xs3 env3 (extE_appnf v o3)) as (o4 & Hsub4 & HredE2); [assumption|assumption|constructor; assumption|].
     eexists; split; [eassumption|].
     inversion H4; unexistT; subst. inversion H5; unexistT; subst. eapply redE_app1_nf; eassumption.
-  - inversion H4; unexistT; subst. inversion H5; unexistT; subst.
+  - inversion H5; unexistT; subst. inversion H6; unexistT; subst.
     match goal with [_ : context[?a :: env2] |- _ ] => remember a as c end.
     destruct (IHredE xs3 (match t2 with | var n => match nth_error env3 n with | Some c => c | None => clo_term xs t2 env3 end | _ => clo_term xs t2 env3 end :: env1) (extE_term t1)) as (o3 & Hsub3 & HredE1).
     + assumption.
@@ -1210,7 +1210,7 @@ Proof.
       * destruct (nth_error_Forall2_rev Henv3 Hc1) as (c2 & Hc2a & Hc2b); rewrite Hc2a. assumption.
       * eapply nth_error_Forall2_None in Hc1; [|eassumption]. rewrite Hc1. constructor; assumption.
     + constructor.
-    + exists o3. split; [assumption|]. econstructor; eassumption.
+    + exists o3. split; [assumption|]. econstructor; try eassumption. etransitivity; eassumption.
   - inversion H2; unexistT; subst. exists out_div. split; [constructor|]. eapply redE_appnf_abort.
   - inversion H2; unexistT; subst. eexists; split; [|eapply redE_appnf]. constructor.
     inversion H3; unexistT; subst; simpl in *; constructor.
@@ -1242,43 +1242,54 @@ Proof.
   intros df e; destruct e; constructor; apply outE_sub_refl.
 Qed.
 
-Lemma redE_xs_mono :
-  forall df xs env e o, redE df xs env e o -> forall xs2, xs2 \subseteq xs -> redE df xs2 env e o.
+Lemma redE_xsdom_mono :
+  forall df xs dom env e o, redE df xs dom env e o -> forall xs2 dom2, xs2 \subseteq xs -> dom \subseteq dom2 -> redE df xs2 dom2 env e o.
 Proof.
-  intros df xs env e o H; induction H; intros xs3 Hxs3.
-  - eapply redE_var_bound; [eassumption|]. eapply IHredE. reflexivity.
+  intros df xs dom env e o H; induction H; intros xs3 dom2 Hxs3 Hdom2.
+  - eapply redE_var_bound; [eassumption|etransitivity; eassumption|]. eapply IHredE; [reflexivity|assumption].
   - eapply redE_var_free; eassumption.
   - eapply redE_abs_shallow.
-  - eapply redE_abs_deep; [rewrite Hxs3; eassumption|eapply IHredE1|eapply IHredE2; assumption].
+  - eapply redE_abs_deep; [rewrite Hxs3; eassumption|rewrite <- Hdom2; eassumption|eapply IHredE1; [|assumption]|eapply IHredE2; assumption].
     intros y [<- | Hy]; [left; reflexivity|right; apply Hxs3; assumption].
   - eapply redE_abs1_abort.
   - eapply redE_abs1.
   - eapply redE_app; [eapply IHredE1|eapply IHredE2]; assumption.
   - eapply redE_app1_abort.
   - eapply redE_app1_nf; [eapply IHredE1|eapply IHredE2]; assumption.
-  - eapply redE_app1_abs; [|eapply IHredE; assumption]. etransitivity; eassumption.
+  - eapply redE_app1_abs; [| |eapply IHredE; assumption]; etransitivity; eassumption.
   - eapply redE_appnf_abort.
   - eapply redE_appnf.
 Qed.
 
+Lemma redE_xs_mono :
+  forall df xs dom env e o, redE df xs dom env e o -> forall xs2, xs2 \subseteq xs -> redE df xs2 dom env e o.
+Proof.
+  intros; eapply redE_xsdom_mono; try eassumption. reflexivity.
+Qed.
+
+Lemma redE_dom_mono :
+  forall df xs dom env e o, redE df xs dom env e o -> forall dom2, dom \subseteq dom2 -> redE df xs dom2 env e o.
+Proof.
+  intros; eapply redE_xsdom_mono; try eassumption. reflexivity.
+Qed.
 
 Lemma redE_closed :
-  forall df xs xs2 env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> xs \subseteq xs2 -> redE df xs2 env e o -> outE_closed xs o.
+  forall df xs xs2 dom env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> xs \subseteq xs2 -> redE df xs2 dom env e o -> outE_closed xs o.
 Proof.
-  intros df xs xs2 env e o Henv He Hxs H. revert xs Henv He Hxs; induction H; intros nxs Henv He Hxs; simpl in *; inversion He; subst.
-  - apply nth_error_In, Henv in H. destruct H as [H1 H2]. inversion H1; subst.
+  intros df xs xs2 dom env e o Henv He Hxs H. revert xs Henv He Hxs; induction H; intros nxs Henv He Hxs; simpl in *; inversion He; subst.
+  - apply nth_error_In, Henv in H. destruct H as [H2 H3]. inversion H2; subst.
     apply outE_closed_mono with (xs1 := list_inter nxs xs2); [|apply list_inter_subl1].
     apply IHredE; [|constructor; assumption|apply list_inter_subl2].
-    simpl in H2. rewrite concat_incl, Forall_map, Forall_forall in H2.
-    intros c Hc; split; [apply H7; assumption|rewrite list_inter_subr; split; [apply H2; assumption|apply H7; assumption]].
+    simpl in H3. rewrite concat_incl, Forall_map, Forall_forall in H3.
+    intros c Hc; split; [apply H8; assumption|rewrite list_inter_subr; split; [apply H3; assumption|apply H8; assumption]].
   - apply (Henv (clo_var x)). eapply nth_error_In. eassumption.
   - split; [|assumption].
     inversion H1; subst. assumption.
-  - apply IHredE2; [assumption| |assumption]. constructor; [inversion H4; subst; assumption|].
+  - apply IHredE2; [assumption| |assumption]. constructor; [inversion H5; subst; assumption|].
     apply IHredE1.
     + intros c [<- | Hc]; split; [constructor|simpl; prove_list_inc|apply Henv; assumption|].
       etransitivity; [apply Henv; assumption|]. prove_list_inc.
-    + constructor. inversion H4; subst. assumption.
+    + constructor. inversion H5; subst. assumption.
     + intros y [<- | Hy]; [left; reflexivity|right; apply Hxs; assumption].
   - tauto.
   - split; [assumption|]. split; [assumption|]. intros y Hy. rewrite list_remove_correct in Hy.
@@ -1297,8 +1308,8 @@ Proof.
       * constructor; [assumption|]. intros; rewrite <- H, <- Hxs; apply Henv; assumption.
       * simpl. rewrite concat_incl, Forall_map, Forall_forall.
         intros; apply Henv; assumption.
-    + simpl in *. apply H7. assumption.
-    + simpl in *. constructor. apply H7.
+    + simpl in *. apply H8. assumption.
+    + simpl in *. constructor. apply H8.
   - tauto.
   - rewrite list_inc_app_left.
     split; [assumption|]. simpl in H5.
@@ -1306,20 +1317,15 @@ Proof.
 Qed.
 
 Lemma redE_red :
-  forall df xs xs2 xs3 env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> xs \subseteq xs2 -> xs \subseteq xs3 -> redE df xs2 env e o -> red df (read_extE xs3 env e) (out_map (read_valE xs3) o).
+  forall df xs xs2 xs3 dom env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> xs \subseteq xs2 -> xs \subseteq xs3 -> redE df xs2 dom env e o -> red df (read_extE xs3 env e) (out_map (read_valE xs3) o).
 Proof.
-  intros df xs xs2 xs3 env e o Henv He Hxs Hxs3 H. revert xs xs3 Henv He Hxs Hxs3; induction H; intros nxs nxs3 Henv He Hxs Hxs3; simpl in *; inversion He; subst.
+  intros df xs xs2 xs3 dom env e o Henv He Hxs Hxs3 H. revert xs xs3 Henv He Hxs Hxs3; induction H; intros nxs nxs3 Henv He Hxs Hxs3; simpl in *; inversion He; subst.
   - unfold read_env. rewrite nth_error_map, H.
-    apply nth_error_In, Henv in H. destruct H as [H1 H2]. inversion H1; subst.
+    apply nth_error_In, Henv in H. destruct H as [H2 H3]. inversion H2; subst.
     apply IHredE with (xs := list_inter nxs xs2).
-    (*
-    + assumption. (* intros c Hc. split; [apply H7; assumption|].
-      simpl in H5. rewrite list_inc_app_left, concat_incl, Forall_map, Forall_forall in H5. apply H5; eassumption. *)
-    + constructor. assumption.
-    + etransitivity; [|eassumption]. (* simpl in H5; rewrite list_inc_app_left in H5; apply H5. (* intros x Hx. eapply H0. assumption. *)*) assumption.*)
-    + intros x Hc. split; [apply H7; assumption|]. rewrite list_inter_subr.
-      simpl in H2. rewrite concat_incl, Forall_map, Forall_forall in H2.
-      split; [apply H2|apply H7]; assumption.
+    + intros x Hc. split; [apply H8; assumption|]. rewrite list_inter_subr.
+      simpl in H3. rewrite concat_incl, Forall_map, Forall_forall in H3.
+      split; [apply H3|apply H8]; assumption.
     + constructor. assumption.
     + apply list_inter_subl2.
     + etransitivity; [|eassumption]. apply list_inter_subl1.
@@ -1332,25 +1338,25 @@ Proof.
     + apply nth_error_None in Hu. lia.
   - econstructor; [|eapply IHredE2; [eassumption|constructor|eassumption|eassumption]].
     erewrite subst_closed_at_ext.
-    + apply IHredE1 with (xs0 := x :: nxs); [|constructor; inversion H4; assumption| |].
+    + apply IHredE1 with (xs0 := x :: nxs); [|constructor; inversion H5; assumption| |].
       * intros c [<- | Hc]; [split; [constructor|simpl; prove_list_inc]|].
         split; [apply Henv; assumption|].
         etransitivity; [apply Henv; assumption|]. prove_list_inc.
       * (* intros y [<- | Hy]; rewrite list_remove_correct; [tauto|]. specialize (Hdisj y); tauto. *)
         intros y [<- | Hy]; simpl; [left; reflexivity|right; apply Hxs; assumption].
       * intros y [<- | Hy]; simpl; [left; reflexivity|right; apply Hxs3; assumption].
-    + inversion H4; eassumption.
+    + inversion H5; eassumption.
     + intros [|n] Hn; unfold comp, read_env; simpl; [destruct freevar_eq_dec; congruence|].
       rewrite !nth_error_map; destruct nth_error as [u|] eqn:Hu; [|apply nth_error_None in Hu; lia].
       apply nth_error_In, Henv in Hu. destruct Hu as [Hu1 Hu2].
       rewrite read_shift_clo; [reflexivity| |apply Hu1].
       rewrite Hu2. rewrite Hxs. (* intros Hx. apply Hdisj in Hx. tauto. *) assumption.
-    + inversion H4; subst; assumption.
+    + inversion H5; subst; assumption.
     + eapply redE_closed; [| | |eassumption].
       * intros c [<- | Hc]; [split; [constructor|simpl; prove_list_inc]|].
         apply Henv in Hc; destruct Hc as [Hc1 Hc2].
         split; [apply Hc1 | rewrite Hc2; prove_list_inc].
-      * constructor. inversion H4; simpl; subst. assumption.
+      * constructor. inversion H5; simpl; subst. assumption.
       * intros y [<- | Hy]; simpl; [left; reflexivity|right; apply Hxs; assumption].
   - constructor.
   - destruct (destruct_valE_deep v) as [(v2 & ->) | (t2 & env2 & v2 & ->)]; simpl in *; constructor.
@@ -1362,18 +1368,18 @@ Proof.
   - econstructor.
     unfold subst1. rewrite subst_subst.
     erewrite subst_closed_at_ext; [eapply IHredE| |].
-    + intros c [<- | Hc]; [|simpl in H7; apply H7; assumption].
+    + intros c [<- | Hc]; [|simpl in H8; apply H8; assumption].
       destruct t2; try (split; simpl; [constructor; [assumption|intros; rewrite <- H, <- Hxs; apply Henv; assumption] | rewrite concat_incl, Forall_map, Forall_forall; intros; apply Henv; assumption]).
       destruct nth_error eqn:Hu; [|split; simpl; [constructor; [assumption|intros; rewrite <- H, <- Hxs; apply Henv; assumption] | rewrite concat_incl, Forall_map, Forall_forall; intros; apply Henv; assumption]].
       eapply Henv, nth_error_In; eassumption.
-    + simpl in H7. constructor. apply H7.
+    + simpl in H8. constructor. apply H8.
     + assumption.
     + assumption.
-    + simpl in H7. apply H7.
+    + simpl in H8. apply H8.
     + unfold comp, read_env.
       intros [|n] Hn; simpl.
       * destruct t2; try reflexivity. simpl.
-        rewrite nth_error_map. destruct nth_error eqn:Hu; [|apply nth_error_None in Hu; inversion H4; subst; lia].
+        rewrite nth_error_map. destruct nth_error eqn:Hu; [|apply nth_error_None in Hu; inversion H5; subst; lia].
         reflexivity.
       * rewrite !nth_error_map; destruct nth_error as [u|] eqn:Hu; [|apply nth_error_None in Hu; lia].
         rewrite subst_ren; unfold comp; simpl.
@@ -1402,159 +1408,121 @@ Definition extE_deep_to_shallow (e : extE deep) : option (extE shallow) :=
   end.
 
 Lemma redE_shallow_deep_val_aux :
-  forall df xs env e o,
-    redE df xs env e o -> forall (p : df = shallow) v, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valE_nf v) ->
-    redE deep xs env (extE_shallow_to_deep (match p in _ = df return extE df with eq_refl => e end)) (out_ret (valE_nf v)).
+  forall df xs dom env e o,
+    redE df xs dom env e o -> forall (p : df = shallow) v, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valE_nf v) ->
+    redE deep xs dom env (extE_shallow_to_deep (match p in _ = df return extE df with eq_refl => e end)) (out_ret (valE_nf v)).
 Proof.
-  intros df xs env e o H.
+  intros df xs dom env e o H.
   induction H; try destruct df; intros Hdf; try discriminate Hdf; rewrite (UIP_dec deep_flag_eq_dec Hdf eq_refl);
     intros nv Ho; try discriminate Ho; simpl.
-  - subst. econstructor; [eassumption|]. eapply (IHredE eq_refl). reflexivity.
+  - subst. econstructor; [eassumption|assumption|]. eapply (IHredE eq_refl). reflexivity.
   - injection Ho as Ho; subst. apply (redE_var_free deep). assumption.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl). assumption.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl). assumption.
-  - econstructor; [eassumption|].
+  - econstructor; [eassumption|eassumption|].
     eapply (IHredE eq_refl). eassumption.
   - injection Ho as Ho; subst. constructor.
 Qed.
 
 Lemma redE_shallow_deep_val :
-  forall xs env e v, redE shallow xs env e (out_ret (valE_nf v)) ->
-         redE deep xs env (extE_shallow_to_deep e) (out_ret (valE_nf v)).
+  forall xs dom env e v, redE shallow xs dom env e (out_ret (valE_nf v)) ->
+         redE deep xs dom env (extE_shallow_to_deep e) (out_ret (valE_nf v)).
 Proof.
-  intros xs env e v H.
-  exact (redE_shallow_deep_val_aux shallow xs env e _ H eq_refl v eq_refl).
+  intros xs dom env e v H.
+  exact (redE_shallow_deep_val_aux shallow xs dom env e _ H eq_refl v eq_refl).
 Qed.
 
 Inductive clo_xs_in (xs : list freevar) : clo -> Prop :=
 | clo_xs_in_var : forall x, clo_xs_in xs (clo_var x)
 | clo_xs_in_term : forall xs2 t env, xs2 \subseteq xs -> (forall c, c \in env -> clo_xs_in xs c) -> clo_xs_in xs (clo_term xs2 t env).
 
-(*
 Lemma redE_shallow_deep_abs_aux :
-  forall df xs env e o,
-    redE df xs env e o -> forall (p : df = shallow) t env2, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valEs_abs t env2) ->
-    forall o2 xs2, xs \subseteq xs2 -> (forall c, c \in env -> clo_xs_in xs2 c) -> redE deep xs2 env2 (extE_term (abs t)) o2 -> redE deep xs env (extE_shallow_to_deep (match p in _ = df return extE df with eq_refl => e end)) o2.
+  forall df xs dom env e o,
+    redE df xs dom env e o -> forall (p : df = shallow) t env2, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valEs_abs t env2) ->
+    forall o2 dom2, xs \subseteq dom -> dom \subseteq dom2 -> redE deep dom dom2 env2 (extE_term (abs t)) o2 -> redE deep xs dom2 env (extE_shallow_to_deep (match p in _ = df return extE df with eq_refl => e end)) o2.
 Proof.
-  intros df xs env e o H.
+  intros df xs dom env e o H.
   induction H; try destruct df; intros Hdf; try discriminate Hdf; rewrite (UIP_dec deep_flag_eq_dec Hdf eq_refl);
     intros nt nenv Ho; try discriminate Ho; simpl.
-  - subst. intros o2 xs3 Hxs3 Henv Ho2.
-    econstructor; [eassumption|].
-    apply nth_error_In in H. apply Henv in H. inversion H; subst.
-    eapply IHredE with (p := eq_refl); [reflexivity|eassumption|assumption|assumption].
+  - subst. intros o2 dom2 Hxs Hdom2 Ho2.
+    econstructor; [eassumption|etransitivity; eassumption|].
+    eapply IHredE with (p := eq_refl); [reflexivity|assumption|assumption|assumption].
   - injection Ho as Ho; subst.
-    intros o2 xs3 Hxs3 Henv Ho2. eapply redE_xs_mono; eassumption.
-  - intros o3 xs3 Hxs3 Henv Ho3. specialize (IHredE2 eq_refl nt nenv Ho o3 xs3 Hxs3 Henv Ho3). simpl in IHredE2.
-    econstructor; eassumption.
-  - intros o3 xs3 Hxs3 Henv Ho3. specialize (IHredE2 eq_refl nt nenv Ho o3 xs3 Hxs3 Henv Ho3). simpl in IHredE2.
-    econstructor; eassumption.
-  - intros o3 xs3 Hxs3 Henv Ho3. 
-    apply redE_xs_mono_rec with (xs2 := xs) (env2 := match t2 with | var n => match nth_error env n with | Some c => c | None => clo_term (list_inter xs0 xs2) t2 env end | _ => clo_term (list_inter xs0 xs2) t2 env end :: env2) (e2 := extE_term t1) in H0.
-    + destruct H0 as (o2 & Ho2 & HredE).
-    + reflexivity.
-    + constructor; [|apply Forall2_map_same, Forall_True, clo_sub_refl].
-      destruct t2; try (constructor; [apply list_inter_subl1|apply Forall2_map_same, Forall_True, clo_sub_refl]).
-      destruct nth_error; [apply clo_sub_refl|].
-      constructor; [apply list_inter_subl1|apply Forall2_map_same, Forall_True, clo_sub_refl].
-    + constructor.
-    econstructor; [eassumption|]. eapply IHredE with (p := eq_refl); try eassumption.
-    intros c [<- | Hc].
-    + destruct t2; try (constructor). admit. 
-      ; [|apply Henv].
-    specialize (IHredE Hxs Henv eq_refl nt nenv Ho o3 Ho3). simpl in IHredE.
-    econstructor; eassumption.
-    intros o2 xs3 Ho2. econstructor; [eassumption|].
-    apply redE_xs_mono with (xs := xs2 ++ xs3); [|prove_list_inc].
-    eapply IHredE with (xs := list_inter nxs xs2) (p := eq_refl).
-    + apply nth_error_In in H. apply Henv in H.
-      destruct H as [H1 H2]; inversion H1; subst; simpl in *.
-      rewrite concat_incl, Forall_map, Forall_forall in H2.
-      intros c Hc; split; [apply H6; assumption|].
-      rewrite list_inter_subr. split; [apply H2|apply H6]; assumption.
-    + constructor.
-      apply nth_error_In in H. apply Henv in H.
-      destruct H as [H1 H2]; inversion H1; subst; simpl in *. assumption.
-    + apply list_inter_subl2.
-    + reflexivity.
-    + admitprove_list_inc. (* etransitivity; [|eassumption]. apply list_inter_subl1. *)
-    + eassumption.
-  - injection Ho as Ho; subst.
-    intros o2 xs3 Hxs3 Ho2. intros; assumption.
-  - intros o3. specialize (IHredE2 eq_refl nt nenv Ho o3). simpl in IHredE2.
-    intros HredE. econstructor; [eassumption|]. apply IHredE2; assumption.
-  - intros o3. specialize (IHredE2 eq_refl nt nenv Ho o3). simpl in IHredE2.
-    intros HredE. econstructor; [eassumption|]. apply IHredE2; assumption.
-  - intros o3. specialize (IHredE eq_refl nt nenv Ho o3). simpl in IHredE.
-    intros HredE. constructor. apply IHredE; assumption.
+    intros o2 dom2 Hxs Hdom2 Ho2. eapply redE_xs_mono; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    specialize (IHredE2 eq_refl nt nenv Ho o3 dom2 Hxs Hdom2 Ho3). simpl in IHredE2.
+    econstructor; [|eassumption]. eapply redE_dom_mono; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3. specialize (IHredE2 eq_refl nt nenv Ho o3 dom2 Hxs Hdom2 Ho3). simpl in IHredE2.
+    econstructor; [|eassumption]. eapply redE_dom_mono; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    econstructor; [| |eapply IHredE with (p := eq_refl)]; try eassumption. etransitivity; eassumption.
 Qed.
 
 Lemma redE_shallow_deep_abs :
-  forall xs env env2 e t,
-    redE shallow xs env e (out_ret (valEs_abs t env2)) ->
-    forall o, redE deep xs env2 (extE_term (abs t)) o -> redE deep xs env (extE_shallow_to_deep e) o.
+  forall xs dom env env2 e t,
+    redE shallow xs dom env e (out_ret (valEs_abs t env2)) ->
+    forall o dom2, xs \subseteq dom -> dom \subseteq dom2 -> redE deep dom dom2 env2 (extE_term (abs t)) o -> redE deep xs dom2 env (extE_shallow_to_deep e) o.
 Proof.
-  intros xs env env2 e t H.
-  exact (redE_shallow_deep_abs_aux shallow xs env e _ H eq_refl t env2 eq_refl).
+  intros xs dom env env2 e t H.
+  exact (redE_shallow_deep_abs_aux shallow xs dom env e _ H eq_refl t env2 eq_refl).
 Qed.
- *)
 
 Lemma redE_deep_shallow_abs_aux :
-  forall df xs env e o,
-    redE df xs env e o -> forall (p : df = deep) t env2 v, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valEd_abs t env2 v) ->
-    forall e2, extE_deep_to_shallow (match p in _ = df return extE df with eq_refl => e end) = Some e2 -> redE shallow xs env e2 (out_ret (valEs_abs t env2)).
+  forall df xs dom env e o,
+    redE df xs dom env e o -> forall (p : df = deep) t env2 v, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valEd_abs t env2 v) ->
+    forall e2, extE_deep_to_shallow (match p in _ = df return extE df with eq_refl => e end) = Some e2 -> redE shallow xs dom env e2 (out_ret (valEs_abs t env2)).
 Proof.
-  intros df k env e o H.
+  intros df xs dom env e o H.
   induction H; try destruct df; intros Hdf; try discriminate Hdf; rewrite (UIP_dec deep_flag_eq_dec Hdf eq_refl);
     intros nt nenv nv Ho e2 He2; try discriminate Ho; subst; simpl in *; try discriminate He2; injection He2 as <-.
-  - econstructor; [eassumption|]. eapply (IHredE eq_refl); reflexivity.
-  - inversion H1; subst. constructor.
+  - econstructor; [eassumption|eassumption|]. eapply (IHredE eq_refl); reflexivity.
+  - inversion H2; subst. constructor.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl); reflexivity.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl); reflexivity.
-  - econstructor; [eassumption|].
+  - econstructor; [eassumption|eassumption|].
     eapply (IHredE eq_refl); reflexivity.
 Qed.
 
 Lemma redE_deep_shallow_abs :
-  forall xs env env2 e t v,
-    redE deep xs env e (out_ret (valEd_abs t env2 v)) ->
-    forall e2, extE_deep_to_shallow e = Some e2 -> redE shallow xs env e2 (out_ret (valEs_abs t env2)).
+  forall xs dom env env2 e t v,
+    redE deep xs dom env e (out_ret (valEd_abs t env2 v)) ->
+    forall e2, extE_deep_to_shallow e = Some e2 -> redE shallow xs dom env e2 (out_ret (valEs_abs t env2)).
 Proof.
-  intros xs env env2 e t v H e2 He2.
-  exact (redE_deep_shallow_abs_aux deep xs env e _ H eq_refl t env2 v eq_refl e2 He2).
+  intros xs dom env env2 e t v H e2 He2.
+  exact (redE_deep_shallow_abs_aux deep xs dom env e _ H eq_refl t env2 v eq_refl e2 He2).
 Qed.
 
 Lemma redE_deep_shallow_val_aux :
-  forall df xs env e o,
-    redE df xs env e o -> forall (p : df = deep) v, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valE_nf v) ->
-    forall e2, extE_deep_to_shallow (match p in _ = df return extE df with eq_refl => e end) = Some e2 -> redE shallow xs env e2 (out_ret (valE_nf v)).
+  forall df xs dom env e o,
+    redE df xs dom env e o -> forall (p : df = deep) v, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valE_nf v) ->
+    forall e2, extE_deep_to_shallow (match p in _ = df return extE df with eq_refl => e end) = Some e2 -> redE shallow xs dom env e2 (out_ret (valE_nf v)).
 Proof.
-  intros df k env e o H.
+  intros df xs dom env e o H.
   induction H; try destruct df; intros Hdf; try discriminate Hdf; rewrite (UIP_dec deep_flag_eq_dec Hdf eq_refl);
     intros nv Ho e2 He2; try discriminate Ho; subst; simpl in *; try discriminate He2; injection He2 as <-.
-  - econstructor; [eassumption|]. eapply (IHredE eq_refl); reflexivity.
+  - econstructor; [eassumption|eassumption|]. eapply (IHredE eq_refl); reflexivity.
   - inversion Ho; intros; subst. constructor. assumption.
-  - inversion H1.
+  - inversion H2.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl); reflexivity.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl); reflexivity.
-  - econstructor; [eassumption|].
+  - econstructor; [eassumption|eassumption|].
     eapply (IHredE eq_refl); reflexivity.
   - injection Ho; intros; subst. constructor.
 Qed.
 
 Lemma redE_deep_shallow_val :
-  forall xs env e v,
-    redE deep xs env e (out_ret (valE_nf v)) ->
-    forall e2, extE_deep_to_shallow e = Some e2 -> redE shallow xs env e2 (out_ret (valE_nf v)).
+  forall xs dom env e v,
+    redE deep xs dom env e (out_ret (valE_nf v)) ->
+    forall e2, extE_deep_to_shallow e = Some e2 -> redE shallow xs dom env e2 (out_ret (valE_nf v)).
 Proof.
-  intros xs env e v H e2 He2.
-  exact (redE_deep_shallow_val_aux deep xs env e _ H eq_refl v eq_refl e2 He2).
+  intros xs dom env e v H e2 He2.
+  exact (redE_deep_shallow_val_aux deep xs dom env e _ H eq_refl v eq_refl e2 He2).
 Qed.
 
 
@@ -1572,30 +1540,39 @@ Definition memM := list (freevar * eiM).
 
 Definition memdom (m : memM) := map fst m.
 
-Inductive read_eiM (res : freevar -> option clo) : eiM -> clo -> Prop :=
+Inductive read_eiM (res : freevar -> option clo) dom : eiM -> clo -> Prop :=
 | read_eiM_lazy : forall t ys vs xs,
     map Some vs = map res ys ->
-    read_eiM res (eiM_lazy t ys) (clo_term xs t vs)
+    read_eiM res dom (eiM_lazy t ys) (clo_term xs t vs)
 | read_eiM_abs1 : forall t ys u ws vs xs,
     map Some vs = map res ys ->
-    redE shallow xs ws (extE_term u) (out_ret (valEs_abs t vs)) ->
-    read_eiM res (eiM_abs1 t ys) (clo_term xs u ws)
+    redE shallow xs dom ws (extE_term u) (out_ret (valEs_abs t vs)) ->
+    read_eiM res dom (eiM_abs1 t ys) (clo_term xs u ws)
 | read_eiM_abs2 : forall t ys u ws v vs xs,
     map Some vs = map res ys ->
-    redE deep xs ws (extE_term u) (out_ret (valEd_abs t vs v)) ->
-    read_eiM res (eiM_abs2 t ys v) (clo_term xs u ws)
+    redE deep xs dom ws (extE_term u) (out_ret (valEd_abs t vs v)) ->
+    read_eiM res dom (eiM_abs2 t ys v) (clo_term xs u ws)
 | read_eiM_val : forall u ws v xs,
-    redE shallow xs ws (extE_term u) (out_ret (valE_nf v)) ->
-    read_eiM res (eiM_val v) (clo_term xs u ws)
+    redE shallow xs dom ws (extE_term u) (out_ret (valE_nf v)) ->
+    read_eiM res dom (eiM_val v) (clo_term xs u ws)
 | read_eiM_var : forall y,
-    read_eiM res (eiM_val (nxvar y)) (clo_var y).
+    read_eiM res dom (eiM_val (nxvar y)) (clo_var y).
 
-Definition read_memM (m : memM) (res : freevar -> option clo) :=
-  (forall x u, env_find m x = Some u -> exists v, res x = Some v /\ read_eiM res u v) /\
-  (forall x, env_find m x = None -> res x = None).
+Lemma read_eiM_dom_mono :
+  forall res dom u c, read_eiM res dom u c -> forall dom2, dom \subseteq dom2 -> read_eiM res dom2 u c.
+Proof.
+  intros res dom u c H; inversion H; subst; intros dom2 Hdom2; econstructor; try eassumption;
+    eapply redE_dom_mono; eassumption.
+Qed.
+
+Notation memxM := (memM * list freevar)%type.
+
+Definition read_memM (m : memxM) (res : freevar -> option clo) :=
+  (forall x u, env_find (fst m) x = Some u -> exists v, res x = Some v /\ read_eiM res (snd m) u v) /\
+  (forall x, env_find (fst m) x = None -> res x = None).
 
 Lemma read_memM_Some :
-  forall m res x u v, read_memM m res -> env_find m x = Some u -> res x = Some v -> read_eiM res u v.
+  forall m res x u v, read_memM m res -> env_find (fst m) x = Some u -> res x = Some v -> read_eiM res (snd m) u v.
 Proof.
   intros m res x u v Hread Hm Hres. apply Hread in Hm.
   destruct Hm as (v2 & Hx2 & Hv2). congruence.
@@ -1615,7 +1592,6 @@ Inductive read_valM : forall {df}, (freevar -> option clo) -> valM df -> valE df
     map Some vs = map res ys ->
     @read_valM deep res (valMd_abs t ys v) (valEd_abs t vs v).
 
-Notation memxM := (memM * list freevar)%type.
 
 Inductive outM t m :=
 | outM_ret : t -> m -> outM t m
@@ -1656,7 +1632,7 @@ Definition get_ext_memxM {df} (m : memxM) (e : extM df) :=
 Inductive read_outM : forall df, (freevar -> option clo) -> outM (valM df) memxM -> out (valE df) -> Prop :=
 | read_outM_div : forall df res, read_outM df res outM_div out_div
 | read_outM_ret : forall df res m v1 v2,
-    read_memM (fst m) res -> read_valM res v1 v2 -> read_outM df res (outM_ret v1 m) (out_ret v2).
+    read_memM m res -> read_valM res v1 v2 -> read_outM df res (outM_ret v1 m) (out_ret v2).
 
 Inductive read_extM : forall df, (freevar -> option clo) -> extM df -> extE df -> Prop :=
 | read_extM_term : forall df res t, read_extM df res (extM_term t) (extE_term t)
@@ -1839,10 +1815,10 @@ Proof.
 Qed.
 
 Lemma compat_res_read_eiM :
-  forall res1 res2 u c,
-    compat_res res1 res2 -> read_eiM res1 u c -> read_eiM res2 u c.
+  forall dom res1 res2 u c,
+    compat_res res1 res2 -> read_eiM res1 dom u c -> read_eiM res2 dom u c.
 Proof.
-  intros res1 res2 u c H1 H2. inversion H2; subst; econstructor; try eassumption.
+  intros dom res1 res2 u c H1 H2. inversion H2; subst; econstructor; try eassumption.
   all: eapply nenv_compat_list; eassumption.
 Qed.
 
@@ -1904,27 +1880,21 @@ Proof.
 Qed.
 
 Lemma read_memM_update :
-  forall m res x c u, read_memM m res -> res x = Some c -> read_eiM res u c -> read_memM (update_env m x u) res.
+  forall m res x c u, read_memM m res -> res x = Some c -> read_eiM res (snd m) u c -> read_memM (update_mem m x u) res.
 Proof.
-  intros m res x c u Hmem Hres Hread.
-(*  assert (Hdom : memdom (update_env m x u) = memdom m).
-  {
-    unfold memdom in *.
-    destruct (env_find m x) as [v|] eqn:Hv; [|apply Hmem in Hv; congruence].
-    erewrite update_env_in_fst; [reflexivity|eassumption].
-  } *)
-  split.
+  intros [m dom] res x c u Hmem Hres Hread. unfold update_mem; simpl in *.
+  split; simpl.
   - intros y v Hy. rewrite env_find_update_env in Hy. destruct freevar_eq_dec.
-    + injection Hy; intros; subst. exists c. (*rewrite Hdom;*) split; assumption.
-    + (*rewrite Hdom;*) apply Hmem. assumption.
+    + injection Hy; intros; subst. exists c. split; assumption.
+    + apply Hmem. assumption.
   - intros y Hy. rewrite env_find_update_env in Hy. destruct freevar_eq_dec.
     + congruence.
     + apply Hmem. assumption.
 Qed.
 
-Definition read_memxM m res := read_memM (fst m) res /\ (forall x xs t env, res x = Some (clo_term xs t env) -> xs \subseteq (snd m)).
+Definition read_memxM m res := read_memM m res /\ (forall x xs t env, res x = Some (clo_term xs t env) -> xs \subseteq (snd m)).
 Lemma read_memxM_update :
-  forall m res x c u, read_memxM m res -> res x = Some c -> read_eiM res u c -> read_memxM (update_mem m x u) res.
+  forall m res x c u, read_memxM m res -> res x = Some c -> read_eiM res (snd m) u c -> read_memxM (update_mem m x u) res.
 Proof.
   intros m res x c u H1 H2 H3. split; [|apply H1].
   eapply read_memM_update; [apply H1|eassumption|eassumption].
@@ -2029,16 +1999,17 @@ Lemma redM_redE :
   forall df env e m o,
     redM df env e m o ->
     forall res e2 env2, read_memxM (get_ext_memxM m e) res -> read_extM df res e e2 -> map Some env2 = map res env ->
-             exists o2 res2, redE df (snd (get_ext_memxM m e)) env2 e2 o2 /\ read_outM df res2 o o2 /\ compat_res res res2 /\ read_memxM (get_out_memxM (get_ext_memxM m e) o) res2.
+             exists o2 res2, redE df (snd (get_ext_memxM m e)) (snd (get_out_memxM (get_ext_memxM m e) o)) env2 e2 o2 /\ read_outM df res2 o o2 /\ compat_res res res2 /\ read_memxM (get_out_memxM (get_ext_memxM m e) o) res2.
 Proof.
   intros df env e m o H. induction H; intros res e2 nenv Hres Hread Hnenv; inversion Hread; unexistT; subst; simpl in *.
   - destruct (nenv_eqs H Hnenv) as (c & Hc1 & Hc2).
     assert (Hx2 := read_memM_Some _ _ _ _ _ (proj1 Hres) H0 Hc2). inversion Hx2; subst.
     + exists (out_ret (valE_nf v)). exists res.
       splits 4.
-      * econstructor; [eassumption|].
-        destruct df; simpl; [assumption|].
-        eapply redE_shallow_deep_val in H2. assumption.
+      * econstructor; [eassumption| |].
+        -- destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2. assumption.
+        -- destruct df; simpl; [assumption|].
+           eapply redE_shallow_deep_val in H2. assumption.
       * constructor; [apply Hres|]. constructor.
       * apply compat_res_refl.
       * assumption.
@@ -2051,7 +2022,8 @@ Proof.
   - destruct (nenv_eqs H Hnenv) as (c & Hc1 & Hc2).
     assert (Hx2 := read_memM_Some _ _ _ _ _ (proj1 Hres) H0 Hc2). inversion Hx2; subst.
     eexists; exists res; splits 4.
-    + econstructor; eassumption.
+    + econstructor; [eassumption| |eassumption].
+      destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2. assumption.
     + constructor; [apply Hres|]. constructor. assumption.
     + apply compat_res_refl.
     + assumption.
@@ -2060,40 +2032,54 @@ Proof.
     specialize (IHredM res (extE_term (abs t)) vs).
     destruct IHredM as (o3 & res3 & HredE & Ho3 & Hcompat & Hread3); [assumption|constructor|assumption|].
     exists o3. exists res3. splits 4.
-    + econstructor; [eassumption|].
-      eapply redE_xs_mono; [eassumption|].
-      (* eapply redE_shallow_deep_abs with (e := extE_term u); eapply redE_xs_mono; try eassumption.
-      * etransitivity; [|eapply update_result_memdom in H2; eassumption]. eapply redM_memdom_inc in H1; eassumption.
-      * eapply update_result_memdom in H2; eassumption. *) admit.
+    + econstructor; [eassumption| |].
+      * destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2.
+        etransitivity; [eassumption|].
+        eapply redM_usedvars_inc in H1; simpl in H1. eapply update_result_usedvars in H2; simpl in H2.
+        rewrite <- H2; assumption.
+      * eapply redM_usedvars_inc in H1; simpl in H1. apply update_result_usedvars with (m := m) in H2; simpl in H2.
+        eapply redE_shallow_deep_abs with (e := extE_term u).
+        -- eassumption.
+        -- destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2. assumption.
+        -- rewrite <- H2; assumption.
+        -- rewrite <- H2; eassumption.
     + inversion Ho3; unexistT; subst; inversion H2; unexistT; subst; constructor; try assumption.
       * inversion H1; unexistT; subst. inversion H14.
       * eapply read_memxM_update; [assumption|apply Hcompat; eassumption|].
         inversion H10; unexistT; subst.
-        econstructor; [eassumption|]. (*
-        eapply redE_shallow_deep_abs with (e := extE_term u); eapply redE_xs_mono; try eassumption.
-        -- eapply redM_memdom_inc in H1; eassumption.
-        -- reflexivity. *) admit.
+        econstructor; [eassumption|].
+        eapply redM_usedvars_inc in H1; simpl in H1. apply update_result_usedvars with (m := m) in H2; simpl in H2.
+        eapply redE_shallow_deep_abs with (e := extE_term u).
+        -- eassumption.
+        -- destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2. assumption.
+        -- assumption.
+        -- assumption.
     + assumption.
     + inversion Ho3; unexistT; subst; inversion H2; unexistT; subst; try assumption.
       * inversion H1; unexistT; subst. inversion H14.
       * eapply read_memxM_update; [assumption|apply Hcompat; eassumption|].
         inversion H10; unexistT; subst.
-        econstructor; [eassumption|]. (*
-        eapply redE_shallow_deep_abs with (e := extE_term u); eapply redE_xs_mono; try eassumption.
-        -- eapply redM_memdom_inc in H1; eassumption.
-        -- reflexivity. *) admit.
+        econstructor; [eassumption|].
+        eapply redM_usedvars_inc in H1; simpl in H1. apply update_result_usedvars with (m := m) in H2; simpl in H2.
+        eapply redE_shallow_deep_abs with (e := extE_term u).
+        -- eassumption.
+        -- destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2. assumption.
+        -- assumption.
+        -- assumption.
   - destruct (nenv_eqs H Hnenv) as (c & Hc1 & Hc2).
     assert (Hx2 := read_memM_Some _ _ _ _ _ (proj1 Hres) H0 Hc2). inversion Hx2; subst.
     eexists; exists res; splits 4.
-    + econstructor; [eassumption|].
-      eapply redE_deep_shallow_abs with (e := extE_term u); [eassumption|reflexivity].
+    + econstructor; [eassumption| |].
+      * destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2. assumption.
+      * eapply redE_deep_shallow_abs with (e := extE_term u); [eassumption|reflexivity].
     + constructor; [apply Hres|]. constructor. assumption.
     + apply compat_res_refl.
     + assumption.
   - destruct (nenv_eqs H Hnenv) as (c & Hc1 & Hc2).
     assert (Hx2 := read_memM_Some _ _ _ _ _ (proj1 Hres) H0 Hc2). inversion Hx2; subst.
     eexists; exists res; splits 4.
-    + econstructor; eassumption.
+    + econstructor; [eassumption| |eassumption].
+      destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2. assumption.
     + constructor; [apply Hres|]. constructor. assumption.
     + apply compat_res_refl.
     + assumption.
@@ -2104,7 +2090,11 @@ Proof.
     exists o3. exists res3.
     eapply redE_xs_mono in HredE; [|apply Hres in Hc2; eassumption].
     splits 4.
-    + econstructor; eassumption.
+    + eapply redM_usedvars_inc in H1; simpl in H1. apply update_result_usedvars with (m := m) in H2; simpl in H2.
+      econstructor; [eassumption| |].
+      -- destruct Hres as [Hres1 Hres2]. apply Hres2 in Hc2.
+         etransitivity; [eassumption|]. rewrite <- H2. assumption.
+      -- rewrite <- H2. assumption.
     + inversion Ho3; unexistT; subst; inversion H2; subst; unexistT; subst; constructor; try assumption.
       all: eapply read_memM_update; [assumption|apply Hcompat; eassumption|].
       all: inversion H9; unexistT; subst.
@@ -2135,8 +2125,14 @@ Proof.
         -- injection Hyu; intros; subst. unfold res2. exists (clo_var x).
            split; [rewrite freevar_eq_dec_eq_ifte; reflexivity|]. constructor.
         -- apply Hres in Hyu. destruct Hyu as (v & Hv1 & Hv2). exists v.
-           split; [|eapply compat_res_read_eiM; eassumption].
+           split; [|eapply compat_res_read_eiM; try eassumption; eapply read_eiM_dom_mono; [eassumption|prove_list_inc]].
            unfold res2. rewrite freevar_eq_dec_neq_ifte; assumption.
+      * intros y Hy. unfold res2. destruct freevar_eq_dec.
+        -- congruence.
+        -- apply Hres in Hy. assumption.
+      * intros y xs t2 env2 Hy. unfold res2 in Hy. destruct freevar_eq_dec.
+        -- congruence.
+        -- apply Hres in Hy. rewrite Hy. prove_list_inc.
     + simpl. f_equal; [|eapply nenv_compat_list; eassumption]. unfold res2. rewrite freevar_eq_dec_eq_ifte; reflexivity.
     + specialize (IHredM2 res3 (extEd_abs x t o3) nenv).
       destruct IHredM2 as (o4 & res4 & HredE2 & Ho4 & Hcompat4 & Hread4).
@@ -2144,10 +2140,11 @@ Proof.
       * constructor. assumption.
       * eapply nenv_compat_list; [|eassumption]. eapply compat_res_trans; eassumption.
       * exists o4. exists res4. splits 4.
-        -- econstructor; [eassumption|eassumption|].
-           eapply redE_xs_mono; [eassumption|].
-           destruct o1; simpl; [|prove_list_inc].
-           apply redM_usedvars_inc in H2; simpl in H2. etransitivity; [|eassumption]. prove_list_inc.
+        -- destruct o1; [|apply redM_not_div in H2; simpl in H2; tauto].
+           destruct o2; [|apply redM_not_div in H3; simpl in H3; [congruence|tauto]].
+           eapply redM_usedvars_inc in H2; eapply redM_usedvars_inc in H3; simpl in *.
+           econstructor; [eassumption|rewrite <- H3, <- H2; simpl; tauto|eapply redE_dom_mono; eassumption|].
+           eapply redE_xs_mono; [eassumption|]. rewrite <- H2. prove_list_inc.
         -- assumption.
         -- eapply compat_res_trans; [eassumption|]. eapply compat_res_trans; eassumption.
         -- destruct o2; [assumption|].
@@ -2166,9 +2163,10 @@ Proof.
     specialize (IHredM2 res3 (extE_app o3 t2) nenv).
     destruct IHredM2 as (o4 & res4 & HredE2 & Ho4 & Hcompat4 & Hread4); [assumption|constructor; assumption|eapply nenv_compat_list; eassumption|].
     exists o4. exists res4. splits 4.
-    + econstructor; [eassumption|].
-      eapply redE_xs_mono; [eassumption|].
-      eapply redM_usedvars_inc in H; simpl in H. assumption.
+    + destruct o1; [|apply redM_not_div in H; simpl in H; tauto].
+      destruct o2; [|apply redM_not_div in H0; simpl in H0; [congruence|tauto]].
+      eapply redM_usedvars_inc in H; eapply redM_usedvars_inc in H0; simpl in *.
+      econstructor; [eapply redE_dom_mono|eapply redE_xs_mono]; eassumption.
     + assumption.
     + eapply compat_res_trans; eassumption.
     + destruct o2; simpl in *; [assumption|].
@@ -2183,9 +2181,10 @@ Proof.
     specialize (IHredM2 res3 (extE_appnf v o3) nenv).
     destruct IHredM2 as (o4 & res4 & HredE2 & Ho4 & Hcompat4 & Hread4); [assumption|constructor; assumption|eapply nenv_compat_list; eassumption|].
     exists o4. exists res4. splits 4.
-    + econstructor; [eassumption|].
-      eapply redE_xs_mono; [eassumption|].
-      eapply redM_usedvars_inc in H; simpl in H. assumption.
+    + destruct o1; [|apply redM_not_div in H; simpl in H; tauto].
+      destruct o2; [|apply redM_not_div in H0; simpl in H0; [congruence|tauto]].
+      eapply redM_usedvars_inc in H; eapply redM_usedvars_inc in H0; simpl in *.
+      econstructor; [eapply redE_dom_mono|eapply redE_xs_mono]; eassumption.
     + assumption.
     + eapply compat_res_trans; eassumption.
     + destruct o2; simpl in *; [assumption|].
@@ -2200,7 +2199,9 @@ Proof.
       specialize (IHredM res (extE_term t1) (c :: vs)).
       destruct IHredM as (o2 & res2 & HredE & Ho2 & Hcompat2 & Hread2); [assumption|constructor|simpl; f_equal; congruence|].
       exists o2. exists res2. splits 4.
-      * econstructor; [reflexivity|]. rewrite Hc1. assumption.
+      * econstructor; [reflexivity| |].
+        -- eapply redM_usedvars_inc in H1. apply H1.
+        -- rewrite Hc1. assumption.
       * assumption.
       * assumption.
       * assumption.
@@ -2225,8 +2226,9 @@ Proof.
         -- unfold res2. rewrite freevar_eq_dec_eq_ifte; reflexivity.
         -- eapply nenv_compat_list; eassumption.
       * exists o2. exists res3. splits 4.
-        -- econstructor; [reflexivity|]. destruct t2; try assumption.
-           destruct (nth_error nenv n) eqn:Hc; [|assumption]. exfalso.
+        -- econstructor; [reflexivity|eapply redM_usedvars_inc in H1; destruct o; apply H1|].
+           destruct t2; try (destruct o; assumption).
+           destruct (nth_error nenv n) eqn:Hc; [|destruct o; assumption]. exfalso.
            assert (length (map Some nenv) = length (map res env)) by congruence; rewrite !map_length in *.
            rewrite nth_error_None, <- H, <- nth_error_None in Ha. congruence.
         -- assumption.
