@@ -90,6 +90,27 @@ Proof.
   reflexivity.
 Qed.
 
+Definition liftn p (L : renaming) : renaming :=
+  match L with
+  | nil => nil
+  | k :: L => p + k :: L
+  end.
+
+Lemma liftn_renv_small :
+  forall n p L, n < p -> renv (liftn p L) n = n.
+Proof.
+  intros n p [|k L] Hp; simpl; try reflexivity.
+  destruct le_lt_dec; lia.
+Qed.
+
+Lemma liftn_renv_large :
+  forall n p L, p <= n -> renv (liftn p L) n = p + renv L (n - p).
+Proof.
+  intros n p [|k L] Hp; simpl; try lia.
+  repeat destruct le_lt_dec; try lia.
+  replace (n - p - k) with (n - (p + k)) by lia. lia.
+Qed.
+
 Lemma renv_uncar :
   forall f, { C | (forall n, f n < f (S n)) /\ (forall n, f (n + C) = n + f C) } -> { L | forall n, renv L n = f n }.
 Proof.
@@ -194,20 +215,61 @@ Qed.
 Inductive term :=
 | var : nat -> term
 | abs : term -> term
-| app : term -> term -> term.
+| app : term -> term -> term
+| constr : nat -> list term -> term
+| switch : term -> list (nat * term) -> term.
+
+Fixpoint term_ind2 (P : term -> Prop)
+         (Hvar : forall n, P (var n))
+         (Habs : forall t, P t -> P (abs t))
+         (Happ : forall t1 t2, P t1 -> P t2 -> P (app t1 t2))
+         (Hconstr : forall tag l, Forall P l -> P (constr tag l))
+         (Hswitch : forall t m, P t -> Forall (fun '(p, t2) => P t2) m -> P (switch t m))
+         (t : term) : P t :=
+  match t with
+  | var n => Hvar n
+  | abs t => Habs t (term_ind2 P Hvar Habs Happ Hconstr Hswitch t)
+  | app t1 t2 =>
+    Happ t1 t2
+      (term_ind2 P Hvar Habs Happ Hconstr Hswitch t1)
+      (term_ind2 P Hvar Habs Happ Hconstr Hswitch t2)
+  | constr tag l =>
+    Hconstr tag l
+            ((fix H (l : _) : Forall P l :=
+              match l with
+              | nil => @Forall_nil _ _
+              | cons t l => @Forall_cons _ _ t l (term_ind2 P Hvar Habs Happ Hconstr Hswitch t) (H l)
+              end) l)
+  | switch t m =>
+    Hswitch t m
+            (term_ind2 P Hvar Habs Happ Hconstr Hswitch t)
+            ((fix H (m : _) : Forall (fun '(p, t2) => P t2) m :=
+              match m with
+              | nil => @Forall_nil _ _
+              | cons (p, t2) m => @Forall_cons _ _ (p, t2) m (term_ind2 P Hvar Habs Happ Hconstr Hswitch t2) (H m)
+              end) m)
+  end.
+
 
 Fixpoint ren_term (r : renaming) t :=
   match t with
   | var n => var (renv r n)
   | abs t => abs (ren_term (lift r) t)
   | app t1 t2 => app (ren_term r t1) (ren_term r t2)
+  | constr tag l => constr tag (map (ren_term r) l)
+  | switch t l => switch (ren_term r t) (map (fun pt2 => (fst pt2, ren_term (liftn (fst pt2) r) (snd pt2))) l)
   end.
+
+Definition lift_subst us := scons (var 0) (comp (ren_term (plus_ren 1)) us).
+Definition liftn_subst p us n := if le_lt_dec p n then ren_term (plus_ren p) (us (n - p)) else var n.
 
 Fixpoint subst us t :=
   match t with
   | var n => us n
-  | abs t => abs (subst (scons (var 0) (comp (ren_term (plus_ren 1)) us)) t)
+  | abs t => abs (subst (lift_subst us) t)
   | app t1 t2 => app (subst us t1) (subst us t2)
+  | constr tag l => constr tag (map (subst us) l)
+  | switch t l => switch (subst us t) (map (fun pt2 => (fst pt2, subst (liftn_subst (fst pt2) us) (snd pt2))) l)
   end.
 
 Definition subst1 u t := subst (scons u (fun n => var n)) t.
@@ -215,10 +277,15 @@ Definition subst1 u t := subst (scons u (fun n => var n)) t.
 Lemma subst_ext :
   forall t us1 us2, (forall n, us1 n = us2 n) -> subst us1 t = subst us2 t.
 Proof.
-  induction t; intros us1 us2 H; simpl.
-  - apply H.
-  - f_equal. apply IHt. intros [|n]; simpl; [reflexivity|unfold comp; f_equal; apply H].
+  induction t using term_ind2; intros us1 us2 Heq; simpl.
+  - apply Heq.
+  - f_equal. apply IHt. intros [|n]; simpl; [reflexivity|unfold comp; f_equal; apply Heq].
   - f_equal; [apply IHt1|apply IHt2]; assumption.
+  - f_equal. apply map_ext_in. intros t Ht. rewrite Forall_forall in H. apply H; assumption.
+  - f_equal; [apply IHt; assumption|].
+    apply map_ext_in. intros [p t2] Hpt2. simpl. f_equal.
+    rewrite Forall_forall in H. apply (H _ Hpt2).
+    intros n. unfold liftn_subst. destruct le_lt_dec; [|reflexivity]. f_equal. apply Heq.
 Qed.
 
 Definition ren r := fun n => var (renv r n).
@@ -226,92 +293,168 @@ Definition ren r := fun n => var (renv r n).
 Lemma ren_term_is_subst :
   forall t r, ren_term r t = subst (ren r) t.
 Proof.
-  induction t; intros r; simpl.
+  induction t using term_ind2; intros r; simpl.
   - reflexivity.
   - f_equal. rewrite IHt. apply subst_ext.
     intros [|n]; simpl.
     + unfold ren. rewrite lift_renv. reflexivity.
     + unfold ren. rewrite lift_renv. unfold comp. simpl. f_equal. f_equal. lia.
   - f_equal; [apply IHt1|apply IHt2].
+  - f_equal. apply map_ext_in. intros t Ht. rewrite Forall_forall in H. apply H; assumption.
+  - f_equal; [apply IHt|].
+    apply map_ext_in. intros [p t2] Hpt2. simpl. f_equal.
+    rewrite Forall_forall in H.
+    erewrite subst_ext; [apply (H _ Hpt2)|]. intros n.
+    unfold liftn_subst, ren. destruct le_lt_dec.
+    + simpl. rewrite liftn_renv_large, plus_ren_correct; [reflexivity|assumption].
+    + f_equal. rewrite liftn_renv_small; [reflexivity|assumption].
 Qed.
+
+Lemma unfold_lift_subst :
+  forall us n, lift_subst us n = match n with 0 => var 0 | S n => subst (ren (plus_ren 1)) (us n) end.
+Proof.
+  intros us [|n]; simpl; [reflexivity|].
+  unfold comp. apply ren_term_is_subst.
+Qed.
+
+Lemma unfold_liftn_subst :
+  forall p us n, liftn_subst p us n = if le_lt_dec p n then subst (ren (plus_ren p)) (us (n - p)) else var n.
+Proof.
+  intros p us n. unfold liftn_subst. destruct le_lt_dec; [|reflexivity].
+  apply ren_term_is_subst.
+Qed.
+
 
 Lemma unfold_subst :
   forall t us, subst us t =
           match t with
           | var n => us n
-          | abs t => abs (subst (scons (var 0) (comp (subst (ren (plus_ren 1))) us)) t)
+          | abs t => abs (subst (lift_subst us) t)
           | app t1 t2 => app (subst us t1) (subst us t2)
+          | constr tag l => constr tag (map (subst us) l)
+          | switch t l => switch (subst us t) (map (fun pt2 => (fst pt2, subst (liftn_subst (fst pt2) us) (snd pt2))) l)
           end.
 Proof.
-  destruct t; intros us; simpl.
-  - reflexivity.
-  - f_equal. apply subst_ext. intros [|n]; simpl; [reflexivity|].
-    unfold comp; simpl. rewrite ren_term_is_subst. reflexivity.
-  - reflexivity.
+  destruct t; intros us; reflexivity.
 Qed.
 
 Lemma ren_ren :
   forall t r1 r2, ren_term r1 (ren_term r2 t) = ren_term (renv_comp r1 r2) t.
 Proof.
-  induction t; intros r1 r2; simpl.
+  induction t using term_ind2; intros r1 r2; simpl.
   - rewrite renv_comp_correct. reflexivity.
   - f_equal. rewrite IHt. f_equal.
     apply renv_ext.
     intros [|n]; rewrite !lift_renv, !renv_comp_correct, !lift_renv; reflexivity.
   - rewrite IHt1, IHt2. reflexivity.
+  - f_equal. rewrite map_map; apply map_ext_in. intros t Ht.
+    rewrite Forall_forall in H. apply H. assumption.
+  - f_equal; [apply IHt|]. rewrite map_map; apply map_ext_in.
+    intros [p t2] Hpt2. simpl. f_equal.
+    rewrite Forall_forall in H.
+    rewrite (H _ Hpt2). f_equal. apply renv_ext. intros n.
+    destruct (le_lt_dec p n).
+    + rewrite renv_comp_correct, !liftn_renv_large, renv_comp_correct; try assumption.
+      * f_equal. f_equal. lia.
+      * rewrite liftn_renv_large; lia.
+    + rewrite renv_comp_correct, !liftn_renv_small; try assumption.
+      * reflexivity.
+      * rewrite liftn_renv_small; assumption.
 Qed.
 
 Lemma ren_subst :
   forall t r us, ren_term r (subst us t) = subst (comp (ren_term r) us) t.
 Proof.
-  induction t; intros r us; simpl.
+  induction t using term_ind2; intros r us; simpl.
   - unfold comp; simpl. rewrite ren_term_is_subst. reflexivity.
   - f_equal. rewrite IHt. unfold comp. apply subst_ext.
     intros [|n]; simpl.
     + rewrite lift_renv. reflexivity.
-    + rewrite !ren_ren. f_equal.
+    + unfold comp. rewrite !ren_ren. f_equal.
       apply renv_ext. intros [|m]; rewrite !renv_comp_correct, lift_renv; simpl; lia.
   - rewrite IHt1, IHt2. reflexivity.
+  - f_equal. rewrite map_map; apply map_ext_in. intros t Ht.
+    rewrite Forall_forall in H. apply H. assumption.
+  - f_equal; [apply IHt|]. rewrite map_map; apply map_ext_in.
+    intros [p t2] Hpt2. simpl. f_equal.
+    rewrite Forall_forall in H. rewrite (H _ Hpt2). apply subst_ext.
+    intros n. unfold comp, liftn_subst. destruct le_lt_dec.
+    + rewrite !ren_ren. f_equal. apply renv_ext. intros n2.
+      rewrite !renv_comp_correct, !plus_ren_correct, liftn_renv_large by lia.
+      f_equal. f_equal. lia.
+    + simpl. rewrite liftn_renv_small; [reflexivity|assumption].
 Qed.
 
 Lemma subst_ren :
   forall t r us, subst us (ren_term r t) = subst (comp (subst us) (ren r)) t.
 Proof.
-  induction t; intros r us; simpl.
+  induction t using term_ind2; intros r us; simpl.
   - unfold comp; simpl. reflexivity.
   - f_equal. rewrite IHt. unfold comp. apply subst_ext.
     intros [|n]; simpl.
     + rewrite lift_renv. reflexivity.
     + rewrite lift_renv. simpl. reflexivity.
   - rewrite IHt1, IHt2. reflexivity.
+  - f_equal. rewrite map_map; apply map_ext_in. intros t Ht.
+    rewrite Forall_forall in H. apply H. assumption.
+  - f_equal; [apply IHt|]. rewrite map_map; apply map_ext_in.
+    intros [p t2] Hpt2. simpl. f_equal.
+    rewrite Forall_forall in H. rewrite (H _ Hpt2). apply subst_ext.
+    intros n. unfold comp, liftn_subst, ren; simpl. destruct (le_lt_dec p n).
+    + unfold ren. simpl. rewrite liftn_renv_large by assumption.
+      destruct le_lt_dec; [|lia]. f_equal. f_equal. lia.
+    + unfold ren. rewrite liftn_renv_small by assumption. destruct le_lt_dec; [lia|reflexivity].
 Qed.
 
 Lemma subst_subst :
   forall t us1 us2, subst us2 (subst us1 t) = subst (comp (subst us2) us1) t.
 Proof.
-  induction t; intros us1 us2; simpl.
+  induction t using term_ind2; intros us1 us2; simpl.
   - unfold comp. reflexivity.
-  - f_equal. rewrite IHt. unfold comp. apply subst_ext.
+  - f_equal. rewrite IHt. unfold lift_subst, comp. apply subst_ext.
     intros [|n]; simpl; [reflexivity|].
     rewrite ren_subst. rewrite subst_ren. apply subst_ext.
     intros m; unfold comp; simpl. f_equal. f_equal. lia.
   - rewrite IHt1, IHt2. reflexivity.
+  - f_equal. rewrite map_map; apply map_ext_in.
+    intros t Ht. rewrite Forall_forall in H. apply H. assumption.
+  - f_equal; [apply IHt|]. rewrite map_map; apply map_ext_in.
+    intros [p t2] Hpt2. simpl. f_equal.
+    rewrite Forall_forall in H. rewrite (H _ Hpt2). apply subst_ext.
+    intros n. unfold comp, liftn_subst; simpl. destruct le_lt_dec; simpl.
+    + rewrite subst_ren. rewrite ren_subst. apply subst_ext.
+      intros n2; unfold comp; simpl. rewrite plus_ren_correct. destruct le_lt_dec; [|lia].
+      f_equal. f_equal. lia.
+    + destruct le_lt_dec; [lia|]. reflexivity.
 Qed.
 
 Lemma subst_id :
   forall t, subst (fun n => var n) t = t.
 Proof.
-  induction t; simpl; f_equal; try assumption.
-  erewrite subst_ext; [eassumption|].
-  intros [|n]; unfold comp; simpl; [reflexivity|f_equal; lia].
+  induction t using term_ind2; simpl; f_equal; try assumption.
+  - erewrite subst_ext; [eassumption|].
+    intros [|n]; unfold lift_subst, comp; simpl; [reflexivity|f_equal; lia].
+  - erewrite map_ext_in; [apply map_id|]. intros t Ht.
+    rewrite Forall_forall in H. apply H. assumption.
+  - erewrite map_ext_in; [apply map_id|]. intros [p t2] Hpt2. simpl.
+    f_equal. rewrite Forall_forall in H.
+    erewrite subst_ext; [apply (H _ Hpt2)|]. intros n; unfold liftn_subst.
+    destruct le_lt_dec; [|reflexivity]. simpl.
+    rewrite plus_ren_correct; f_equal; lia.
 Qed.
 
+Definition read_env (e : list term) :=
+  fun n => match nth_error e n with Some u => u | None => var (n - length e) end.
 
 Inductive beta : term -> term -> Prop :=
 | beta_app1 : forall t1 t2 t3, beta t1 t2 -> beta (app t1 t3) (app t2 t3)
 | beta_app2 : forall t1 t2 t3, beta t1 t2 -> beta (app t3 t1) (app t3 t2)
 | beta_abs : forall t1 t2, beta t1 t2 -> beta (abs t1) (abs t2)
-| beta_redex : forall t1 t2, beta (app (abs t1) t2) (subst1 t2 t1).
+| beta_redex : forall t1 t2, beta (app (abs t1) t2) (subst1 t2 t1)
+| beta_constr : forall tag t1 t2 l1 l2, beta t1 t2 -> beta (constr tag (l1 ++ t1 :: l2)) (constr tag (l1 ++ t2 :: l2))
+| beta_switch1 : forall t1 t2 l, beta t1 t2 -> beta (switch t1 l) (switch t2 l)
+| beta_switch2 : forall t p t1 t2 l1 l2, beta t1 t2 -> beta (switch t (l1 ++ (p, t1) :: l2)) (switch t (l1 ++ (p, t2) :: l2))
+| beta_switch_redex : forall l t l1 l2, beta (switch (constr (length l1) l) (l1 ++ (length l, t) :: l2)) (subst (read_env l) t).
 
 
 Inductive deep_flag := shallow | deep.
@@ -323,32 +466,39 @@ Defined.
 Inductive nfval :=
 | nvar : nat -> nfval
 | napp : nfval -> nfval_or_lam -> nfval
+| nswitch : nfval -> list (nat * nfval_or_lam) -> nfval
 
 with nfval_or_lam :=
 | nval : nfval -> nfval_or_lam
-| nlam : nfval_or_lam -> nfval_or_lam.
+| nlam : nfval_or_lam -> nfval_or_lam
+| nconstr : nat -> list nfval_or_lam -> nfval_or_lam.
+
 
 Fixpoint read_nfval v :=
   match v with
   | nvar n => var n
   | napp v1 v2 => app (read_nfval v1) (read_nfval_or_lam v2)
+  | nswitch v l => switch (read_nfval v) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) l)
   end
 
 with read_nfval_or_lam v :=
   match v with
   | nval v => read_nfval v
   | nlam v => abs (read_nfval_or_lam v)
+  | nconstr tag l => constr tag (map read_nfval_or_lam l)
   end.
 
 Inductive val : deep_flag -> Type :=
 | vals_nf : nfval -> val shallow
 | vals_abs : term -> val shallow
+| vals_constr : nat -> list term -> val shallow
 | vald_nf : nfval_or_lam -> val deep.
 
 Definition read_val {df} (v : val df) :=
   match v with
   | vals_nf v => read_nfval v
   | vals_abs t => abs t
+  | vals_constr tag l => constr tag l
   | vald_nf v => read_nfval_or_lam v
   end.
 
@@ -372,17 +522,38 @@ Inductive out t :=
 Arguments out_ret {t} _.
 Arguments out_div {t}.
 
-
+Definition todo := nat.
 Inductive ext : deep_flag -> Type :=
 | ext_term : forall df, term -> ext df
 | ext_app : forall df, out (val shallow) -> term -> ext df
 | ext_appnf : forall df, nfval -> out (val deep) -> ext df
-| extd_abs : out (val deep) -> ext deep.
+| ext_switch : forall df, out (val shallow) -> list (nat * term) -> ext df
+| ext_switchnf : forall df, nfval -> list (nat * nfval_or_lam) -> option (nat * out (val deep)) -> list (nat * term) -> ext df
+| extd_abs : out (val deep) -> ext deep
+| extd_constr : nat -> list nfval_or_lam -> option (out (val deep)) -> list term -> ext deep.
 
 Arguments ext_term {df} _.
 Arguments ext_app {df} _ _.
 Arguments ext_appnf {df} _ _.
+Arguments ext_switch {df} _ _.
+Arguments ext_switchnf {df} _ _ _ _.
 
+Definition get_out_abort {t1 t2} (o : out t1) : option (out t2) :=
+  match o with
+  | out_div => Some out_div
+  | _ => None
+  end.
+
+Definition get_abort {df t} (e : ext df) : option (out t) :=
+  match e with
+  | ext_term _ => None
+  | ext_app o _ => get_out_abort o
+  | ext_appnf _ o => get_out_abort o
+  | ext_switch o _ => get_out_abort o
+  | ext_switchnf _ _ o _ => match o with Some (_, o) => get_out_abort o | None => None end
+  | extd_abs o => get_out_abort o
+  | extd_constr _ _ o _ => match o with Some o => get_out_abort o | None => None end
+  end.
 
 Inductive red : forall df, ext df -> out (val df) -> Prop :=
 | red_var : forall df n, red df (ext_term (var n)) (out_ret (val_nf (nvar n))) (* Free variables reduce to themselves *)
@@ -391,13 +562,11 @@ Inductive red : forall df, ext df -> out (val df) -> Prop :=
     red deep (ext_term t) o1 ->
     red deep (extd_abs o1) o2 ->
     red deep (ext_term (abs t)) o2
-| red_abs1_abort : red deep (extd_abs out_div) out_div
 | red_abs1 : forall v, red deep (extd_abs (out_ret (vald_nf v))) (out_ret (vald_nf (nlam v)))
 | red_app : forall df t1 o1 t2 o2,
     red shallow (ext_term t1) o1 ->
     red df (ext_app o1 t2) o2 ->
     red df (ext_term (app t1 t2)) o2
-| red_app1_abort : forall df t2, red df (ext_app out_div t2) out_div
 | red_app1_nf : forall df v o1 t2 o2,
     red deep (ext_term t2) o1 ->
     red df (ext_appnf v o1) o2 ->
@@ -405,23 +574,52 @@ Inductive red : forall df, ext df -> out (val df) -> Prop :=
 | red_app1_abs : forall df t1 t2 o,
     red df (ext_term (subst1 t2 t1)) o ->
     red df (ext_app (out_ret (vals_abs t1)) t2) o
-| red_appnf_abort : forall df v, red df (ext_appnf v out_div) out_div
-| red_appnf : forall df v1 v2, red df (ext_appnf v1 (out_ret (vald_nf v2))) (out_ret (val_nf (napp v1 v2))).
+| red_appnf : forall df v1 v2, red df (ext_appnf v1 (out_ret (vald_nf v2))) (out_ret (val_nf (napp v1 v2)))
+| red_constr_shallow : forall tag l, red shallow (ext_term (constr tag l)) (out_ret (vals_constr tag l))
+| red_constr_deep : forall tag l o,
+    red deep (extd_constr tag nil None l) o ->
+    red deep (ext_term (constr tag l)) o
+| red_constr1_done : forall tag l, red deep (extd_constr tag l None nil) (out_ret (vald_nf (nconstr tag l)))
+| red_constr1_step1 : forall tag l1 l2 t o1 o2,
+    red deep (ext_term t) o1 ->
+    red deep (extd_constr tag l1 (Some o1) l2) o2 ->
+    red deep (extd_constr tag l1 None (t :: l2)) o2
+| red_constr1_step2 : forall tag l1 l2 v o,
+    red deep (extd_constr tag (l1 ++ v :: nil) None l2) o ->
+    red deep (extd_constr tag l1 (Some (out_ret (vald_nf v))) l2) o
+| red_switch : forall df t o1 m o2,
+    red shallow (ext_term t) o1 ->
+    red df (ext_switch o1 m) o2 ->
+    red df (ext_term (switch t m)) o2
+| red_switch1_constr : forall df tag l m t o,
+    nth_error m tag = Some (length l, t) ->
+    red df (ext_term (subst (read_env l) t)) o ->
+    red df (ext_switch (out_ret (vals_constr tag l)) m) o
+| red_switch1_nf : forall df v m o,
+    red df (ext_switchnf v nil None m) o ->
+    red df (ext_switch (out_ret (vals_nf v)) m) o
+| red_switchnf_done : forall df v m, red df (ext_switchnf v m None nil) (out_ret (val_nf (nswitch v m)))
+| red_switchnf_step1 : forall df v m1 m2 p t o1 o2,
+    red deep (ext_term t) o1 ->
+    red df (ext_switchnf v m1 (Some (p, o1)) m2) o2 ->
+    red df (ext_switchnf v m1 None ((p, t) :: m2)) o2
+| red_switchnf_step2 : forall df m1 m2 v1 v2 p o,
+    red df (ext_switchnf v1 (m1 ++ (p, v2) :: nil) None m2) o ->
+    red df (ext_switchnf v1 m1 (Some (p, out_ret (vald_nf v2))) m2) o
+| red_abort : forall df e o, get_abort e = Some o -> red df e o.
 
 CoInductive cored : forall df, ext df -> out (val df) -> Prop :=
-| cored_var : forall df n, cored df (ext_term (var n)) (out_ret (val_nf (nvar n))) (* Free variables reduce to themselves *)
+| cored_var : forall df n, cored df (ext_term (var n)) (out_ret (val_nf (nvar n))) (* Free variables coreduce to themselves *)
 | cored_abs_shallow : forall t, cored shallow (ext_term (abs t)) (out_ret (vals_abs t)) (* Do not look under abstractions *)
 | cored_abs_deep : forall t o1 o2,
     cored deep (ext_term t) o1 ->
     cored deep (extd_abs o1) o2 ->
     cored deep (ext_term (abs t)) o2
-| cored_abs1_abort : cored deep (extd_abs out_div) out_div
 | cored_abs1 : forall v, cored deep (extd_abs (out_ret (vald_nf v))) (out_ret (vald_nf (nlam v)))
 | cored_app : forall df t1 o1 t2 o2,
     cored shallow (ext_term t1) o1 ->
     cored df (ext_app o1 t2) o2 ->
     cored df (ext_term (app t1 t2)) o2
-| cored_app1_abort : forall df t2, cored df (ext_app out_div t2) out_div
 | cored_app1_nf : forall df v o1 t2 o2,
     cored deep (ext_term t2) o1 ->
     cored df (ext_appnf v o1) o2 ->
@@ -429,9 +627,39 @@ CoInductive cored : forall df, ext df -> out (val df) -> Prop :=
 | cored_app1_abs : forall df t1 t2 o,
     cored df (ext_term (subst1 t2 t1)) o ->
     cored df (ext_app (out_ret (vals_abs t1)) t2) o
-| cored_appnf_abort : forall df v, cored df (ext_appnf v out_div) out_div
-| cored_appnf : forall df v1 v2, cored df (ext_appnf v1 (out_ret (vald_nf v2))) (out_ret (val_nf (napp v1 v2))).
-
+| cored_appnf : forall df v1 v2, cored df (ext_appnf v1 (out_ret (vald_nf v2))) (out_ret (val_nf (napp v1 v2)))
+| cored_constr_shallow : forall tag l, cored shallow (ext_term (constr tag l)) (out_ret (vals_constr tag l))
+| cored_constr_deep : forall tag l o,
+    cored deep (extd_constr tag nil None l) o ->
+    cored deep (ext_term (constr tag l)) o
+| cored_constr1_done : forall tag l, cored deep (extd_constr tag l None nil) (out_ret (vald_nf (nconstr tag l)))
+| cored_constr1_step1 : forall tag l1 l2 t o1 o2,
+    cored deep (ext_term t) o1 ->
+    cored deep (extd_constr tag l1 (Some o1) l2) o2 ->
+    cored deep (extd_constr tag l1 None (t :: l2)) o2
+| cored_constr1_step2 : forall tag l1 l2 v o,
+    cored deep (extd_constr tag (l1 ++ v :: nil) None l2) o ->
+    cored deep (extd_constr tag l1 (Some (out_ret (vald_nf v))) l2) o
+| cored_switch : forall df t o1 m o2,
+    cored shallow (ext_term t) o1 ->
+    cored df (ext_switch o1 m) o2 ->
+    cored df (ext_term (switch t m)) o2
+| cored_switch1_constr : forall df tag l m t o,
+    nth_error m tag = Some (length l, t) ->
+    cored df (ext_term (subst (read_env l) t)) o ->
+    cored df (ext_switch (out_ret (vals_constr tag l)) m) o
+| cored_switch1_nf : forall df v m o,
+    cored df (ext_switchnf v nil None m) o ->
+    cored df (ext_switch (out_ret (vals_nf v)) m) o
+| cored_switchnf_done : forall df v m, cored df (ext_switchnf v m None nil) (out_ret (val_nf (nswitch v m)))
+| cored_switchnf_step1 : forall df v m1 m2 p t o1 o2,
+    cored deep (ext_term t) o1 ->
+    cored df (ext_switchnf v m1 (Some (p, o1)) m2) o2 ->
+    cored df (ext_switchnf v m1 None ((p, t) :: m2)) o2
+| cored_switchnf_step2 : forall df m1 m2 v1 v2 p o,
+    cored df (ext_switchnf v1 (m1 ++ (p, v2) :: nil) None m2) o ->
+    cored df (ext_switchnf v1 m1 (Some (p, out_ret (vald_nf v2))) m2) o
+| cored_abort : forall df e o, get_abort e = Some o -> cored df e o.
 
 CoInductive infred {A : Type} (R : A -> A -> Prop) : A -> Prop :=
 | infred_step : forall x y, R x y -> infred R y -> infred R x.
@@ -456,51 +684,113 @@ Definition read_ext {df} (e : ext df) :=
   | ext_term t => Some t
   | ext_app o t2 => match read_out o with Some t1 => Some (app t1 t2) | None => None end
   | ext_appnf v1 o => match read_out o with Some t2 => Some (app (read_nfval v1) t2) | None => None end
+  | ext_switch o m => match read_out o with Some t2 => Some (switch t2 m) | None => None end
+  | ext_switchnf v m1 o m2 =>
+    match o with
+    | None => Some (switch (read_nfval v) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) m1 ++ m2))
+    | Some (p, o) =>
+      match read_out o with
+      | Some t2 => Some (switch (read_nfval v) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) m1 ++ (p, t2) :: m2))
+      | None => None
+      end
+    end
   | extd_abs o => match read_out o with Some t => Some (abs t) | None => None end
+  | extd_constr tag l1 o l2 =>
+    match o with
+    | None => Some (constr tag (map read_nfval_or_lam l1 ++ l2))
+    | Some o =>
+      match read_out o with
+      | Some t2 => Some (constr tag (map read_nfval_or_lam l1 ++ t2 :: l2))
+      | None => None
+      end
+    end
   end.
+
+Ltac unexistT :=
+  repeat match goal with
+           [ H : @existT deep_flag _ _ _ = @existT deep_flag _ _ _ |- _ ] =>
+           apply inj_pair2_eq_dec in H; [|apply deep_flag_eq_dec]
+         end.
+Lemma Some_inj : forall A (x y : A), Some x = Some y -> x = y.
+Proof.
+  intros; congruence.
+Qed.
+Ltac autoinjSome :=
+  repeat match goal with
+           [ H : Some ?x = Some ?y |- _ ] => apply Some_inj in H; subst
+         end.
+
+Lemma nth_error_decompose :
+  forall (A : Type) (L : list A) x n, nth_error L n = Some x -> exists L1 L2, L = L1 ++ x :: L2 /\ length L1 = n.
+Proof.
+  intros A L. induction L as [|y L]; intros x [|n] H; simpl in *; try congruence; autoinjSome.
+  - exists nil. exists L. split; reflexivity.
+  - apply IHL in H. destruct H as (L1 & L2 & H1 & H2). exists (y :: L1). exists L2.
+    split; [rewrite H1; reflexivity|simpl; rewrite H2; reflexivity].
+Qed.
 
 Lemma red_star_beta :
   forall df e o, red df e o -> forall t1 t2, read_ext e = Some t1 -> read_out o = Some t2 -> star beta t1 t2.
 Proof.
-  intros df e o H. induction H; intros u1 u2 Hu1 Hu2; simpl in *.
-  - rewrite read_val_nf in Hu2; simpl in Hu2.
-    injection Hu1; injection Hu2; intros; subst. constructor.
-  - injection Hu1; injection Hu2; intros; subst. constructor.
+  intros df e o H. induction H; intros u1 u2 Hu1 Hu2; simpl in *; autoinjSome.
+  - rewrite read_val_nf. simpl. constructor.
+  - constructor.
   - destruct o1.
     + simpl in *. eapply star_compose.
-      * injection Hu1; intros; subst. eapply star_map_impl with (RA := beta); [intros; constructor; assumption|].
+      * eapply star_map_impl with (RA := beta); [intros; constructor; assumption|].
         apply IHred1; reflexivity.
       * apply IHred2; [reflexivity|assumption].
-    + inversion H0; subst.
-      apply inj_pair2_eq_dec in H1; [|apply deep_flag_eq_dec].
-      subst; simpl in *; congruence.
-  - congruence.
-  - injection Hu1; injection Hu2; intros; subst. constructor.
+    + inversion H0; unexistT; subst; simpl in *; autoinjSome; simpl in *.
+      congruence.
+  - constructor.
   - destruct o1.
     + simpl in *. eapply star_compose.
-      * injection Hu1; intros; subst.
-        eapply star_map_impl with (f := fun t => app t t2) (RA := beta); [intros; constructor; assumption|].
+      * eapply star_map_impl with (f := fun t => app t t2) (RA := beta); [intros; constructor; assumption|].
         eapply IHred1; reflexivity.
       * apply IHred2; [reflexivity|assumption].
-    + inversion H0; subst.
-      apply inj_pair2_eq_dec in H4; [|apply deep_flag_eq_dec].
-      subst; simpl in *; congruence.
-  - congruence.
+    + inversion H0; unexistT; subst; simpl in *; autoinjSome; simpl in *. congruence.
   - destruct o1.
     + simpl in *. eapply star_compose.
-      * injection Hu1; intros; subst.
-        eapply star_map_impl with (f := fun t => app _ t) (RA := beta); [intros; constructor; assumption|].
+      * eapply star_map_impl with (f := fun t => app _ t) (RA := beta); [intros; constructor; assumption|].
         eapply IHred1; reflexivity.
       * apply IHred2; [reflexivity|assumption].
-    + inversion H0; subst.
-      apply inj_pair2_eq_dec in H4; [|apply deep_flag_eq_dec].
-      subst; simpl in *; congruence.
-  - injection Hu1; intros; subst.
-    econstructor; [apply beta_redex|].
+    + inversion H0; unexistT; subst; simpl in *; autoinjSome; simpl in *. congruence.
+  - econstructor; [apply beta_redex|].
     apply IHred; [reflexivity|assumption].
-  - congruence.
-  - injection Hu1; injection Hu2; intros; subst.
-    rewrite read_val_nf. simpl. constructor.
+  - rewrite read_val_nf. simpl. constructor.
+  - constructor.
+  - apply IHred; [reflexivity|assumption].
+  - rewrite app_nil_r. constructor.
+  - destruct o1.
+    + simpl in *. eapply star_compose.
+      * eapply star_map_impl with (f := fun t => constr _ (_ ++ t :: _)) (RA := beta); [intros; constructor; assumption|].
+        eapply IHred1; reflexivity.
+      * apply IHred2; [reflexivity|assumption].
+    + inversion H0; unexistT; subst; simpl in *; autoinjSome; simpl in *. congruence.
+  - apply IHred; [|assumption]. rewrite map_app, <- app_assoc; reflexivity.
+  - destruct o1.
+    + simpl in *. eapply star_compose.
+      * eapply star_map_impl with (f := fun t => switch t _) (RA := beta); [intros; constructor; assumption|].
+        eapply IHred1; reflexivity.
+      * apply IHred2; [reflexivity|assumption].
+    + inversion H0; unexistT; subst; simpl in *; autoinjSome; simpl in *. congruence.
+  - apply nth_error_decompose in H. destruct H as (m1 & m2 & -> & <-).
+    econstructor; [|apply IHred; [reflexivity|assumption]]. constructor.
+  - apply IHred; [reflexivity|assumption].
+  - rewrite read_val_nf, app_nil_r. constructor.
+  - destruct o1.
+    + simpl in *. eapply star_compose.
+      * eapply star_map_impl with (f := fun t => switch _ (_ ++ (_, t) :: _)) (RA := beta);
+          [intros; constructor; assumption|].
+        eapply IHred1; reflexivity.
+      * apply IHred2; [reflexivity|assumption].
+    + inversion H0; unexistT; subst; simpl in *; autoinjSome; simpl in *. congruence.
+  - apply IHred; [|assumption]. rewrite map_app, <- app_assoc; reflexivity.
+  - destruct e; simpl in *; try congruence;
+      try solve [destruct o0; simpl in *; autoinjSome; simpl in *; congruence];
+      destruct o0 as [o0|]; simpl in *; try congruence.
+    + destruct o0 as [p o0]; destruct o0; simpl in *; autoinjSome; simpl in *; congruence.
+    + destruct o0; simpl in *; autoinjSome; simpl in *; congruence.
 Qed.
 
 Lemma infred_map_impl :
@@ -533,12 +823,6 @@ Proof.
     eapply IH; eassumption.
 Defined.
 
-Ltac unexistT :=
-  repeat match goal with
-           [ H : @existT deep_flag _ _ _ = @existT deep_flag _ _ _ |- _ ] =>
-           apply inj_pair2_eq_dec in H; [|apply deep_flag_eq_dec]
-         end.
-
 Definition option_map {A B : Type} (f : A -> B) (x : option A) := match x with Some x => Some (f x) | None => None end.
 Lemma option_map_id : forall (A : Type) (x : option A), option_map id x = x.
 Proof.
@@ -547,11 +831,14 @@ Qed.
 
 Definition respectful {A : Type} (R : A -> A -> Prop) (f : A -> A) := forall x y, R x y -> R (f x) (f y).
 
+Fixpoint list_sum l := match l with nil => 0 | x :: l => x + list_sum l end.
 Fixpoint size t :=
   match t with
   | var n => 0
   | abs t => S (size t)
   | app t1 t2 => S (size t1 + size t2)
+  | constr tag l => S (list_sum (map (fun t => S (size t)) l))
+  | switch t m => S (size t + list_sum (map (fun pt2 => S (size (snd pt2))) m))
   end.
 
 Definition read_ext_with_size {df} (e : ext df) :=
@@ -559,8 +846,32 @@ Definition read_ext_with_size {df} (e : ext df) :=
   | ext_term t => Some (t, 2 * size t)
   | ext_app o t2 => match read_out o with Some t1 => Some (app t1 t2, 2 * size t2 + 1) | None => None end
   | ext_appnf v1 o => match read_out o with Some t2 => Some (app (read_nfval v1) t2, 0) | None => None end
+  | ext_switch o m =>
+    match read_out o with
+    | Some t2 => Some (switch t2 m, 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m) + 1)
+    | None => None
+    end
+  | ext_switchnf v m1 o m2 =>
+    match o with
+    | Some (p, o) =>
+      match read_out o with
+      | Some t2 => Some (switch (read_nfval v) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) m1 ++ (p, t2) :: m2), 1 + 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m2))
+      | None => None
+      end
+    | None => Some (switch (read_nfval v) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) m1 ++ m2), 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m2))
+    end
   | extd_abs o => match read_out o with Some t => Some (abs t, 0) | None => None end
+  | extd_constr tag l1 o l2 =>
+    match o with
+    | Some o =>
+      match read_out o with
+      | Some t2 => Some (constr tag (map read_nfval_or_lam l1 ++ t2 :: l2), 1 + 2 * list_sum (map (fun t => S (size t)) l2))
+      | None => None
+      end
+    | None => Some (constr tag (map read_nfval_or_lam l1 ++ l2), 2 * list_sum (map (fun t => S (size t)) l2))
+    end
   end.
+
 Definition read_out_with_size {df} (o : out (val df)) := match o with out_div => None | out_ret v => Some (read_val v, 0) end.
 
 Definition fst_map {A B C : Type} (f : A -> B) : (A * C) -> (B * C) := fun x => (f (fst x), snd x).
@@ -700,7 +1011,7 @@ Proof.
     - intros x y Hxy. exact Hxy.
   }
   clear t df e o H Ht. intros x y (df & e & o & f & H & Hx & -> & Hf).
-  inversion H; subst; simpl in *; unexistT; subst; simpl in *; try congruence; simpl in Hx; injection Hx as Hx; subst x.
+  inversion H; subst; simpl in *; unexistT; subst; simpl in *; autoinjSome; simpl in *.
   - rewrite read_val_nf in *; simpl in *.
     left. apply Hf. unfold weaken. split; simpl; [reflexivity|lia].
   - left. apply Hf. unfold weaken. split; simpl; [reflexivity|lia].
@@ -753,12 +1064,91 @@ Proof.
     eexists. eexists. eexists. exists f.
     split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
   - left. rewrite read_val_nf. apply weaken_refl.
+  - left. apply Hf. unfold weaken; split; simpl; [reflexivity|lia].
+  - right. left.
+    exists (f (constr tag l, 2 * list_sum (map (fun t => S (size t)) l))).
+    split; [apply Hf; right; simpl; split; [reflexivity|lia]|].
+    eexists. eexists. eexists. exists f.
+    split; [exact H2|]. split; [reflexivity|]. tauto.
+  - left. apply Hf. rewrite app_nil_r. unfold weaken; simpl; split; [reflexivity|lia].
+  - right. right.
+    exists (f (constr tag (map read_nfval_or_lam l1 ++ t :: l2), 1 + 2 * size t + 2 * list_sum (map (fun t => S (size t)) l2))).
+    exists (option_map (fun t3 => f (constr tag (map read_nfval_or_lam l1 ++ fst t3 :: l2), 1 + snd t3 + 2 * list_sum (map (fun t => S (size t)) l2))) (read_out_with_size o1)).
+    splits 3.
+    + apply Hf. right. simpl. split; [reflexivity|lia].
+    + eexists. eexists. eexists. exists (fun t3 => f (constr tag (map read_nfval_or_lam l1 ++ fst t3 :: l2), 1 + snd t3 + 2 * list_sum (map (fun t => S (size t)) l2))).
+      split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|].
+      split; intros x y Hxy; apply Hf.
+      * destruct Hxy as [Hxy | Hxy];
+          [left; simpl; constructor; assumption|right; simpl; split; [destruct Hxy; congruence|lia]].
+      * unfold weaken in *. simpl. split; [destruct Hxy; congruence|lia].
+    + intros v Hv. destruct o1; simpl in Hv; [|discriminate]. injection Hv; intros; subst.
+      eexists. eexists. eexists. exists f.
+      split; [exact H6|]. split; [reflexivity|]. tauto.
+  - right. left.
+    exists (f (constr tag (map read_nfval_or_lam l1 ++ read_nfval_or_lam v :: l2), 2 * list_sum (map (fun t => S (size t)) l2))).
+    split; [apply Hf; right; simpl; split; [reflexivity|lia]|].
+    eexists. eexists. eexists. exists f.
+    split; [exact H2|]. split; [simpl; rewrite map_app, <- app_assoc; reflexivity|]. tauto.
+  - right. right.
+    exists (f (switch t m, 1 + 2 * size t + 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m))).
+    exists (option_map (fun t3 => f (switch (fst t3) m, 1 + snd t3 + 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m))) (read_out_with_size o1)).
+    splits 3.
+    + apply Hf. right. simpl. split; [reflexivity|lia].
+    + eexists. eexists. eexists. exists (fun t3 => f (switch (fst t3) m, 1 + snd t3 + 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m))).
+      split; [exact H3|]. split; [reflexivity|]. split; [reflexivity|].
+      split; intros x y Hxy; apply Hf.
+      * destruct Hxy as [Hxy | Hxy]; [left; simpl; constructor; assumption|right; simpl; split; [f_equal; tauto|lia]].
+      * unfold weaken in *. simpl. split; [f_equal; tauto|lia].
+    + intros v Hv. destruct o1; simpl in Hv; [|discriminate]. injection Hv; intros; subst.
+      eexists. eexists. eexists. exists f.
+      split; [exact H4|]. simpl. split; [f_equal; f_equal; f_equal; lia|]. tauto.
+  - right. left.
+    exists (f (subst (read_env l) t, 2 * size (subst (read_env l) t))).
+    apply nth_error_decompose in H3. destruct H3 as (m1 & m2 & -> & <-).
+    split; [apply Hf; left; apply beta_switch_redex|].
+    eexists. eexists. eexists. exists f.
+    split; [exact H4|]. simpl. split; [reflexivity|]. split; [reflexivity|]. assumption.
+  - right. left.
+    exists (f (switch (read_nfval v) m, 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m))).
+    split; [apply Hf; right; simpl; split; [reflexivity|lia]|].
+    eexists. eexists. eexists. exists f.
+    split; [exact H3|]. split; [reflexivity|]. tauto.
+  - left. apply Hf. unfold weaken; split; simpl; [rewrite read_val_nf, app_nil_r; reflexivity|lia].
+  - right. right.
+    exists (f (switch (read_nfval v) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) m1 ++ (p, t) :: m2), 1 + 2 * size t + 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m2))).
+    exists (option_map (fun t3 => f (switch (read_nfval v) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) m1 ++ (p, fst t3) :: m2), 1 + snd t3 + 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m2))) (read_out_with_size o1)).
+    splits 3.
+    + apply Hf. right. simpl. split; [reflexivity|lia].
+    + eexists. eexists. eexists. exists (fun t3 => f (switch (read_nfval v) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) m1 ++ (p, fst t3) :: m2), 1 + snd t3 + 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m2))).
+      split; [exact H3|]. simpl. split; [reflexivity|]. split; [reflexivity|].
+      split; intros x y Hxy; apply Hf.
+      * destruct Hxy as [Hxy | Hxy];
+          [left; simpl; constructor; assumption|right; simpl; split; [destruct Hxy; congruence|lia]].
+      * unfold weaken in *. simpl. split; [destruct Hxy; congruence|lia].
+    + intros w Hw. destruct o1; simpl in Hw; [|discriminate]. injection Hw; intros; subst.
+      eexists. eexists. eexists. exists f.
+      split; [exact H4|]. simpl. split; [f_equal; f_equal; f_equal; lia|]. tauto.
+  - right. left.
+    exists (f (switch (read_nfval v1) (map (fun pt2 => (fst pt2, read_nfval_or_lam (snd pt2))) m1 ++ (p, read_nfval_or_lam v2) :: m2), 2 * list_sum (map (fun pt2 => S (size (snd pt2))) m2))).
+    split; [apply Hf; right; simpl; split; [reflexivity|lia]|].
+    eexists. eexists. eexists. exists f.
+    split; [exact H3|]. split; [simpl; rewrite map_app, <- app_assoc; reflexivity|]. tauto.
+  - exfalso. destruct e; simpl in *; try congruence;
+      try solve [destruct o0; simpl in *; autoinjSome; simpl in *; congruence];
+      destruct o0 as [o0|]; simpl in *; try congruence.
+    + destruct o0 as [p o0]; destruct o0; simpl in *; autoinjSome; simpl in *; congruence.
+    + destruct o0; simpl in *; autoinjSome; simpl in *; congruence.
 Qed.
 
 Lemma read_ext_with_size_read_ext :
   forall df (e : ext df), read_ext e = option_map fst (read_ext_with_size e).
 Proof.
-  intros. destruct e; simpl; try destruct read_out; simpl; reflexivity.
+  intros. destruct e; simpl; try destruct read_out; simpl; try reflexivity.
+  - destruct o as [[p o0]|]; simpl in *; [|reflexivity].
+    destruct read_out; simpl; reflexivity.
+  - destruct o as [o|]; simpl in *; [|reflexivity].
+    destruct read_out; simpl; reflexivity.
 Qed.
 
 Lemma read_out_with_size_read_out :
@@ -810,9 +1200,6 @@ Fixpoint shift_clo (c : clo) : clo :=
   | mkclo t l => mkclo (ren_term (shiftn (length l)) t) (map shift_clo l)
   end.
  *)
-
-Definition read_env (e : list term) :=
-  fun n => match nth_error e n with Some u => u | None => var (n - length e) end.
 
 Fixpoint read_clo (xs : list freevar) (c : clo) : term :=
   match c with
