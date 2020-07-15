@@ -1023,39 +1023,39 @@ Inductive redE : forall df, list freevar -> list freevar -> list clo -> extE df 
 | redE_appnf_abort : forall df xs dom env v, redE df xs dom env (extE_appnf v out_div) out_div
 | redE_appnf : forall df xs dom env v1 v2, redE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2)))).
 
-(*
-CoInductive coredE : forall df, list clo -> extE df -> out (valE df) -> Prop :=
-| coredE_var_bound : forall df env n t2 env2 o,
-    nth_error env n = Some (mkclo t2 env2) ->
-    coredE df env2 (extE_term t2) o ->
-    coredE df env (extE_term (var n)) o
-| coredE_var_free : forall df env n,
-    nth_error env n = None ->
-    coredE df env (extE_term (var n)) (out_ret (valE_nf (nvar (n - length env))))
-| coredE_abs_shallow : forall t env,
-    coredE shallow env (extE_term (abs t)) (out_ret (valEs_abs t env))
-| coredE_abs_deep : forall t env o1 o2,
-    coredE deep (mkclo (var 0) nil :: map shift_clo env) (extE_term (ren_term (shiftn (S (length env))) t)) o1 ->
-    coredE deep env (extEd_abs o1) o2 ->
-    coredE deep env (extE_term (abs t)) o2
-| coredE_abs1_abort : forall env, coredE deep env (extEd_abs out_div) out_div
-| coredE_abs1 : forall env v, coredE deep env (ext				isIntNum = false;
-Ed_abs (out_ret (valEd_nf v))) (out_ret (valEd_nf (nlam v)))
-| coredE_app : forall df env t1 o1 t2 o2,
-    coredE shallow env (extE_term t1) o1 ->
-    coredE df env (extE_app o1 t2) o2 ->
-    coredE df env (extE_term (app t1 t2)) o2
-| coredE_app1_abort : forall df env t2, coredE df env (extE_app out_div t2) out_div
-| coredE_app1_nf : forall df env v o1 t2 o2,
-    coredE deep env (extE_term t2) o1 ->
-    coredE df env (extE_appnf v o1) o2 ->
-    coredE df env (extE_app (out_ret (valEs_nf v)) t2) o2
-| coredE_app1_abs : forall df env env2 t1 t2 o,
-    coredE df (mkclo t2 env :: env2) (extE_term t1) o ->
-    coredE df env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
-| coredE_appnf_abort : forall df env v, coredE df env (extE_appnf v out_div) out_div
-| coredE_appnf : forall df env v1 v2, coredE df env (extE_appnf v1 (out_ret (valEd_nf v2))) (out_ret (valE_nf (napp v1 v2))).
-*)
+CoInductive coredE : forall df, list freevar -> list freevar -> list clo -> extE df -> out (valE df) -> Prop :=
+| coredE_var_bound : forall df xs xs2 dom env n t2 env2 o,
+    nth_error env n = Some (clo_term xs2 t2 env2) -> xs2 \subseteq dom ->
+    coredE df xs2 dom env2 (extE_term t2) o ->
+    coredE df xs dom env (extE_term (var n)) o
+| coredE_var_free : forall df x xs dom env n,
+    nth_error env n = Some (clo_var x) ->
+    coredE df xs dom env (extE_term (var n)) (out_ret (valE_nf (nxvar x)))
+| coredE_abs_shallow : forall t xs dom env,
+    coredE shallow xs dom env (extE_term (abs t)) (out_ret (valEs_abs t env))
+| coredE_abs_deep : forall t x xs dom env o1 o2,
+    x \notin xs -> x \in dom ->
+    coredE deep (x :: xs) dom (clo_var x :: env) (extE_term t) o1 ->
+    coredE deep xs dom env (extEd_abs x t o1) o2 ->
+    coredE deep xs dom env (extE_term (abs t)) o2
+| coredE_abs1_abort : forall x t xs dom env, coredE deep xs dom env (extEd_abs x t out_div) out_div
+| coredE_abs1 : forall x t xs dom env v, coredE deep xs dom env (extEd_abs x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
+| coredE_app : forall df xs dom env t1 o1 t2 o2,
+    coredE shallow xs dom env (extE_term t1) o1 ->
+    coredE df xs dom env (extE_app o1 t2) o2 ->
+    coredE df xs dom env (extE_term (app t1 t2)) o2
+| coredE_app1_abort : forall df xs dom env t2, coredE df xs dom env (extE_app out_div t2) out_div
+| coredE_app1_nf : forall df xs dom env v o1 t2 o2,
+    coredE deep xs dom env (extE_term t2) o1 ->
+    coredE df xs dom env (extE_appnf v o1) o2 ->
+    coredE df xs dom env (extE_app (out_ret (valE_nf v)) t2) o2
+| coredE_app1_abs : forall df xs xs2 dom env env2 t1 t2 o,
+    xs \subseteq xs2 -> xs2 \subseteq dom ->
+    coredE df xs dom (match t2 with var n => match nth_error env n with Some c => c | _ => clo_term xs2 t2 env end | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
+    coredE df xs dom env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
+| coredE_appnf_abort : forall df xs dom env v, coredE df xs dom env (extE_appnf v out_div) out_div
+| coredE_appnf : forall df xs dom env v1 v2, coredE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2)))).
+
 Arguments nth_error : simpl nomatch.
 
 Lemma valE_nf_closed :
@@ -1088,6 +1088,11 @@ Proof.
   - unexistT. right. exists t. exists env. exists v2. assumption.
 Qed.
 
+Lemma redE_coredE :
+  forall df xs dom env e o, redE df xs dom env e o -> coredE df xs dom env e o.
+Proof.
+  intros df xs dom env e o H; induction H; econstructor; eassumption.
+Qed.
 
 (*
 Lemma clo_closed_mono :
@@ -1387,9 +1392,6 @@ Proof.
   - constructor.
   - destruct (destruct_valE_deep v2) as [(v & ->) | (t & env2 & v & ->)]; simpl in *; constructor.
 Qed.
-
-
-
 
 Definition extE_shallow_to_deep (e : extE shallow) : extE deep :=
   match e return extE deep with
