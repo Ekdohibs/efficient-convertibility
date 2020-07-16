@@ -214,8 +214,34 @@ Proof.
   - rewrite Forall2_cons_iff, Forall_cons_iff, IHL. reflexivity.
 Qed.
 
-(* Forall using quantifiers *)
+Lemma Forall2_impl :
+  forall (A B : Type) (P Q : A -> B -> Prop) L1 L2, (forall x y, P x y -> Q x y) -> Forall2 P L1 L2 -> Forall2 Q L1 L2.
+Proof.
+  intros A B P Q L1 L2 HPQ H. induction H.
+  - constructor.
+  - constructor; [apply HPQ; assumption|]. assumption.
+Qed.
 
+Lemma Forall2_In_left :
+  forall (A B : Type) (P : A -> B -> Prop) L1 L2 x, Forall2 P L1 L2 -> x \in L1 -> exists y, y \in L2 /\ P x y.
+Proof.
+  intros A B P L1 L2 x H Hx; induction H; simpl in *.
+  - tauto.
+  - destruct Hx as [-> | Hx]; [exists y; tauto|].
+    destruct (IHForall2 Hx) as (y0 & Hy1 & Hy2); exists y0; tauto.
+Qed.
+
+Lemma Forall2_In_right :
+  forall (A B : Type) (P : A -> B -> Prop) L1 L2 y, Forall2 P L1 L2 -> y \in L2 -> exists x, x \in L1 /\ P x y.
+Proof.
+  intros A B P L1 L2 y H Hy; induction H; simpl in *.
+  - tauto.
+  - destruct Hy as [-> | Hy]; [exists x; tauto|].
+    destruct (IHForall2 Hy) as (x0 & Hx1 & Hx2); exists x0; tauto.
+Qed.
+
+
+(* Forall using quantifiers *)
 Lemma forall_cons_iff :
   forall (A : Type) (P : A -> Prop) a L, (forall x, x \in (a :: L) -> P x) <-> P a /\ (forall x, x \in L -> P x).
 Proof.

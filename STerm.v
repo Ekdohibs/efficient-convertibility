@@ -1172,7 +1172,10 @@ Qed.
 Inductive closed_at : term -> nat -> Prop :=
 | closed_at_var : forall n k, n < k -> closed_at (var n) k
 | closed_at_app : forall t1 t2 k, closed_at t1 k -> closed_at t2 k -> closed_at (app t1 t2) k
-| closed_at_abs : forall t k, closed_at t (S k) -> closed_at (abs t) k.
+| closed_at_abs : forall t k, closed_at t (S k) -> closed_at (abs t) k
+| closed_at_constr : forall tag l k, (forall t, t \in l -> closed_at t k) -> closed_at (constr tag l) k
+| closed_at_switch :
+    forall t m k, closed_at t k -> (forall p t2, (p, t2) \in m -> closed_at t2 (p + k)) -> closed_at (switch t m) k.
 
 Fixpoint index l x :=
   match l with
@@ -1222,12 +1225,22 @@ Fixpoint clo_ind2 (P : clo -> Prop) (Hvar : forall x, P (clo_var x)) (Hterm : fo
 Lemma subst_closed_at_ext :
   forall t k us1 us2, closed_at t k -> (forall n, n < k -> us1 n = us2 n) -> subst us1 t = subst us2 t.
 Proof.
-  induction t; intros k us1 us2 Hclosed Hext; inversion Hclosed; subst; simpl.
+  induction t using term_ind2; intros k us1 us2 Hclosed Hext; inversion Hclosed; subst; simpl.
   - apply Hext. assumption.
   - f_equal. eapply IHt; [eassumption|].
     intros [|n] Hn; simpl in *; [reflexivity|].
     unfold comp. f_equal. apply Hext. lia.
   - f_equal; [eapply IHt1 | eapply IHt2]; eassumption.
+  - f_equal. apply map_ext_in; intros t Ht.
+    rewrite Forall_forall in H; eapply H; try eassumption.
+    apply H3; assumption.
+  - f_equal; [eapply IHt; eassumption|].
+    apply map_ext_in; intros [p t2] Hpt2. simpl. f_equal.
+    rewrite Forall_forall in H; eapply (H _ Hpt2); [apply H4; eassumption|].
+    intros n Hn. unfold liftn_subst.
+    destruct le_lt_dec.
+    + f_equal. apply Hext. lia.
+    + reflexivity.
 Qed.
 
 Lemma read_shift_clo :
@@ -1265,28 +1278,33 @@ Qed.
 Inductive nfvalx :=
 | nxvar : freevar -> nfvalx
 | nxapp : nfvalx -> nfvalx_or_lam -> nfvalx
+| nxswitch : nfvalx -> list (list freevar * nfvalx_or_lam) -> nfvalx
 
 with nfvalx_or_lam :=
 | nxval : nfvalx -> nfvalx_or_lam
-| nxlam : freevar -> nfvalx_or_lam -> nfvalx_or_lam.
+| nxlam : freevar -> nfvalx_or_lam -> nfvalx_or_lam
+| nxconstr : nat -> list nfvalx_or_lam -> nfvalx_or_lam.
 
 Fixpoint read_nfvalx xs v :=
   match v with
   | nxvar x => nvar (index xs x)
   | nxapp v1 v2 => napp (read_nfvalx xs v1) (read_nfvalx_or_lam xs v2)
+  | nxswitch t m => nswitch (read_nfvalx xs t) (map (fun pt2 => (length (fst pt2), read_nfvalx_or_lam (fst pt2 ++ xs) (snd pt2))) m)
   end
 
 with read_nfvalx_or_lam xs v :=
   match v with
   | nxval v => nval (read_nfvalx xs v)
   | nxlam x v => nlam (read_nfvalx_or_lam (x :: xs) v)
+  | nxconstr tag l => nconstr tag (map (read_nfvalx_or_lam xs) l)
   end.
-
 
 Inductive valE : deep_flag -> Type :=
 | valE_nf : forall {df}, nfvalx -> valE df
 | valEs_abs : term -> list clo -> valE shallow
-| valEd_abs : term -> list clo -> nfvalx_or_lam -> valE deep.
+| valEs_constr : nat -> list clo -> valE shallow
+| valEd_abs : term -> list clo -> nfvalx_or_lam -> valE deep
+| valEd_constr : nat -> list clo -> nfvalx_or_lam -> valE deep.
 
 Definition read_valE {df} (xs : list freevar) (v : valE df) : val df :=
   match v with
@@ -1294,47 +1312,68 @@ Definition read_valE {df} (xs : list freevar) (v : valE df) : val df :=
   | valEs_abs t l =>
     vals_abs (subst (scons (var 0) (read_env (map (fun c => ren_term (plus_ren 1) (read_clo xs c)) l))) t)
   | valEd_abs t l v => vald_nf (read_nfvalx_or_lam xs v)
+  | valEs_constr tag l =>
+    vals_constr tag (map (read_clo xs) l)
+  | valEd_constr tag l v => vald_nf (read_nfvalx_or_lam xs v)
   end.
 
 Inductive extE : deep_flag -> Type :=
 | extE_term : forall df, term -> extE df
 | extE_app : forall df, out (valE shallow) -> term -> extE df
 | extE_appnf : forall df, nfvalx -> out (valE deep) -> extE df
-| extEd_abs : freevar -> term -> out (valE deep) -> extE deep.
+| extE_switch : forall df, out (valE shallow) -> list (nat * term) -> extE df
+| extE_switchnf : forall df, nfvalx -> list (list freevar * nfvalx_or_lam) ->
+                        option (list freevar * out (valE deep)) -> list (nat * term) -> extE df
+| extEd_abs : freevar -> term -> out (valE deep) -> extE deep
+| extEd_constr : nat -> list clo -> list nfvalx_or_lam -> option (out (valE deep)) -> list term -> extE deep.
 
 Arguments extE_term {df} _.
 Arguments extE_app {df} _ _.
 Arguments extE_appnf {df} _ _.
+Arguments extE_switch {df} _ _.
+Arguments extE_switchnf {df} _ _ _ _.
 
 Fixpoint nfvalx_fv v :=
   match v with
   | nxvar x => x :: nil
   | nxapp v1 v2 => nfvalx_fv v1 ++ nfvalx_or_lam_fv v2
+  | nxswitch t m => nfvalx_fv t ++ concat (map (fun pt2 => list_diff (nfvalx_or_lam_fv (snd pt2)) (fst pt2)) m)
   end
 
 with nfvalx_or_lam_fv v :=
   match v with
   | nxval v => nfvalx_fv v
   | nxlam x v => list_remove x (nfvalx_or_lam_fv v)
+  | nxconstr tag l => concat (map nfvalx_or_lam_fv l)
   end.
 
+Definition cl_closed xs l := (forall c, c \in l -> clo_closed c /\ clo_fv c \subseteq xs).
 Definition valE_closed {df} xs (v : valE df) :=
   match v with
-  | valEs_abs t l => closed_at t (S (length l)) /\ (forall c, c \in l -> clo_closed c /\ clo_fv c \subseteq xs)
+  | valEs_abs t l => closed_at t (S (length l)) /\ cl_closed xs l
   | valE_nf v => nfvalx_fv v \subseteq xs
-  | valEd_abs t l v => closed_at t (S (length l)) /\ (forall c, c \in l -> clo_closed c /\ clo_fv c \subseteq xs) /\
-                      nfvalx_or_lam_fv v \subseteq xs
+  | valEd_abs t l v => closed_at t (S (length l)) /\ cl_closed xs l /\ nfvalx_or_lam_fv v \subseteq xs
+  | valEs_constr tag l => cl_closed xs l
+  | valEd_constr tag l v => cl_closed xs l /\ nfvalx_or_lam_fv v \subseteq xs
   end.
+
+Lemma cl_closed_mono :
+  forall xs1 l, cl_closed xs1 l -> forall xs2, xs1 \subseteq xs2 -> cl_closed xs2 l.
+Proof.
+  intros xs1 l H xs2 Hinc c Hc; split; [apply H; assumption|].
+  etransitivity; [|eassumption]. apply H; assumption.
+Qed.
 
 Lemma valE_closed_mono :
   forall df (v : valE df) xs1, valE_closed xs1 v -> forall xs2, xs1 \subseteq xs2 -> valE_closed xs2 v.
 Proof.
   intros df v xs1 H xs2 Hinc; destruct v; simpl in *.
   - etransitivity; eassumption.
-  - split; [apply H|]. intros; split; [apply H|etransitivity; [apply H|]]; eassumption.
-  - split; [apply H|]. split.
-    + intros; split; [apply H|etransitivity; [apply H|]]; eassumption.
-    + etransitivity; [|eassumption]. apply H.
+  - destruct H; split; [|eapply cl_closed_mono]; eassumption.
+  - eapply cl_closed_mono; eassumption.
+  - destruct H as (? & ? & ?); splits 3; [|eapply cl_closed_mono|etransitivity]; eassumption.
+  - destruct H as (H & H2). split; [|etransitivity; eassumption].
+    eapply cl_closed_mono; eassumption.
 Qed.
 
 Definition outE_closed {df} xs (o : out (valE df)) :=
@@ -1353,8 +1392,26 @@ Qed.
 Inductive extE_closed_at : forall {df}, extE df -> nat -> list freevar -> Prop :=
 | extE_term_closed : forall df t k xs, closed_at t k -> extE_closed_at (@extE_term df t) k xs
 | extE_app_closed : forall df o t k xs, closed_at t k -> outE_closed xs o -> extE_closed_at (@extE_app df o t) k xs
-| extE_appnf_closed : forall df v o k xs, nfvalx_fv v \subseteq xs -> outE_closed xs o -> extE_closed_at (@extE_appnf df v o) k xs
-| extEd_abs_closed : forall o t k x xs, closed_at t (S k) -> outE_closed (x :: xs) o -> extE_closed_at (extEd_abs x t o) k xs.
+| extE_appnf_closed : forall df v o k xs,
+    nfvalx_fv v \subseteq xs -> outE_closed xs o -> extE_closed_at (@extE_appnf df v o) k xs
+| extE_switch_closed : forall df o m k xs,
+    (forall p t2, (p, t2) \in m -> closed_at t2 (p + k)) ->
+    outE_closed xs o ->
+    extE_closed_at (@extE_switch df o m) k xs
+| extE_switchnf_closed : forall df v m1 o m2 k xs,
+    nfvalx_fv v \subseteq xs ->
+    (forall xs2 v2, (xs2, v2) \in m1 -> nfvalx_or_lam_fv v2 \subseteq xs2 ++ xs) ->
+    (forall p t2, (p, t2) \in m2 -> closed_at t2 (p + k)) ->
+    (forall xs2 o2, o = Some (xs2, o2) -> outE_closed (xs2 ++ xs) o2) ->
+    extE_closed_at (@extE_switchnf df v m1 o m2) k xs
+| extEd_abs_closed : forall o t k x xs,
+    closed_at t (S k) -> outE_closed (x :: xs) o -> extE_closed_at (extEd_abs x t o) k xs
+| extEd_constr_closed : forall tag l l1 o l2 k xs,
+    cl_closed xs l ->
+    (forall v, v \in l1 -> nfvalx_or_lam_fv v \subseteq xs) ->
+    (forall o2, o = Some o2 -> outE_closed xs o2) ->
+    (forall t, t \in l2 -> closed_at t k) ->
+    extE_closed_at (extEd_constr tag l l1 o l2) k xs.
 
 Definition out_map {A B : Type} (f : A -> B) (o : out A) : out B :=
   match o with
@@ -1367,14 +1424,52 @@ Definition read_extE {df} xs env (e : extE df) : ext df :=
   | extE_term t => ext_term (read_clo xs (clo_term xs t env))
   | extE_app o1 t2 => ext_app (out_map (read_valE xs) o1) (read_clo xs (clo_term xs t2 env))
   | extE_appnf v1 o2 => ext_appnf (read_nfvalx xs v1) (out_map (read_valE xs) o2)
+  | extE_switch o m =>
+    ext_switch
+      (out_map (read_valE xs) o)
+      (map (fun pt2 => (fst pt2, subst (liftn_subst (fst pt2) (read_env (map (read_clo xs) env))) (snd pt2))) m)
+  | extE_switchnf v m1 o m2 =>
+    ext_switchnf
+      (read_nfvalx xs v)
+      (map (fun pt2 => (length (fst pt2), read_nfvalx_or_lam (fst pt2 ++ xs) (snd pt2))) m1)
+      (option_map (fun o => (length (fst o), out_map (read_valE (fst o ++ xs)) (snd o))) o)
+      (map (fun pt2 => (fst pt2, subst (liftn_subst (fst pt2) (read_env (map (read_clo xs) env))) (snd pt2))) m2)
   | extEd_abs x t o => extd_abs (out_map (read_valE (x :: xs)) o)
+  | extEd_constr tag l l1 o l2 =>
+    extd_constr tag
+                (map (read_nfvalx_or_lam xs) l1)
+                (option_map (out_map (read_valE xs)) o)
+                (map (fun t => read_clo xs (clo_term xs t env)) l2)
   end.
+
+Definition dummyvar := proj1_sig (fresh nil).
+Definition dummy_nfvalx := nxvar dummyvar.
+Definition dummy_nfvalx_or_lam := nxval dummy_nfvalx.
 
 Definition getvalEd_nf (v : valE deep) : nfvalx_or_lam :=
   match v return nfvalx_or_lam with
   | valE_nf v => nxval v
   | valEd_abs t l v => v
-  | valEs_abs _ _ => nxval (nxvar (proj1_sig (fresh nil)))
+  | valEd_constr tag l v => v
+  | valEs_abs _ _ => dummy_nfvalx_or_lam
+  | valEs_constr _ _ => dummy_nfvalx_or_lam
+  end.
+
+Definition get_abortE {df t} (e : extE df) : option (out t) :=
+  match e with
+  | extE_term _ => None
+  | extE_app o _ => get_out_abort o
+  | extE_appnf _ o => get_out_abort o
+  | extE_switch o _ => get_out_abort o
+  | extE_switchnf _ _ o _ => match o with Some (_, o) => get_out_abort o | None => None end
+  | extEd_abs _ _ o => get_out_abort o
+  | extEd_constr _ _ _ o _ => match o with Some o => get_out_abort o | None => None end
+  end.
+
+Definition env_get_maybe_var {A: Type} (env : list A) t :=
+  match t with
+  | var n => nth_error env n
+  | _ => None
   end.
 
 Inductive redE : forall df, list freevar -> list freevar -> list clo -> extE df -> out (valE df) -> Prop :=
@@ -1392,23 +1487,58 @@ Inductive redE : forall df, list freevar -> list freevar -> list clo -> extE df 
     redE deep (x :: xs) dom (clo_var x :: env) (extE_term t) o1 ->
     redE deep xs dom env (extEd_abs x t o1) o2 ->
     redE deep xs dom env (extE_term (abs t)) o2
-| redE_abs1_abort : forall x t xs dom env, redE deep xs dom env (extEd_abs x t out_div) out_div
 | redE_abs1 : forall x t xs dom env v, redE deep xs dom env (extEd_abs x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
 | redE_app : forall df xs dom env t1 o1 t2 o2,
     redE shallow xs dom env (extE_term t1) o1 ->
     redE df xs dom env (extE_app o1 t2) o2 ->
     redE df xs dom env (extE_term (app t1 t2)) o2
-| redE_app1_abort : forall df xs dom env t2, redE df xs dom env (extE_app out_div t2) out_div
 | redE_app1_nf : forall df xs dom env v o1 t2 o2,
     redE deep xs dom env (extE_term t2) o1 ->
     redE df xs dom env (extE_appnf v o1) o2 ->
     redE df xs dom env (extE_app (out_ret (valE_nf v)) t2) o2
 | redE_app1_abs : forall df xs xs2 dom env env2 t1 t2 o,
     xs \subseteq xs2 -> xs2 \subseteq dom ->
-    redE df xs dom (match t2 with var n => match nth_error env n with Some c => c | _ => clo_term xs2 t2 env end | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
+    redE df xs dom (match env_get_maybe_var env t2 with Some c => c | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
     redE df xs dom env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
-| redE_appnf_abort : forall df xs dom env v, redE df xs dom env (extE_appnf v out_div) out_div
-| redE_appnf : forall df xs dom env v1 v2, redE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2)))).
+| redE_appnf : forall df xs dom env v1 v2, redE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2))))
+| redE_constr_shallow : forall xs dom env tag l lc,
+    Forall2 (fun t c => match env_get_maybe_var env t with Some c1 => c = c1 | None => exists xs2, xs \subseteq xs2 /\ xs2 \subseteq dom /\ c = clo_term xs2 t env end) l lc ->
+    redE shallow xs dom env (extE_term (constr tag l)) (out_ret (valEs_constr tag lc))
+| redE_constr_deep : forall xs dom env tag l lc o,
+    Forall2 (fun t c => match env_get_maybe_var env t with Some c1 => c = c1 | None => exists xs2, xs \subseteq xs2 /\ xs2 \subseteq dom /\ c = clo_term xs2 t env end) l lc ->
+    redE deep xs dom env (extEd_constr tag lc nil None l) o ->
+    redE deep xs dom env (extE_term (constr tag l)) o
+| redE_constr1_done : forall xs dom env tag l l1,
+    redE deep xs dom env (extEd_constr tag l l1 None nil) (out_ret (valEd_constr tag l (nxconstr tag l1)))
+| redE_constr1_step1 : forall xs dom env tag l l1 l2 t o1 o2,
+    redE deep xs dom env (extE_term t) o1 ->
+    redE deep xs dom env (extEd_constr tag l l1 (Some o1) l2) o2 ->
+    redE deep xs dom env (extEd_constr tag l l1 None (t :: l2)) o2
+| redE_constr1_step2 : forall xs dom env tag l l1 l2 v o,
+    redE deep xs dom env (extEd_constr tag l (l1 ++ getvalEd_nf v :: nil) None l2) o ->
+    redE deep xs dom env (extEd_constr tag l l1 (Some (out_ret v)) l2) o
+| redE_switch : forall df xs dom env t o1 m o2,
+    redE shallow xs dom env (extE_term t) o1 ->
+    redE df xs dom env (extE_switch o1 m) o2 ->
+    redE df xs dom env (extE_term (switch t m)) o2
+| redE_switch1_constr : forall df xs dom env tag l m t o,
+    nth_error m tag = Some (length l, t) ->
+    redE df xs dom (l ++ env) (extE_term t) o ->
+    redE df xs dom env (extE_switch (out_ret (valEs_constr tag l)) m) o
+| redE_switch1_nf : forall df xs dom env v m o,
+    redE df xs dom env (extE_switchnf v nil None m) o ->
+    redE df xs dom env (extE_switch (out_ret (valE_nf v)) m) o
+| redE_switchnf_done : forall df xs dom env v m,
+    redE df xs dom env (extE_switchnf v m None nil) (out_ret (valE_nf (nxswitch v m)))
+| redE_switchnf_step1 : forall df xs ys dom env v m1 m2 p t o1 o2,
+    distinct xs p ys -> ys \subseteq dom ->
+    redE deep (ys ++ xs) dom (map clo_var ys ++ env) (extE_term t) o1 ->
+    redE df xs dom env (extE_switchnf v m1 (Some (ys, o1)) m2) o2 ->
+    redE df xs dom env (extE_switchnf v m1 None ((p, t) :: m2)) o2
+| redE_switchnf_step2 : forall df xs dom env m1 m2 v1 v2 ys o,
+    redE df xs dom env (extE_switchnf v1 (m1 ++ (ys, getvalEd_nf v2) :: nil) None m2) o ->
+    redE df xs dom env (extE_switchnf v1 m1 (Some (ys, out_ret v2)) m2) o
+| redE_abort : forall df xs dom env e o, get_abortE e = Some o -> redE df xs dom env e o.
 
 CoInductive coredE : forall df, list freevar -> list freevar -> list clo -> extE df -> out (valE df) -> Prop :=
 | coredE_var_bound : forall df xs xs2 dom env n t2 env2 o,
@@ -1425,23 +1555,58 @@ CoInductive coredE : forall df, list freevar -> list freevar -> list clo -> extE
     coredE deep (x :: xs) dom (clo_var x :: env) (extE_term t) o1 ->
     coredE deep xs dom env (extEd_abs x t o1) o2 ->
     coredE deep xs dom env (extE_term (abs t)) o2
-| coredE_abs1_abort : forall x t xs dom env, coredE deep xs dom env (extEd_abs x t out_div) out_div
 | coredE_abs1 : forall x t xs dom env v, coredE deep xs dom env (extEd_abs x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
 | coredE_app : forall df xs dom env t1 o1 t2 o2,
     coredE shallow xs dom env (extE_term t1) o1 ->
     coredE df xs dom env (extE_app o1 t2) o2 ->
     coredE df xs dom env (extE_term (app t1 t2)) o2
-| coredE_app1_abort : forall df xs dom env t2, coredE df xs dom env (extE_app out_div t2) out_div
 | coredE_app1_nf : forall df xs dom env v o1 t2 o2,
     coredE deep xs dom env (extE_term t2) o1 ->
     coredE df xs dom env (extE_appnf v o1) o2 ->
     coredE df xs dom env (extE_app (out_ret (valE_nf v)) t2) o2
 | coredE_app1_abs : forall df xs xs2 dom env env2 t1 t2 o,
     xs \subseteq xs2 -> xs2 \subseteq dom ->
-    coredE df xs dom (match t2 with var n => match nth_error env n with Some c => c | _ => clo_term xs2 t2 env end | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
+    coredE df xs dom (match env_get_maybe_var env t2 with Some c => c | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
     coredE df xs dom env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
-| coredE_appnf_abort : forall df xs dom env v, coredE df xs dom env (extE_appnf v out_div) out_div
-| coredE_appnf : forall df xs dom env v1 v2, coredE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2)))).
+| coredE_appnf : forall df xs dom env v1 v2, coredE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2))))
+| coredE_constr_shallow : forall xs dom env tag l lc,
+    Forall2 (fun t c => match env_get_maybe_var env t with Some c1 => c = c1 | None => exists xs2, xs \subseteq xs2 /\ xs2 \subseteq dom /\ c = clo_term xs2 t env end) l lc ->
+    coredE shallow xs dom env (extE_term (constr tag l)) (out_ret (valEs_constr tag lc))
+| coredE_constr_deep : forall xs dom env tag l lc o,
+    Forall2 (fun t c => match env_get_maybe_var env t with Some c1 => c = c1 | None => exists xs2, xs \subseteq xs2 /\ xs2 \subseteq dom /\ c = clo_term xs2 t env end) l lc ->
+    coredE deep xs dom env (extEd_constr tag lc nil None l) o ->
+    coredE deep xs dom env (extE_term (constr tag l)) o
+| coredE_constr1_done : forall xs dom env tag l l1,
+    coredE deep xs dom env (extEd_constr tag l l1 None nil) (out_ret (valEd_constr tag l (nxconstr tag l1)))
+| coredE_constr1_step1 : forall xs dom env tag l l1 l2 t o1 o2,
+    coredE deep xs dom env (extE_term t) o1 ->
+    coredE deep xs dom env (extEd_constr tag l l1 (Some o1) l2) o2 ->
+    coredE deep xs dom env (extEd_constr tag l l1 None (t :: l2)) o2
+| coredE_constr1_step2 : forall xs dom env tag l l1 l2 v o,
+    coredE deep xs dom env (extEd_constr tag l (l1 ++ getvalEd_nf v :: nil) None l2) o ->
+    coredE deep xs dom env (extEd_constr tag l l1 (Some (out_ret v)) l2) o
+| coredE_switch : forall df xs dom env t o1 m o2,
+    coredE shallow xs dom env (extE_term t) o1 ->
+    coredE df xs dom env (extE_switch o1 m) o2 ->
+    coredE df xs dom env (extE_term (switch t m)) o2
+| coredE_switch1_constr : forall df xs dom env tag l m t o,
+    nth_error m tag = Some (length l, t) ->
+    coredE df xs dom (l ++ env) (extE_term t) o ->
+    coredE df xs dom env (extE_switch (out_ret (valEs_constr tag l)) m) o
+| coredE_switch1_nf : forall df xs dom env v m o,
+    coredE df xs dom env (extE_switchnf v nil None m) o ->
+    coredE df xs dom env (extE_switch (out_ret (valE_nf v)) m) o
+| coredE_switchnf_done : forall df xs dom env v m,
+    coredE df xs dom env (extE_switchnf v m None nil) (out_ret (valE_nf (nxswitch v m)))
+| coredE_switchnf_step1 : forall df xs ys dom env v m1 m2 p t o1 o2,
+    distinct xs p ys -> ys \subseteq dom ->
+    coredE deep (ys ++ xs) dom (map clo_var ys ++ env) (extE_term t) o1 ->
+    coredE df xs dom env (extE_switchnf v m1 (Some (ys, o1)) m2) o2 ->
+    coredE df xs dom env (extE_switchnf v m1 None ((p, t) :: m2)) o2
+| coredE_switchnf_step2 : forall df xs dom env m1 m2 v1 v2 ys o,
+    coredE df xs dom env (extE_switchnf v1 (m1 ++ (ys, getvalEd_nf v2) :: nil) None m2) o ->
+    coredE df xs dom env (extE_switchnf v1 m1 (Some (ys, out_ret v2)) m2) o
+| coredE_abort : forall df xs dom env e o, get_abortE e = Some o -> coredE df xs dom env e o.
 
 Arguments nth_error : simpl nomatch.
 
@@ -1455,33 +1620,61 @@ Lemma destruct_valE :
   forall df (v : valE df),
     { v2 | existT valE df v = existT valE df (valE_nf v2) } +
     { t & { env | existT valE df v = existT valE shallow (valEs_abs t env) } } +
-    { t & { env & { v2 | existT valE df v = existT valE deep (valEd_abs t env v2) } } }.
+    { t & { env & { v2 | existT valE df v = existT valE deep (valEd_abs t env v2) } } } +
+    { tag & { l | existT valE df v = existT valE shallow (valEs_constr tag l) } } +
+    { tag & { l & { v2 | existT valE df v = existT valE deep (valEd_constr tag l v2) } } }.
 Proof.
   intros df v. destruct v.
-  - left; left. exists n. reflexivity.
-  - left; right. exists t. exists l. reflexivity.
-  - right. exists t. exists l. exists n. reflexivity.
+  - left; left; left; left. exists n. reflexivity.
+  - left; left; left; right. exists t. exists l. reflexivity.
+  - left; right. exists n. exists l. reflexivity.
+  - left; left; right. exists t. exists l. exists n. reflexivity.
+  - right. exists n. exists l. exists n0. reflexivity.
 Qed.
 
 Lemma destruct_valE_deep :
   forall (v : valE deep),
     { v2 | v = valE_nf v2 } +
-    { t & { env & { v2 | v = valEd_abs t env v2 } } }.
+    { t & { env & { v2 | v = valEd_abs t env v2 } } } +
+    { tag & { l & { v2 | v = valEd_constr tag l v2 } } }.
 Proof.
   intros v. assert (H := destruct_valE deep v).
-  destruct H as [[(v2 & Heq) | (t & env & Heq)] | (t & env & v2 & Heq)].
-  - unexistT. left. exists v2. assumption.
+  destruct H as [[[[(v2 & Heq) | (t & env & Heq)] | (t & env & v2 & Heq)] | (tag & l & Heq)] | (tag & l & v2 & Heq)].
+  - unexistT. left; left. exists v2. assumption.
   - apply projT1_eq in Heq; simpl in Heq; congruence.
-  - unexistT. right. exists t. exists env. exists v2. assumption.
+  - unexistT. left; right. exists t. exists env. exists v2. assumption.
+  - apply projT1_eq in Heq; simpl in Heq; congruence.
+  - unexistT. right. exists tag. exists l. exists v2. assumption.
 Qed.
 
 Lemma redE_coredE :
   forall df xs dom env e o, redE df xs dom env e o -> coredE df xs dom env e o.
 Proof.
-  intros df xs dom env e o H; induction H; econstructor; eassumption.
+  intros df xs dom env e o H; induction H.
+  - eapply coredE_var_bound; eassumption.
+  - eapply coredE_var_free; eassumption.
+  - eapply coredE_abs_shallow; eassumption.
+  - eapply coredE_abs_deep; eassumption.
+  - eapply coredE_abs1; eassumption.
+  - eapply coredE_app; eassumption.
+  - eapply coredE_app1_nf; eassumption.
+  - eapply coredE_app1_abs; eassumption.
+  - eapply coredE_appnf; eassumption.
+  - eapply coredE_constr_shallow; eassumption.
+  - eapply coredE_constr_deep; eassumption.
+  - eapply coredE_constr1_done; eassumption.
+  - eapply coredE_constr1_step1; eassumption.
+  - eapply coredE_constr1_step2; eassumption.
+  - eapply coredE_switch; eassumption.
+  - eapply coredE_switch1_constr; eassumption.
+  - eapply coredE_switch1_nf; eassumption.
+  - eapply coredE_switchnf_done; eassumption.
+  - eapply coredE_switchnf_step1; eassumption.
+  - eapply coredE_switchnf_step2; eassumption.
+  - eapply coredE_abort; eassumption.
 Qed.
 
-(*
+(*;
 Lemma clo_closed_mono :
   forall c k1, clo_closed_at c k1 -> forall k2, k1 < k2 -> clo_closed_at c k2.
 Proof.
@@ -1564,7 +1757,7 @@ Proof.
   - apply IHForall2.
 Qed.
 
-
+(*
 Lemma redE_xs_mono_rec :
   forall df xs dom env e o, redE df xs dom env e o -> forall xs2 env2 e2, xs2 \subseteq xs -> Forall2 clo_sub env2 env -> extE_sub df e2 e -> exists o2, outE_sub df o2 o /\ redE df xs2 dom env2 e2 o2.
 Proof.
@@ -1581,33 +1774,34 @@ Proof.
       [intros y [<- | Hy]; [left; reflexivity|right; apply Hxs3; assumption]|constructor; [constructor|assumption]|constructor|].
     destruct (IHredE2 xs3 env3 (extEd_abs x t o3)) as (o4 & Hsub4 & HredE2); [assumption|assumption|constructor;assumption|].
     exists o4. split; [assumption|]. eapply redE_abs_deep; try eassumption. rewrite Hxs3; assumption.
-  - inversion H2; unexistT; subst. exists out_div. split; [constructor|]. eapply redE_abs1_abort.
   - inversion H2; unexistT; subst.
     eexists; split; [|eapply redE_abs1]. constructor.
     inversion H3; unexistT; subst; constructor; assumption.
   - destruct (IHredE1 xs3 env3 (extE_term t1)) as (o3 & Hsub3 & HredE1); [assumption|assumption|constructor|].
     destruct (IHredE2 xs3 env3 (extE_app o3 t2)) as (o4 & Hsub4 & HredE2); [assumption|assumption|constructor; assumption|].
     eexists; split; [|eapply redE_app; eassumption]. assumption.
-  - inversion H2; unexistT; subst. exists out_div. split; [constructor|]. eapply redE_app1_abort.
   - destruct (IHredE1 xs3 env3 (extE_term t2)) as (o3 & Hsub3 & HredE1); [assumption|assumption|constructor|].
     destruct (IHredE2 xs3 env3 (extE_appnf v o3)) as (o4 & Hsub4 & HredE2); [assumption|assumption|constructor; assumption|].
     eexists; split; [eassumption|].
     inversion H4; unexistT; subst. inversion H5; unexistT; subst. eapply redE_app1_nf; eassumption.
   - inversion H5; unexistT; subst. inversion H6; unexistT; subst.
     match goal with [_ : context[?a :: env2] |- _ ] => remember a as c end.
-    destruct (IHredE xs3 (match t2 with | var n => match nth_error env3 n with | Some c => c | None => clo_term xs t2 env3 end | _ => clo_term xs t2 env3 end :: env1) (extE_term t1)) as (o3 & Hsub3 & HredE1).
+    destruct (IHredE xs3 (match env_get_maybe_var env3 t2 with | Some c => c | None => clo_term xs t2 env3 end :: env1) (extE_term t1)) as (o3 & Hsub3 & HredE1).
     + assumption.
     + constructor; [|assumption]. rewrite Heqc. destruct t2; try (constructor; assumption).
+      simpl.
       destruct (nth_error env n) as [c1|] eqn:Hc1.
       * destruct (nth_error_Forall2_rev Henv3 Hc1) as (c2 & Hc2a & Hc2b); rewrite Hc2a. assumption.
       * eapply nth_error_Forall2_None in Hc1; [|eassumption]. rewrite Hc1. constructor; assumption.
     + constructor.
     + exists o3. split; [assumption|]. econstructor; try eassumption. etransitivity; eassumption.
-  - inversion H2; unexistT; subst. exists out_div. split; [constructor|]. eapply redE_appnf_abort.
   - inversion H2; unexistT; subst. eexists; split; [|eapply redE_appnf]. constructor.
     inversion H3; unexistT; subst; simpl in *; constructor.
+  - eexists; split; [constructor|].
 Qed.
+ *)
 
+(*
 Lemma clo_sub_refl :
   forall c, clo_sub c c.
 Proof.
@@ -1633,6 +1827,7 @@ Lemma extE_sub_refl :
 Proof.
   intros df e; destruct e; constructor; apply outE_sub_refl.
 Qed.
+*)
 
 Lemma redE_xsdom_mono :
   forall df xs dom env e o, redE df xs dom env e o -> forall xs2 dom2, xs2 \subseteq xs -> dom \subseteq dom2 -> redE df xs2 dom2 env e o.
@@ -1643,14 +1838,34 @@ Proof.
   - eapply redE_abs_shallow.
   - eapply redE_abs_deep; [rewrite Hxs3; eassumption|rewrite <- Hdom2; eassumption|eapply IHredE1; [|assumption]|eapply IHredE2; assumption].
     intros y [<- | Hy]; [left; reflexivity|right; apply Hxs3; assumption].
-  - eapply redE_abs1_abort.
   - eapply redE_abs1.
   - eapply redE_app; [eapply IHredE1|eapply IHredE2]; assumption.
-  - eapply redE_app1_abort.
   - eapply redE_app1_nf; [eapply IHredE1|eapply IHredE2]; assumption.
   - eapply redE_app1_abs; [| |eapply IHredE; assumption]; etransitivity; eassumption.
-  - eapply redE_appnf_abort.
   - eapply redE_appnf.
+  - eapply redE_constr_shallow. eapply Forall2_impl; [|eassumption].
+    intros t c Htc. simpl in *. destruct env_get_maybe_var; [assumption|].
+    destruct Htc as (xs2 & H1 & H2 & H3); exists xs2; splits 3; try assumption; etransitivity; eassumption.
+  - eapply redE_constr_deep; [|eapply IHredE; eassumption]. eapply Forall2_impl; [|eassumption].
+    intros t c Htc. simpl in *. destruct env_get_maybe_var; [assumption|].
+    destruct Htc as (xs2 & H1 & H2 & H3); exists xs2; splits 3; try assumption; etransitivity; eassumption.
+  - eapply redE_constr1_done.
+  - eapply redE_constr1_step1; [eapply IHredE1|eapply IHredE2]; eassumption.
+  - eapply redE_constr1_step2. eapply IHredE; eassumption.
+  - eapply redE_switch; [eapply IHredE1|eapply IHredE2]; eassumption.
+  - eapply redE_switch1_constr; [eassumption|].
+    eapply IHredE; eassumption.
+  - eapply redE_switch1_nf. eapply IHredE; eassumption.
+  - eapply redE_switchnf_done.
+  - eapply redE_switchnf_step1; [| |eapply IHredE1|eapply IHredE2].
+    + eapply distinct_incl; eassumption.
+    + etransitivity; eassumption.
+    + rewrite Hxs3. reflexivity.
+    + eassumption.
+    + eassumption.
+    + eassumption.
+  - eapply redE_switchnf_step2. eapply IHredE; eassumption.
+  - eapply redE_abort. eassumption.
 Qed.
 
 Lemma redE_xs_mono :
@@ -1665,10 +1880,31 @@ Proof.
   intros; eapply redE_xsdom_mono; try eassumption. reflexivity.
 Qed.
 
-Lemma redE_closed :
-  forall df xs xs2 dom env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> xs \subseteq xs2 -> redE df xs2 dom env e o -> outE_closed xs o.
+Lemma env_get_maybe_var_in :
+  forall (A : Type) t (env : list A) x, env_get_maybe_var env t = Some x -> x \in env.
 Proof.
-  intros df xs xs2 dom env e o Henv He Hxs H. revert xs Henv He Hxs; induction H; intros nxs Henv He Hxs; simpl in *; inversion He; subst.
+  intros A t env x H. destruct t; simpl in *; try congruence.
+  eapply nth_error_In. eassumption.
+Qed.
+
+Lemma get_out_abort_div :
+  forall t1 t2 (o1 : out t1) (o2 : out t2), get_out_abort o1 = Some o2 -> o2 = out_div.
+Proof.
+  intros; destruct o1; simpl in *; congruence.
+Qed.
+
+Lemma out_abort_div :
+  forall df t (e : extE df) (o : out t), get_abortE e = Some o -> o = out_div.
+Proof.
+  intros; destruct e; simpl in *; try congruence; autoinjSome; try (eapply get_out_abort_div; eassumption).
+  - destruct o0 as [[_ o0]|]; [eapply get_out_abort_div; eassumption|congruence].
+  - destruct o0 as [o0|]; [eapply get_out_abort_div; eassumption|congruence].
+Qed.
+
+Lemma redE_closed :
+  forall df xs xs2 dom env e o, cl_closed xs env -> extE_closed_at e (length env) xs -> xs \subseteq xs2 -> redE df xs2 dom env e o -> outE_closed xs o.
+Proof.
+  intros df xs xs2 dom env e o Henv He Hxs H. revert xs Henv He Hxs; induction H; intros nxs Henv He Hxs; simpl in *;try (erewrite out_abort_div by eassumption; constructor); inversion He; subst.
   - apply nth_error_In, Henv in H. destruct H as [H2 H3]. inversion H2; subst.
     apply outE_closed_mono with (xs1 := list_inter nxs xs2); [|apply list_inter_subl1].
     apply IHredE; [|constructor; assumption|apply list_inter_subl2].
@@ -1683,29 +1919,87 @@ Proof.
       etransitivity; [apply Henv; assumption|]. prove_list_inc.
     + constructor. inversion H5; subst. assumption.
     + intros y [<- | Hy]; [left; reflexivity|right; apply Hxs; assumption].
-  - tauto.
   - split; [assumption|]. split; [assumption|]. intros y Hy. rewrite list_remove_correct in Hy.
-    destruct (destruct_valE_deep v) as [(v2 & ->) | (t2 & env2 & v2 & ->)]; simpl in *.
+    destruct (destruct_valE_deep v) as [[(v2 & ->) | (t2 & env2 & v2 & ->)] | (tag & l & v2 & ->)]; simpl in *.
     + specialize (H5 y ltac:(tauto)). destruct H5; simpl in *; tauto.
     + destruct H5 as (H5 & H6 & H7); specialize (H7 y ltac:(tauto)). destruct H7; simpl in *; tauto.
+    + destruct H5 as (H5 & H6); specialize (H6 y ltac:(tauto)). destruct H6; simpl in *; tauto.
   - apply IHredE2; [assumption| |assumption]. constructor; [inversion H3; subst; assumption|].
     apply IHredE1; [assumption| |assumption]. constructor; inversion H3; subst; assumption.
-  - tauto.
   - apply IHredE2; [assumption| |assumption]. constructor; [assumption|].
     apply IHredE1; [assumption| |assumption]. constructor. assumption.
   - apply IHredE; [intros c [<- | Hc]| |assumption].
-    + destruct t2; try (split; simpl; [constructor; [assumption|intros; rewrite <- H, <- Hxs; apply Henv; assumption] | rewrite concat_incl, Forall_map, Forall_forall; intros; apply Henv; assumption]).
-      destruct nth_error eqn:Hu; [|split].
-      * eapply Henv, nth_error_In; eassumption.
-      * constructor; [assumption|]. intros; rewrite <- H, <- Hxs; apply Henv; assumption.
-      * simpl. rewrite concat_incl, Forall_map, Forall_forall.
+    + destruct env_get_maybe_var as [c|] eqn:Hc; [eapply Henv, env_get_maybe_var_in; eassumption|].
+      split; simpl.
+      * constructor; [assumption|]. eapply cl_closed_mono; [eassumption|]. etransitivity; eassumption.
+      * rewrite concat_incl, Forall_map, Forall_forall.
         intros; apply Henv; assumption.
     + simpl in *. apply H8. assumption.
     + simpl in *. constructor. apply H8.
-  - tauto.
   - rewrite list_inc_app_left.
     split; [assumption|]. simpl in H5.
-    destruct (destruct_valE_deep v2) as [(v & ->) | (t & env2 & v & ->)]; simpl in *; tauto.
+    destruct (destruct_valE_deep v2) as [[(v & ->) | (t & env2 & v & ->)] | (tag & l & v & ->)]; simpl in *; tauto.
+  - intros c Hc. destruct (Forall2_In_right _ _ _ _ _ _ H Hc) as (t & Ht1 & Htc).
+    destruct env_get_maybe_var eqn:Hc1.
+    + subst. apply Henv. eapply env_get_maybe_var_in; eassumption.
+    + destruct Htc as (xs2 & Hxs2a & Hxs2b & ->).
+      split; simpl.
+      * constructor; [inversion H2; subst; apply H4; assumption|].
+        eapply cl_closed_mono; [eassumption|]. etransitivity; eassumption.
+      * rewrite concat_incl, Forall_map, Forall_forall.
+        intros; apply Henv; assumption.
+  - eapply IHredE; try eassumption.
+    constructor; [|intros _ []|intros; congruence|inversion H3; assumption].
+    intros c Hc. destruct (Forall2_In_right _ _ _ _ _ _ H Hc) as (t & Ht1 & Htc).
+    destruct env_get_maybe_var eqn:Hc1.
+    + subst. apply Henv. eapply env_get_maybe_var_in; eassumption.
+    + destruct Htc as (xs2 & Hxs2a & Hxs2b & ->).
+      split; simpl.
+      * constructor; [inversion H3; subst; apply H5; assumption|].
+        eapply cl_closed_mono; [eassumption|]. etransitivity; eassumption.
+      * rewrite concat_incl, Forall_map, Forall_forall.
+        intros; apply Henv; assumption.
+  - split; [assumption|]. rewrite concat_incl, Forall_map, Forall_forall. assumption.
+  - eapply IHredE2; try eassumption.
+    constructor; [eassumption|eassumption| |intros; apply H11; simpl in *; tauto].
+    intros o [=<-]. eapply IHredE1; try eassumption.
+    constructor. apply H11. simpl. tauto.
+  - eapply IHredE; try eassumption.
+    constructor; [eassumption| |intros; congruence|eassumption].
+    intros v2 Hv2. rewrite in_app_iff in Hv2; simpl in Hv2.
+    destruct Hv2 as [Hv2 | [<- | []]]; [apply H8; assumption|].
+    specialize (H9 _ eq_refl). simpl in H9.
+    destruct (destruct_valE_deep v) as [[(v2 & ->) | (t & env2 & v2 & ->)] | (tag2 & l3 & v2 & ->)]; simpl in *; tauto.
+  - eapply IHredE2; try eassumption.
+    constructor; [inversion H3; subst; eassumption|].
+    eapply IHredE1; try eassumption.
+    constructor; inversion H3; subst; eassumption.
+  - eapply IHredE; try eassumption.
+    + intros c Hc; rewrite in_app_iff in Hc; destruct Hc as [Hc | Hc].
+      * simpl in H7. apply H7. assumption.
+      * apply Henv. assumption.
+    + constructor. rewrite app_length.
+      eapply H4, nth_error_In; eassumption.
+  - eapply IHredE; try eassumption.
+    constructor; [eassumption|intros xs2 v2 []|eassumption|intros; congruence].
+  - rewrite list_inc_app_left. split; [assumption|].
+    rewrite concat_incl, Forall_map, Forall_forall. intros [xs2 v2] Hxsv2. simpl.
+    apply H7 in Hxsv2. rewrite Hxsv2. intros y Hy. rewrite list_diff_In_iff, in_app_iff in Hy. tauto.
+  - eapply IHredE2; try eassumption.
+    constructor; [eassumption|eassumption|intros; apply H12; simpl; tauto|].
+    intros xs2 o [= <- <-].
+    eapply IHredE1; [| |rewrite Hxs; reflexivity].
+    + intros c Hc; rewrite in_app_iff, in_map_iff in Hc; destruct Hc as [(y & <- & Hy) | Hc].
+      * simpl. split; [constructor; assumption|]. intros z [<- | []]. rewrite in_app_iff; tauto.
+      * eapply cl_closed_mono; try eassumption. prove_list_inc.
+    + constructor. erewrite app_length, map_length, distinct_length; [|eassumption].
+      apply H12. simpl; tauto.
+  - eapply IHredE; try eassumption.
+    constructor; [eassumption| |eassumption|intros; congruence].
+    intros xs2 v Hxsv2. rewrite in_app_iff in Hxsv2; destruct Hxsv2 as [Hxsv2 | [[=<- <-] | []]].
+    + apply H8. assumption.
+    + specialize (H10 _ _ eq_refl).
+      destruct (destruct_valE_deep v2) as [[(v & ->) | (t & env2 & v & ->)] | (tag2 & l3 & v & ->)]; simpl in *; tauto.
 Qed.
 
 Lemma redE_red :
