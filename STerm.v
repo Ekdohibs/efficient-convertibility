@@ -2002,10 +2002,63 @@ Proof.
       destruct (destruct_valE_deep v2) as [[(v & ->) | (t & env2 & v & ->)] | (tag2 & l3 & v & ->)]; simpl in *; tauto.
 Qed.
 
+Lemma read_valE_deep :
+  forall (v : valE deep) xs, read_valE xs v = vald_nf (read_nfvalx_or_lam xs (getvalEd_nf v)).
+Proof.
+  intros v xs.
+  destruct (destruct_valE_deep v) as [[(v2 & ->) | (t & env & v2 & ->)] | (tag & l & v2 & ->)]; reflexivity.
+Qed.
+
+Lemma index_app :
+  forall L1 L2 x, x \in L1 -> index (L1 ++ L2) x = index L1 x.
+Proof.
+  intros L1 L2 x H. induction L1; simpl in *.
+  - tauto.
+  - destruct freevar_eq_dec; [reflexivity|]. f_equal. apply IHL1. destruct H; [congruence|tauto].
+Qed.
+
+Lemma index_app2 :
+  forall L1 L2 x, x \notin L1 -> index (L1 ++ L2) x = length L1 + index L2 x.
+Proof.
+  intros L1 L2 x H. induction L1; simpl in *.
+  - reflexivity.
+  - destruct freevar_eq_dec; subst; [simpl in *; tauto|]. f_equal.
+    apply IHL1. tauto.
+Qed.
+
+
+Lemma nth_error_index :
+  forall L p xs n x, distinct L p xs -> nth_error xs n = Some x -> index xs x = n.
+Proof.
+  intros L p xs n x H; revert n x; induction H; intros [|k] y Hy; simpl in *.
+  - congruence.
+  - congruence.
+  - destruct freevar_eq_dec; [reflexivity|]. congruence.
+  - destruct freevar_eq_dec; [|f_equal; apply IHdistinct; assumption].
+    subst. exfalso. eapply distinct_distinct; [eassumption|left; reflexivity|eapply nth_error_In; eassumption].
+Qed.
+
+Lemma read_shiftn_clo :
+  forall c ys p xs, distinct (clo_fv c) p ys -> clo_closed c -> read_clo (ys ++ xs) c = ren_term (plus_ren p) (read_clo xs c).
+Proof.
+  induction c using clo_ind2; intros ys p zs Hdistinct Hcc; inversion Hcc; subst; simpl in *.
+  - f_equal. erewrite index_app2, plus_ren_correct, distinct_length; [reflexivity|eassumption|].
+    intros H. eapply distinct_distinct; try eassumption. simpl. tauto.
+  - rewrite ren_subst. eapply subst_closed_at_ext; [eassumption|].
+    intros n Hn. unfold comp, read_env.
+    rewrite !nth_error_map.
+    destruct nth_error as [u|] eqn:Hu; [|apply nth_error_None in Hu; lia].
+    assert (u \in l) by (eapply nth_error_In; eassumption).
+    rewrite Forall_forall in H. apply H; [eassumption| |apply H4; assumption].
+    eapply distinct_incl; [|eassumption].
+    intros y Hy. rewrite concat_map_In. exists u. tauto.
+Qed.
+
+
 Lemma redE_red :
   forall df xs xs2 xs3 dom env e o, (forall c, c \in env -> clo_closed c /\ clo_fv c \subseteq xs) -> extE_closed_at e (length env) xs -> xs \subseteq xs2 -> xs \subseteq xs3 -> redE df xs2 dom env e o -> red df (read_extE xs3 env e) (out_map (read_valE xs3) o).
 Proof.
-  intros df xs xs2 xs3 dom env e o Henv He Hxs Hxs3 H. revert xs xs3 Henv He Hxs Hxs3; induction H; intros nxs nxs3 Henv He Hxs Hxs3; simpl in *; inversion He; subst.
+  intros df xs xs2 xs3 dom env e o Henv He Hxs Hxs3 H. revert xs xs3 Henv He Hxs Hxs3; induction H; intros nxs nxs3 Henv He Hxs Hxs3; simpl in *; lazymatch goal with [ _ : get_abortE _ = _ |- _ ] => idtac | _ => inversion He end; subst.
   - unfold read_env. rewrite nth_error_map, H.
     apply nth_error_In, Henv in H. destruct H as [H2 H3]. inversion H2; subst.
     apply IHredE with (xs := list_inter nxs xs2).
@@ -2018,9 +2071,9 @@ Proof.
   - unfold read_env. rewrite nth_error_map, H. constructor.
   - inversion H1; subst.
     erewrite subst_closed_at_ext; [constructor|eassumption|].
-    intros [|n] Hn; [reflexivity|]. unfold comp, read_env; simpl.
+    intros [|n] Hn; [reflexivity|]. simpl; unfold read_env, comp; simpl.
     rewrite !nth_error_map; destruct nth_error as [u|] eqn:Hu.
-    + (* rewrite read_shift_clo; [reflexivity|]. apply Henv. eapply nth_error_In; eassumption. *) reflexivity.
+    + reflexivity.
     + apply nth_error_None in Hu. lia.
   - econstructor; [|eapply IHredE2; [eassumption|constructor|eassumption|eassumption]].
     erewrite subst_closed_at_ext.
@@ -2032,7 +2085,7 @@ Proof.
         intros y [<- | Hy]; simpl; [left; reflexivity|right; apply Hxs; assumption].
       * intros y [<- | Hy]; simpl; [left; reflexivity|right; apply Hxs3; assumption].
     + inversion H5; eassumption.
-    + intros [|n] Hn; unfold comp, read_env; simpl; [destruct freevar_eq_dec; congruence|].
+    + intros [|n] Hn; simpl; unfold comp, read_env; simpl; [destruct freevar_eq_dec; congruence|].
       rewrite !nth_error_map; destruct nth_error as [u|] eqn:Hu; [|apply nth_error_None in Hu; lia].
       apply nth_error_In, Henv in Hu. destruct Hu as [Hu1 Hu2].
       rewrite read_shift_clo; [reflexivity| |apply Hu1].
@@ -2044,20 +2097,20 @@ Proof.
         split; [apply Hc1 | rewrite Hc2; prove_list_inc].
       * constructor. inversion H5; simpl; subst. assumption.
       * intros y [<- | Hy]; simpl; [left; reflexivity|right; apply Hxs; assumption].
-  - constructor.
-  - destruct (destruct_valE_deep v) as [(v2 & ->) | (t2 & env2 & v2 & ->)]; simpl in *; constructor.
+  - destruct (destruct_valE_deep v) as [[(v2 & ->) | (t2 & env2 & v2 & ->)] | (tag & l & v2 & ->)]; simpl in *; constructor.
   - econstructor; [eapply IHredE1|eapply IHredE2]; try eassumption; constructor; try (inversion H3; assumption).
     eapply redE_closed; [| | |eassumption]; [assumption| |assumption]. constructor. inversion H3; assumption.
-  - constructor.
   - econstructor; [eapply IHredE1|eapply IHredE2]; try eassumption; constructor; try assumption.
     eapply redE_closed; [| | |eassumption]; [assumption| |assumption]. constructor. assumption.
   - econstructor.
     unfold subst1. rewrite subst_subst.
     erewrite subst_closed_at_ext; [eapply IHredE| |].
     + intros c [<- | Hc]; [|simpl in H8; apply H8; assumption].
-      destruct t2; try (split; simpl; [constructor; [assumption|intros; rewrite <- H, <- Hxs; apply Henv; assumption] | rewrite concat_incl, Forall_map, Forall_forall; intros; apply Henv; assumption]).
-      destruct nth_error eqn:Hu; [|split; simpl; [constructor; [assumption|intros; rewrite <- H, <- Hxs; apply Henv; assumption] | rewrite concat_incl, Forall_map, Forall_forall; intros; apply Henv; assumption]].
-      eapply Henv, nth_error_In; eassumption.
+      destruct env_get_maybe_var as [c|] eqn:Hc; [eapply Henv, env_get_maybe_var_in; eassumption|].
+      split; simpl.
+      * constructor; [assumption|]. eapply cl_closed_mono; [eassumption|]. transitivity xs; assumption.
+      * rewrite concat_incl, Forall_map, Forall_forall.
+        intros; apply Henv; assumption.
     + simpl in H8. constructor. apply H8.
     + assumption.
     + assumption.
@@ -2070,8 +2123,116 @@ Proof.
       * rewrite !nth_error_map; destruct nth_error as [u|] eqn:Hu; [|apply nth_error_None in Hu; lia].
         rewrite subst_ren; unfold comp; simpl.
         erewrite subst_ext; [apply subst_id|]; intros; f_equal; lia.
+  - destruct (destruct_valE_deep v2) as [[(v & ->) | (t & env2 & v & ->)] | (tag & l & v & ->)]; simpl in *; constructor.
+  - replace (map (read_clo nxs3) lc) with (map (subst (read_env (map (read_clo nxs3) env))) l); [constructor|].
+    eapply Forall2_map_eq, Forall2_impl; [|eassumption]. intros t c Htc; simpl in *.
+    destruct env_get_maybe_var as [c1|] eqn:Hc1.
+    + subst. destruct t; simpl in *; try congruence.
+      unfold read_env. rewrite nth_error_map, Hc1. reflexivity.
+    + destruct Htc as (xs2 & Hxs2a & Hxs2b & ->). reflexivity.
+  - replace (map (read_clo nxs3) lc) with (map (subst (read_env (map (read_clo nxs3) env))) l); [constructor|].
+    + eapply IHredE; try eassumption.
+      constructor; [|intros _ []|intros; congruence|inversion H3; assumption].
+      intros c Hc. destruct (Forall2_In_right _ _ _ _ _ _ H Hc) as (t & Ht1 & Htc).
+      destruct env_get_maybe_var eqn:Hc1.
+      * subst. apply Henv. eapply env_get_maybe_var_in; eassumption.
+      * destruct Htc as (xs2 & Hxs2a & Hxs2b & ->).
+        split; simpl.
+        -- constructor; [inversion H3; subst; apply H5; assumption|].
+           eapply cl_closed_mono; [eassumption|]. transitivity xs; assumption.
+        -- rewrite concat_incl, Forall_map, Forall_forall.
+           intros; apply Henv; assumption.
+    + eapply Forall2_map_eq, Forall2_impl; [|eassumption]. intros t c Htc; simpl in *.
+      destruct env_get_maybe_var as [c1|] eqn:Hc1.
+      * subst. destruct t; simpl in *; try congruence.
+        unfold read_env. rewrite nth_error_map, Hc1. reflexivity.
+      * destruct Htc as (xs2 & Hxs2a & Hxs2b & ->). reflexivity.
   - constructor.
-  - destruct (destruct_valE_deep v2) as [(v & ->) | (t & env2 & v & ->)]; simpl in *; constructor.
+  - econstructor.
+    + eapply IHredE1; try eassumption.
+      constructor. apply H11. simpl. tauto.
+    + eapply IHredE2; try eassumption.
+      constructor; try assumption; [|intros; apply H11; simpl; tauto].
+      intros o [=<-]. eapply redE_closed; [| | |eassumption]; try assumption.
+      constructor. apply H11. simpl. tauto.
+  - rewrite read_valE_deep. econstructor.
+    rewrite <- map_app with (f := read_nfvalx_or_lam nxs3) (l' := getvalEd_nf v :: nil).
+    eapply IHredE; try eassumption.
+    constructor; [eassumption| |intros; congruence|eassumption].
+    intros v2 Hv2. rewrite in_app_iff in Hv2; simpl in Hv2.
+    destruct Hv2 as [Hv2 | [<- | []]]; [apply H8; assumption|].
+    specialize (H9 _ eq_refl). simpl in H9.
+    destruct (destruct_valE_deep v) as [[(v2 & ->) | (t & env2 & v2 & ->)] | (tag2 & l3 & v2 & ->)]; simpl in *; tauto.
+  - econstructor.
+    + eapply IHredE1; try eassumption. constructor. inversion H3; subst; assumption.
+    + eapply IHredE2; try eassumption.
+      inversion H3; subst.
+      constructor; [assumption|]. eapply redE_closed; [| | |eassumption]; try eassumption.
+      constructor. assumption.
+  - econstructor; [rewrite nth_error_map, H, map_length; simpl; reflexivity|].
+    rewrite subst_subst.
+    erewrite subst_closed_at_ext; [eapply IHredE; try eassumption|eapply H4, nth_error_In; eassumption|].
+    + intros c Hc; rewrite in_app_iff in Hc; destruct Hc as [Hc | Hc]; [|apply Henv; assumption].
+      apply H7; assumption.
+    + constructor. rewrite app_length. eapply H4, nth_error_In; eassumption.
+    + intros n Hn. unfold comp, liftn_subst, read_env.
+      destruct le_lt_dec.
+      * rewrite !nth_error_map, nth_error_app2 by assumption.
+        destruct (nth_error env _) as [c|] eqn:Hc; [|apply nth_error_None in Hc; lia].
+        rewrite subst_ren. erewrite subst_ext; [apply subst_id|]. intros n2. simpl.
+        unfold comp; simpl. rewrite nth_error_map, plus_ren_correct, map_length.
+        replace (nth_error l (length l + n2)) with (@None clo) by (symmetry; apply nth_error_None; lia).
+        f_equal. lia.
+      * simpl. rewrite !nth_error_map, nth_error_app1 by assumption.
+        destruct (nth_error l _) as [c|] eqn:Hc; [|apply nth_error_None in Hc; lia]. reflexivity.
+  - constructor. eapply IHredE; try eassumption.
+    constructor; [assumption|intros xs2 v2 []|eassumption|intros; congruence].
+  - constructor.
+  - econstructor.
+    + erewrite subst_closed_at_ext; [apply (IHredE1 (ys ++ nxs) (ys ++ nxs3))|apply H12; left; reflexivity|].
+      * intros c Hc; rewrite in_app_iff, in_map_iff in Hc.
+        destruct Hc as [(y & <- & Hy) | Hc]; [split; [constructor|]; intros z [<- | []]; rewrite in_app_iff; tauto|].
+        eapply cl_closed_mono; try eassumption. prove_list_inc.
+      * erewrite app_length, map_length, distinct_length by eassumption. constructor.
+        apply H12. simpl. tauto.
+      * rewrite Hxs. prove_list_inc.
+      * rewrite Hxs3. prove_list_inc.
+      * intros n Hn. unfold liftn_subst, read_env.
+        destruct le_lt_dec.
+        -- rewrite !nth_error_map, nth_error_app2 by (erewrite map_length, distinct_length; eassumption).
+           erewrite !map_length, app_length, map_length, distinct_length by eassumption.
+           destruct nth_error eqn:Hu.
+           ++ erewrite read_shiftn_clo; [reflexivity| |eapply Henv, nth_error_In; eassumption].
+             eapply distinct_incl; [|eassumption].
+             rewrite <- Hxs. eapply Henv, nth_error_In; eassumption.
+           ++ apply nth_error_None in Hu. lia.
+        -- rewrite nth_error_map, nth_error_app1, nth_error_map by (erewrite map_length, distinct_length; eassumption).
+           destruct nth_error as [y|] eqn:Hy.
+           ++ simpl. f_equal. rewrite index_app; [|eapply nth_error_In; eassumption].
+             symmetry; eapply nth_error_index; eassumption.
+           ++ apply nth_error_None in Hy. erewrite distinct_length in Hy by eassumption. lia.
+    + replace p with (length ys) by (eapply distinct_length; eassumption).
+      eapply IHredE2; try eassumption.
+      constructor; [eassumption|eassumption|intros; apply H12; simpl; tauto|].
+      intros xs2 o [=<- <-]. eapply redE_closed; [| | |eassumption].
+      * intros c Hc; rewrite in_app_iff, in_map_iff in Hc.
+        destruct Hc as [(y & <- & Hy) | Hc]; [split; [constructor|]; intros z [<- | []]; rewrite in_app_iff; tauto|].
+        eapply cl_closed_mono; try eassumption. prove_list_inc.
+      * erewrite app_length, map_length, distinct_length by eassumption. constructor.
+        apply H12. simpl. tauto.
+      * rewrite Hxs. prove_list_inc.
+  - rewrite read_valE_deep. econstructor.
+    rewrite <- map_app with (f := fun pt2 => (length (fst pt2), read_nfvalx_or_lam (fst pt2 ++ nxs3) (snd pt2))) (l' := (ys, getvalEd_nf v2) :: nil).
+    eapply IHredE; try eassumption.
+    constructor; [eassumption| |eassumption|intros; congruence].
+    intros xs2 v Hxsv2. rewrite in_app_iff in Hxsv2; simpl in Hxsv2.
+    destruct Hxsv2 as [Hxsv2 | [[=<- <-] | []]]; [apply H8; assumption|].
+    specialize (H10 _ _ eq_refl). simpl in H10.
+    destruct (destruct_valE_deep v2) as [[(v & ->) | (t & env2 & v & ->)] | (tag2 & l3 & v & ->)]; simpl in *; tauto.
+  - constructor.
+    destruct e; simpl in *; try congruence; try (destruct o0; simpl in *; autoinjSome; simpl; congruence).
+    + destruct o0 as [[? o0]|]; simpl in *; [destruct o0; simpl in *; autoinjSome; simpl|]; congruence.
+    + destruct o0 as [o0|]; simpl in *; [destruct o0; simpl in *; autoinjSome; simpl|]; congruence.
 Qed.
 
 Definition extE_shallow_to_deep (e : extE shallow) : extE deep :=
