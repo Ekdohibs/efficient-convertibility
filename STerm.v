@@ -2240,7 +2240,10 @@ Definition extE_shallow_to_deep (e : extE shallow) : extE deep :=
   | extE_term t => extE_term t
   | extE_app o1 t2 => extE_app o1 t2
   | extE_appnf v1 o2 => extE_appnf v1 o2
+  | extE_switch o m => extE_switch o m
+  | extE_switchnf v m1 o m2 => extE_switchnf v m1 o m2
   | extEd_abs x t o => extEd_abs x t o
+  | extEd_constr tag l l1 o l2 => extEd_constr tag l l1 o l2
   end.
 
 Definition extE_deep_to_shallow (e : extE deep) : option (extE shallow) :=
@@ -2248,7 +2251,10 @@ Definition extE_deep_to_shallow (e : extE deep) : option (extE shallow) :=
   | extE_term t => Some (extE_term t)
   | extE_app o1 t2 => Some (extE_app o1 t2)
   | extE_appnf v1 o2 => Some (extE_appnf v1 o2)
+  | extE_switch o m => Some (extE_switch o m)
+  | extE_switchnf v m1 o m2 => Some (extE_switchnf v m1 o m2)
   | extEd_abs x t o => None
+  | extEd_constr tag l l1 o l2 => None
   end.
 
 Lemma redE_shallow_deep_val_aux :
@@ -2268,6 +2274,18 @@ Proof.
   - econstructor; [eassumption|eassumption|].
     eapply (IHredE eq_refl). eassumption.
   - injection Ho as Ho; subst. constructor.
+  - econstructor; [eassumption|].
+    eapply (IHredE2 eq_refl). eassumption.
+  - econstructor; [eassumption|].
+    eapply (IHredE eq_refl). eassumption.
+  - econstructor.
+    eapply (IHredE eq_refl). eassumption.
+  - injection Ho as Ho; subst. econstructor.
+  - econstructor; try eassumption.
+    eapply (IHredE2 eq_refl). eassumption.
+  - econstructor.
+    eapply (IHredE eq_refl). eassumption.
+  - subst. apply out_abort_div in H. congruence.
 Qed.
 
 Lemma redE_shallow_deep_val :
@@ -2302,6 +2320,20 @@ Proof.
     econstructor; [|eassumption]. eapply redE_dom_mono; eassumption.
   - intros o3 dom2 Hxs Hdom2 Ho3.
     econstructor; [| |eapply IHredE with (p := eq_refl)]; try eassumption. etransitivity; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    specialize (IHredE2 eq_refl nt nenv Ho o3 dom2 Hxs Hdom2 Ho3). simpl in IHredE2.
+    econstructor; [|eassumption]. eapply redE_dom_mono; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    econstructor; [eassumption|].
+    eapply (IHredE eq_refl); eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    econstructor. eapply (IHredE eq_refl); eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    specialize (IHredE2 eq_refl nt nenv Ho o3 dom2 Hxs Hdom2 Ho3). simpl in IHredE2.
+    econstructor; [eassumption|etransitivity; eassumption|eapply redE_dom_mono; eassumption|eassumption].
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    econstructor. eapply (IHredE eq_refl); eassumption.
+  - subst. apply out_abort_div in H. congruence.
 Qed.
 
 Lemma redE_shallow_deep_abs :
@@ -2313,6 +2345,77 @@ Proof.
   exact (redE_shallow_deep_abs_aux shallow xs dom env e _ H eq_refl t env2 eq_refl).
 Qed.
 
+Lemma redE_deep_constr_aux :
+  forall df xs dom env e o, redE df xs dom env e o -> forall (p : df = deep) tag l l1 o2 l2 v,
+      match p in _ = df return extE df with eq_refl => e end = extEd_constr tag l l1 o2 l2 ->
+      o = out_ret v -> exists v2, match p in _ = df return valE df with eq_refl => v end = valEd_constr tag l v2.
+Proof.
+  intros df xs dom env e o H.
+  induction H; try destruct df; intros Hdf; try discriminate Hdf; rewrite (UIP_dec deep_flag_eq_dec Hdf eq_refl);
+    intros tag2 l3 l4 o3 l5 v3 He Ho; try discriminate He; try discriminate Ho.
+  - injection He; intros; subst. injection Ho; intros; subst.
+    eexists. reflexivity.
+  - injection He; intros; subst.
+    eapply (IHredE2 eq_refl); reflexivity.
+  - injection He; intros; subst.
+    eapply (IHredE eq_refl); reflexivity.
+  - subst. apply out_abort_div in H. congruence.
+Qed.
+
+Lemma redE_deep_constr :
+  forall xs dom env tag l l1 o2 l2 v, redE deep xs dom env (extEd_constr tag l l1 o2 l2) (out_ret v) ->
+                                 exists v2, v = valEd_constr tag l v2.
+Proof.
+  intros xs dom env tag l l1 o2 l2 v H.
+  exact (redE_deep_constr_aux deep xs dom env _ _ H eq_refl _ _ _ _ _ _ eq_refl eq_refl).
+Qed.
+
+Lemma redE_shallow_deep_constr_aux :
+  forall df xs dom env e o,
+    redE df xs dom env e o -> forall (p : df = shallow) tag l, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valEs_constr tag l) ->
+    forall o2 dom2, xs \subseteq dom -> dom \subseteq dom2 -> redE deep dom dom2 env2 (extE_term (abs t)) o2 -> redE deep xs dom2 env (extE_shallow_to_deep (match p in _ = df return extE df with eq_refl => e end)) o2.
+Proof.
+  intros df xs dom env e o H.
+  induction H; try destruct df; intros Hdf; try discriminate Hdf; rewrite (UIP_dec deep_flag_eq_dec Hdf eq_refl);
+    intros nt nenv Ho; try discriminate Ho; simpl.
+  - subst. intros o2 dom2 Hxs Hdom2 Ho2.
+    econstructor; [eassumption|etransitivity; eassumption|].
+    eapply IHredE with (p := eq_refl); [reflexivity|assumption|assumption|assumption].
+  - injection Ho as Ho; subst.
+    intros o2 dom2 Hxs Hdom2 Ho2. eapply redE_xs_mono; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    specialize (IHredE2 eq_refl nt nenv Ho o3 dom2 Hxs Hdom2 Ho3). simpl in IHredE2.
+    econstructor; [|eassumption]. eapply redE_dom_mono; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3. specialize (IHredE2 eq_refl nt nenv Ho o3 dom2 Hxs Hdom2 Ho3). simpl in IHredE2.
+    econstructor; [|eassumption]. eapply redE_dom_mono; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    econstructor; [| |eapply IHredE with (p := eq_refl)]; try eassumption. etransitivity; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    specialize (IHredE2 eq_refl nt nenv Ho o3 dom2 Hxs Hdom2 Ho3). simpl in IHredE2.
+    econstructor; [|eassumption]. eapply redE_dom_mono; eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    econstructor; [eassumption|].
+    eapply (IHredE eq_refl); eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    econstructor. eapply (IHredE eq_refl); eassumption.
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    specialize (IHredE2 eq_refl nt nenv Ho o3 dom2 Hxs Hdom2 Ho3). simpl in IHredE2.
+    econstructor; [eassumption|etransitivity; eassumption|eapply redE_dom_mono; eassumption|eassumption].
+  - intros o3 dom2 Hxs Hdom2 Ho3.
+    econstructor. eapply (IHredE eq_refl); eassumption.
+  - subst. apply out_abort_div in H. congruence.
+Qed.
+
+Lemma redE_shallow_deep_abs :
+  forall xs dom env env2 e t,
+    redE shallow xs dom env e (out_ret (valEs_abs t env2)) ->
+    forall o dom2, xs \subseteq dom -> dom \subseteq dom2 -> redE deep dom dom2 env2 (extE_term (abs t)) o -> redE deep xs dom2 env (extE_shallow_to_deep e) o.
+Proof.
+  intros xs dom env env2 e t H.
+  exact (redE_shallow_deep_abs_aux shallow xs dom env e _ H eq_refl t env2 eq_refl).
+Qed.
+
+
 Lemma redE_deep_shallow_abs_aux :
   forall df xs dom env e o,
     redE df xs dom env e o -> forall (p : df = deep) t env2 v, (match p in _ = df return out (valE df) with eq_refl => o end) = out_ret (valEd_abs t env2 v) ->
@@ -2320,15 +2423,27 @@ Lemma redE_deep_shallow_abs_aux :
 Proof.
   intros df xs dom env e o H.
   induction H; try destruct df; intros Hdf; try discriminate Hdf; rewrite (UIP_dec deep_flag_eq_dec Hdf eq_refl);
-    intros nt nenv nv Ho e2 He2; try discriminate Ho; subst; simpl in *; try discriminate He2; injection He2 as <-.
+    intros nt nenv nv Ho e2 He2; try discriminate Ho; subst; simpl in *; try discriminate; autoinjSome.
   - econstructor; [eassumption|eassumption|]. eapply (IHredE eq_refl); reflexivity.
-  - inversion H2; subst. constructor.
+  - inversion H2; subst.
+    + constructor.
+    + unexistT; subst. apply out_abort_div in H9. congruence.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl); reflexivity.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl); reflexivity.
   - econstructor; [eassumption|eassumption|].
     eapply (IHredE eq_refl); reflexivity.
+  - apply redE_deep_constr in H0. destruct H0 as (v2 & H0); congruence.
+  - econstructor; [eassumption|].
+    eapply (IHredE2 eq_refl); reflexivity.
+  - econstructor; [eassumption|].
+    eapply (IHredE eq_refl); reflexivity.
+  - econstructor. eapply (IHredE eq_refl); reflexivity.
+  - econstructor; try eassumption.
+    eapply (IHredE2 eq_refl); reflexivity.
+  - econstructor. eapply (IHredE eq_refl); reflexivity.
+  - apply out_abort_div in H. congruence.
 Qed.
 
 Lemma redE_deep_shallow_abs :
@@ -2347,10 +2462,11 @@ Lemma redE_deep_shallow_val_aux :
 Proof.
   intros df xs dom env e o H.
   induction H; try destruct df; intros Hdf; try discriminate Hdf; rewrite (UIP_dec deep_flag_eq_dec Hdf eq_refl);
-    intros nv Ho e2 He2; try discriminate Ho; subst; simpl in *; try discriminate He2; injection He2 as <-.
+    intros nv Ho e2 He2; try discriminate Ho; subst; simpl in *; try discriminate; autoinjSome.
   - econstructor; [eassumption|eassumption|]. eapply (IHredE eq_refl); reflexivity.
   - inversion Ho; intros; subst. constructor. assumption.
-  - inversion H2.
+  - inversion H2; unexistT; subst.
+    apply out_abort_div in H9. congruence.
   - econstructor; [eassumption|].
     eapply (IHredE2 eq_refl); reflexivity.
   - econstructor; [eassumption|].
@@ -2358,6 +2474,16 @@ Proof.
   - econstructor; [eassumption|eassumption|].
     eapply (IHredE eq_refl); reflexivity.
   - injection Ho; intros; subst. constructor.
+  - apply redE_deep_constr in H0. destruct H0 as (v2 & H0); congruence.
+  - econstructor; [eassumption|].
+    eapply (IHredE2 eq_refl); reflexivity.
+  - econstructor; [eassumption|].
+    eapply (IHredE eq_refl); reflexivity.
+  - econstructor. eapply (IHredE eq_refl); reflexivity.
+  - injection Ho; intros; subst. constructor.
+  - econstructor; try eassumption. eapply (IHredE2 eq_refl); reflexivity.
+  - econstructor; try eassumption. eapply (IHredE eq_refl); reflexivity.
+  - apply out_abort_div in H. congruence.
 Qed.
 
 Lemma redE_deep_shallow_val :
