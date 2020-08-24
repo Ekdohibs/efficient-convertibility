@@ -6,6 +6,7 @@ Require Import Psatz.
 Require Import Star.
 Require Import Coq.Logic.Eqdep_dec.
 Require Import FEnv.
+Require Import Inductive.
 
 Definition renaming := list nat.
 Fixpoint renv (L : renaming) (n : nat) : nat :=
@@ -1318,20 +1319,24 @@ Definition read_valE {df} (xs : list freevar) (v : valE df) : val df :=
   end.
 
 Inductive extE : deep_flag -> Type :=
-| extE_term : forall df, term -> extE df
-| extE_app : forall df, out (valE shallow) -> term -> extE df
-| extE_appnf : forall df, nfvalx -> out (valE deep) -> extE df
-| extE_switch : forall df, out (valE shallow) -> list (nat * term) -> extE df
-| extE_switchnf : forall df, nfvalx -> list (list freevar * nfvalx_or_lam) ->
-                        option (list freevar * out (valE deep)) -> list (nat * term) -> extE df
-| extEd_abs : freevar -> term -> out (valE deep) -> extE deep
-| extEd_constr : nat -> list clo -> list nfvalx_or_lam -> option (out (valE deep)) -> list clo -> extE deep.
+| extE_term : forall df, list clo -> term -> extE df
+| extE_clo : forall df, clo -> extE df
+| extE_app : forall df, list clo -> out (valE shallow) -> term -> extE df
+| extE_appnf : forall df, list clo -> nfvalx -> out (valE deep) -> extE df
+| extE_switch : forall df, list clo -> out (valE shallow) -> list (nat * term) -> extE df
+| extE_switchnf1 : forall df, list clo -> nfvalx -> list (list freevar * nfvalx_or_lam) -> list (nat * term) -> extE df
+| extE_switchnf2 : forall df, list clo -> nfvalx -> list (list freevar * nfvalx_or_lam) -> list freevar -> out (valE deep) -> list (nat * term) -> extE df
+| extEd_abs : list clo -> freevar -> term -> out (valE deep) -> extE deep
+| extEd_constr1 : nat -> list clo -> list nfvalx_or_lam -> list clo -> extE deep
+| extEd_constr2 : nat -> list clo -> list nfvalx_or_lam -> out (valE deep) -> list clo -> extE deep.
 
-Arguments extE_term {df} _.
-Arguments extE_app {df} _ _.
-Arguments extE_appnf {df} _ _.
-Arguments extE_switch {df} _ _.
-Arguments extE_switchnf {df} _ _ _ _.
+Arguments extE_term {df} _ _.
+Arguments extE_clo {df} _.
+Arguments extE_app {df} _ _ _.
+Arguments extE_appnf {df} _ _ _.
+Arguments extE_switch {df} _ _ _.
+Arguments extE_switchnf1 {df} _ _ _ _.
+Arguments extE_switchnf2 {df} _ _ _ _ _ _.
 
 Fixpoint nfvalx_fv v :=
   match v with
@@ -1389,29 +1394,43 @@ Proof.
   eapply valE_closed_mono; eassumption.
 Qed.
 
-Inductive extE_closed_at : forall {df}, extE df -> nat -> list freevar -> Prop :=
-| extE_term_closed : forall df t k xs, closed_at t k -> extE_closed_at (@extE_term df t) k xs
-| extE_app_closed : forall df o t k xs, closed_at t k -> outE_closed xs o -> extE_closed_at (@extE_app df o t) k xs
-| extE_appnf_closed : forall df v o k xs,
-    nfvalx_fv v \subseteq xs -> outE_closed xs o -> extE_closed_at (@extE_appnf df v o) k xs
-| extE_switch_closed : forall df o m k xs,
-    (forall p t2, (p, t2) \in m -> closed_at t2 (p + k)) ->
+Inductive extE_closed_at : forall {df}, extE df -> list freevar -> Prop :=
+| extE_term_closed : forall df env t xs, cl_closed xs env -> closed_at t (length env) -> extE_closed_at (@extE_term df env t) xs
+| extE_clo_closed : forall df c xs, clo_closed c -> clo_fv c \subseteq xs -> extE_closed_at (@extE_clo df c) xs
+| extE_app_closed : forall df env o t xs, cl_closed xs env -> closed_at t (length env) -> outE_closed xs o -> extE_closed_at (@extE_app df env o t) xs
+| extE_appnf_closed : forall df env v o xs,
+    cl_closed xs env -> nfvalx_fv v \subseteq xs -> outE_closed xs o -> extE_closed_at (@extE_appnf df env v o) xs
+| extE_switch_closed : forall df env o m xs,
+    cl_closed xs env ->
+    (forall p t2, (p, t2) \in m -> closed_at t2 (p + length env)) ->
     outE_closed xs o ->
-    extE_closed_at (@extE_switch df o m) k xs
-| extE_switchnf_closed : forall df v m1 o m2 k xs,
+    extE_closed_at (@extE_switch df env o m) xs
+| extE_switchnf1_closed : forall df env v m1 m2 xs,
+    cl_closed xs env ->
     nfvalx_fv v \subseteq xs ->
     (forall xs2 v2, (xs2, v2) \in m1 -> nfvalx_or_lam_fv v2 \subseteq xs2 ++ xs) ->
-    (forall p t2, (p, t2) \in m2 -> closed_at t2 (p + k)) ->
-    (forall xs2 o2, o = Some (xs2, o2) -> outE_closed (xs2 ++ xs) o2) ->
-    extE_closed_at (@extE_switchnf df v m1 o m2) k xs
-| extEd_abs_closed : forall o t k x xs,
-    closed_at t (S k) -> outE_closed (x :: xs) o -> extE_closed_at (extEd_abs x t o) k xs
-| extEd_constr_closed : forall tag l l1 o l2 k xs,
+    (forall p t2, (p, t2) \in m2 -> closed_at t2 (p + length env)) ->
+    extE_closed_at (@extE_switchnf1 df env v m1 m2) xs
+| extE_switchnf_closed : forall df env v m1 xs2 o m2 xs,
+    cl_closed xs env ->
+    nfvalx_fv v \subseteq xs ->
+    (forall xs2 v2, (xs2, v2) \in m1 -> nfvalx_or_lam_fv v2 \subseteq xs2 ++ xs) ->
+    (forall p t2, (p, t2) \in m2 -> closed_at t2 (p + length env)) ->
+    outE_closed (xs2 ++ xs) o ->
+    extE_closed_at (@extE_switchnf2 df env v m1 xs2 o m2) xs
+| extEd_abs_closed : forall env o t x xs,
+    cl_closed xs env -> closed_at t (S (length env)) -> outE_closed (x :: xs) o -> extE_closed_at (extEd_abs env x t o) xs
+| extEd_constr1_closed : forall tag l l1 l2 xs,
     cl_closed xs l ->
     (forall v, v \in l1 -> nfvalx_or_lam_fv v \subseteq xs) ->
-    (forall o2, o = Some o2 -> outE_closed xs o2) ->
     cl_closed xs l2 ->
-    extE_closed_at (extEd_constr tag l l1 o l2) k xs.
+    extE_closed_at (extEd_constr1 tag l l1 l2) xs
+| extEd_constr2_closed : forall tag l l1 o l2 xs,
+    cl_closed xs l ->
+    (forall v, v \in l1 -> nfvalx_or_lam_fv v \subseteq xs) ->
+    outE_closed xs o ->
+    cl_closed xs l2 ->
+    extE_closed_at (extEd_constr2 tag l l1 o l2) xs.
 
 Definition out_map {A B : Type} (f : A -> B) (o : out A) : out B :=
   match o with
@@ -1419,26 +1438,38 @@ Definition out_map {A B : Type} (f : A -> B) (o : out A) : out B :=
   | out_div => out_div
   end.
 
-Definition read_extE {df} xs env (e : extE df) : ext df :=
+Definition read_extE {df} xs (e : extE df) : ext df :=
   match e with
-  | extE_term t => ext_term (read_clo xs (clo_term xs t env))
-  | extE_app o1 t2 => ext_app (out_map (read_valE xs) o1) (read_clo xs (clo_term xs t2 env))
-  | extE_appnf v1 o2 => ext_appnf (read_nfvalx xs v1) (out_map (read_valE xs) o2)
-  | extE_switch o m =>
+  | extE_term env t => ext_term (read_clo xs (clo_term xs t env))
+  | extE_clo c => ext_term (read_clo xs c)
+  | extE_app env o1 t2 => ext_app (out_map (read_valE xs) o1) (read_clo xs (clo_term xs t2 env))
+  | extE_appnf env v1 o2 => ext_appnf (read_nfvalx xs v1) (out_map (read_valE xs) o2)
+  | extE_switch env o m =>
     ext_switch
       (out_map (read_valE xs) o)
       (map (fun pt2 => (fst pt2, subst (liftn_subst (fst pt2) (read_env (map (read_clo xs) env))) (snd pt2))) m)
-  | extE_switchnf v m1 o m2 =>
+  | extE_switchnf1 env v m1 m2 =>
     ext_switchnf
       (read_nfvalx xs v)
       (map (fun pt2 => (length (fst pt2), read_nfvalx_or_lam (fst pt2 ++ xs) (snd pt2))) m1)
-      (option_map (fun o => (length (fst o), out_map (read_valE (fst o ++ xs)) (snd o))) o)
+      None
       (map (fun pt2 => (fst pt2, subst (liftn_subst (fst pt2) (read_env (map (read_clo xs) env))) (snd pt2))) m2)
-  | extEd_abs x t o => extd_abs (out_map (read_valE (x :: xs)) o)
-  | extEd_constr tag l l1 o l2 =>
+  | extE_switchnf2 env v m1 xs2 o m2 =>
+    ext_switchnf
+      (read_nfvalx xs v)
+      (map (fun pt2 => (length (fst pt2), read_nfvalx_or_lam (fst pt2 ++ xs) (snd pt2))) m1)
+      (Some (length xs2, out_map (read_valE (xs2 ++ xs)) o))
+      (map (fun pt2 => (fst pt2, subst (liftn_subst (fst pt2) (read_env (map (read_clo xs) env))) (snd pt2))) m2)
+  | extEd_abs env x t o => extd_abs (out_map (read_valE (x :: xs)) o)
+  | extEd_constr1 tag l l1 l2 =>
     extd_constr tag
                 (map (read_nfvalx_or_lam xs) l1)
-                (option_map (out_map (read_valE xs)) o)
+                None
+                (map (read_clo xs) l2)
+  | extEd_constr2 tag l l1 o l2 =>
+    extd_constr tag
+                (map (read_nfvalx_or_lam xs) l1)
+                (Some (out_map (read_valE xs) o))
                 (map (read_clo xs) l2)
   end.
 
@@ -1457,13 +1488,16 @@ Definition getvalEd_nf (v : valE deep) : nfvalx_or_lam :=
 
 Definition get_abortE {df t} (e : extE df) : option (out t) :=
   match e with
-  | extE_term _ => None
-  | extE_app o _ => get_out_abort o
-  | extE_appnf _ o => get_out_abort o
-  | extE_switch o _ => get_out_abort o
-  | extE_switchnf _ _ o _ => match o with Some (_, o) => get_out_abort o | None => None end
-  | extEd_abs _ _ o => get_out_abort o
-  | extEd_constr _ _ _ o _ => match o with Some o => get_out_abort o | None => None end
+  | extE_term _ _ => None
+  | extE_clo _ => None
+  | extE_app _ o _ => get_out_abort o
+  | extE_appnf _ _ o => get_out_abort o
+  | extE_switch _ o _ => get_out_abort o
+  | extE_switchnf1 _ _ _ _ => None
+  | extE_switchnf2 _ _ _ _ o _ => get_out_abort o
+  | extEd_abs _ _ _ o => get_out_abort o
+  | extEd_constr1 _ _ _ _ => None
+  | extEd_constr2 _ _ _ o _ => get_out_abort o
   end.
 
 Definition env_get_maybe_var {A: Type} (env : list A) t :=
@@ -1472,147 +1506,141 @@ Definition env_get_maybe_var {A: Type} (env : list A) t :=
   | _ => None
   end.
 
-Inductive redE : forall df, list freevar -> list freevar -> list clo -> extE df -> out (valE df) -> Prop :=
-| redE_var_bound : forall df xs xs2 dom env n t2 env2 o,
-    nth_error env n = Some (clo_term xs2 t2 env2) -> xs2 \subseteq dom ->
-    redE df xs2 dom env2 (extE_term t2) o ->
-    redE df xs dom env (extE_term (var n)) o
-| redE_var_free : forall df x xs dom env n,
-    nth_error env n = Some (clo_var x) ->
-    redE df xs dom env (extE_term (var n)) (out_ret (valE_nf (nxvar x)))
+Inductive redE : forall df, list freevar -> list freevar -> extE df -> out (valE df) -> Prop :=
+| redE_clo_term : forall df xs xs2 dom t env o,
+    xs2 \subseteq dom -> redE df xs2 dom (extE_term env t) o -> redE df xs dom (extE_clo (clo_term xs2 t env)) o
+| redE_clo_var : forall df xs dom x, redE df xs dom (extE_clo (clo_var x)) (out_ret (valE_nf (nxvar x)))
+| redE_var : forall df xs dom env n c o,
+    nth_error env n = Some c ->
+    redE df xs dom (extE_clo c) o ->
+    redE df xs dom (extE_term env (var n)) o
 | redE_abs_shallow : forall t xs dom env,
-    redE shallow xs dom env (extE_term (abs t)) (out_ret (valEs_abs t env))
+    redE shallow xs dom (extE_term env (abs t)) (out_ret (valEs_abs t env))
 | redE_abs_deep : forall t x xs dom env o1 o2,
     x \notin xs -> x \in dom ->
-    redE deep (x :: xs) dom (clo_var x :: env) (extE_term t) o1 ->
-    redE deep xs dom env (extEd_abs x t o1) o2 ->
-    redE deep xs dom env (extE_term (abs t)) o2
-| redE_abs1 : forall x t xs dom env v, redE deep xs dom env (extEd_abs x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
+    redE deep (x :: xs) dom (extE_term (clo_var x :: env) t) o1 ->
+    redE deep xs dom (extEd_abs env x t o1) o2 ->
+    redE deep xs dom (extE_term env (abs t)) o2
+| redE_abs1 : forall x t xs dom env v, redE deep xs dom (extEd_abs env x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
 | redE_app : forall df xs dom env t1 o1 t2 o2,
-    redE shallow xs dom env (extE_term t1) o1 ->
-    redE df xs dom env (extE_app o1 t2) o2 ->
-    redE df xs dom env (extE_term (app t1 t2)) o2
+    redE shallow xs dom (extE_term env t1) o1 ->
+    redE df xs dom (extE_app env o1 t2) o2 ->
+    redE df xs dom (extE_term env (app t1 t2)) o2
 | redE_app1_nf : forall df xs dom env v o1 t2 o2,
-    redE deep xs dom env (extE_term t2) o1 ->
-    redE df xs dom env (extE_appnf v o1) o2 ->
-    redE df xs dom env (extE_app (out_ret (valE_nf v)) t2) o2
+    redE deep xs dom (extE_term env t2) o1 ->
+    redE df xs dom (extE_appnf env v o1) o2 ->
+    redE df xs dom (extE_app env (out_ret (valE_nf v)) t2) o2
 | redE_app1_abs : forall df xs xs2 dom env env2 t1 t2 o,
     xs \subseteq xs2 -> xs2 \subseteq dom ->
-    redE df xs dom (match env_get_maybe_var env t2 with Some c => c | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
-    redE df xs dom env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
-| redE_appnf : forall df xs dom env v1 v2, redE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2))))
+    redE df xs dom (extE_term (match env_get_maybe_var env t2 with Some c => c | _ => clo_term xs2 t2 env end :: env2) t1) o ->
+    redE df xs dom (extE_app env (out_ret (valEs_abs t1 env2)) t2) o
+| redE_appnf : forall df xs dom env v1 v2, redE df xs dom (extE_appnf env v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2))))
 | redE_constr_shallow : forall xs dom env tag l lc,
     Forall2 (fun t c => match env_get_maybe_var env t with Some c1 => c = c1 | None => exists xs2, xs \subseteq xs2 /\ xs2 \subseteq dom /\ c = clo_term xs2 t env end) l lc ->
-    redE shallow xs dom env (extE_term (constr tag l)) (out_ret (valEs_constr tag lc))
+    redE shallow xs dom (extE_term env (constr tag l)) (out_ret (valEs_constr tag lc))
 | redE_constr_deep : forall xs dom env tag l lc o,
     Forall2 (fun t c => match env_get_maybe_var env t with Some c1 => c = c1 | None => exists xs2, xs \subseteq xs2 /\ xs2 \subseteq dom /\ c = clo_term xs2 t env end) l lc ->
-    redE deep xs dom env (extEd_constr tag lc nil None lc) o ->
-    redE deep xs dom env (extE_term (constr tag l)) o
-| redE_constr1_done : forall xs dom env tag l l1,
-    redE deep xs dom env (extEd_constr tag l l1 None nil) (out_ret (valEd_constr tag l (nxconstr tag l1)))
-| redE_constr1_step1_var : forall xs dom env tag l l1 l2 x o2,
-    redE deep xs dom env (extEd_constr tag l l1 (Some (out_ret (valE_nf (nxvar x)))) l2) o2 ->
-    redE deep xs dom env (extEd_constr tag l l1 None (clo_var x :: l2)) o2
-| redE_constr1_step1_clo : forall xs dom env tag l l1 l2 t xs2 env2 o1 o2,
-    xs2 \subseteq dom -> redE deep xs2 dom env2 (extE_term t) o1 ->
-    redE deep xs dom env (extEd_constr tag l l1 (Some o1) l2) o2 ->
-    redE deep xs dom env (extEd_constr tag l l1 None (clo_term xs2 t env2 :: l2)) o2
-| redE_constr1_step2 : forall xs dom env tag l l1 l2 v o,
-    redE deep xs dom env (extEd_constr tag l (l1 ++ getvalEd_nf v :: nil) None l2) o ->
-    redE deep xs dom env (extEd_constr tag l l1 (Some (out_ret v)) l2) o
+    redE deep xs dom (extEd_constr1 tag lc nil lc) o ->
+    redE deep xs dom (extE_term env (constr tag l)) o
+| redE_constr1_done : forall xs dom tag l l1,
+    redE deep xs dom (extEd_constr1 tag l l1 nil) (out_ret (valEd_constr tag l (nxconstr tag l1)))
+| redE_constr1_step : forall xs dom tag l l1 l2 c o1 o2,
+    redE deep xs dom (extE_clo c) o1 ->
+    redE deep xs dom (extEd_constr2 tag l l1 o1 l2) o2 ->
+    redE deep xs dom (extEd_constr1 tag l l1 (c :: l2)) o2
+| redE_constr2 : forall xs dom tag l l1 l2 v o,
+    redE deep xs dom (extEd_constr1 tag l (l1 ++ getvalEd_nf v :: nil) l2) o ->
+    redE deep xs dom (extEd_constr2 tag l l1 (out_ret v) l2) o
 | redE_switch : forall df xs dom env t o1 m o2,
-    redE shallow xs dom env (extE_term t) o1 ->
-    redE df xs dom env (extE_switch o1 m) o2 ->
-    redE df xs dom env (extE_term (switch t m)) o2
+    redE shallow xs dom (extE_term env t) o1 ->
+    redE df xs dom (extE_switch env o1 m) o2 ->
+    redE df xs dom (extE_term env (switch t m)) o2
 | redE_switch1_constr : forall df xs dom env tag l m t o,
     nth_error m tag = Some (length l, t) ->
-    redE df xs dom (l ++ env) (extE_term t) o ->
-    redE df xs dom env (extE_switch (out_ret (valEs_constr tag l)) m) o
+    redE df xs dom (extE_term (l ++ env) t) o ->
+    redE df xs dom (extE_switch env (out_ret (valEs_constr tag l)) m) o
 | redE_switch1_nf : forall df xs dom env v m o,
-    redE df xs dom env (extE_switchnf v nil None m) o ->
-    redE df xs dom env (extE_switch (out_ret (valE_nf v)) m) o
-| redE_switchnf_done : forall df xs dom env v m,
-    redE df xs dom env (extE_switchnf v m None nil) (out_ret (valE_nf (nxswitch v m)))
-| redE_switchnf_step1 : forall df xs ys dom env v m1 m2 p t o1 o2,
+    redE df xs dom (extE_switchnf1 env v nil m) o ->
+    redE df xs dom (extE_switch env (out_ret (valE_nf v)) m) o
+| redE_switchnf1_done : forall df xs dom env v m,
+    redE df xs dom (extE_switchnf1 env v m nil) (out_ret (valE_nf (nxswitch v m)))
+| redE_switchnf1_step : forall df xs ys dom env v m1 m2 p t o1 o2,
     distinct xs p ys -> ys \subseteq dom ->
-    redE deep (ys ++ xs) dom (map clo_var ys ++ env) (extE_term t) o1 ->
-    redE df xs dom env (extE_switchnf v m1 (Some (ys, o1)) m2) o2 ->
-    redE df xs dom env (extE_switchnf v m1 None ((p, t) :: m2)) o2
-| redE_switchnf_step2 : forall df xs dom env m1 m2 v1 v2 ys o,
-    redE df xs dom env (extE_switchnf v1 (m1 ++ (ys, getvalEd_nf v2) :: nil) None m2) o ->
-    redE df xs dom env (extE_switchnf v1 m1 (Some (ys, out_ret v2)) m2) o
-| redE_abort : forall df xs dom env e o, get_abortE e = Some o -> redE df xs dom env e o.
+    redE deep (ys ++ xs) dom (extE_term (map clo_var ys ++ env) t) o1 ->
+    redE df xs dom (extE_switchnf2 env v m1 ys o1 m2) o2 ->
+    redE df xs dom (extE_switchnf1 env v m1 ((p, t) :: m2)) o2
+| redE_switchnf2 : forall df xs dom env m1 m2 v1 v2 ys o,
+    redE df xs dom (extE_switchnf1 env v1 (m1 ++ (ys, getvalEd_nf v2) :: nil) m2) o ->
+    redE df xs dom (extE_switchnf2 env v1 m1 ys (out_ret v2) m2) o
+| redE_abort : forall df xs dom e o, get_abortE e = Some o -> redE df xs dom e o.
 
-CoInductive coredE : forall df, list freevar -> list freevar -> list clo -> extE df -> out (valE df) -> Prop :=
-| coredE_var_bound : forall df xs xs2 dom env n t2 env2 o,
-    nth_error env n = Some (clo_term xs2 t2 env2) -> xs2 \subseteq dom ->
-    coredE df xs2 dom env2 (extE_term t2) o ->
-    coredE df xs dom env (extE_term (var n)) o
-| coredE_var_free : forall df x xs dom env n,
-    nth_error env n = Some (clo_var x) ->
-    coredE df xs dom env (extE_term (var n)) (out_ret (valE_nf (nxvar x)))
+CoInductive coredE : forall df, list freevar -> list freevar -> extE df -> out (valE df) -> Prop :=
+| coredE_clo_term : forall df xs xs2 dom t env o,
+    xs2 \subseteq dom -> coredE df xs2 dom (extE_term env t) o -> coredE df xs dom (extE_clo (clo_term xs2 t env)) o
+| coredE_clo_var : forall df xs dom x, coredE df xs dom (extE_clo (clo_var x)) (out_ret (valE_nf (nxvar x)))
+| coredE_var : forall df xs dom env n c o,
+    nth_error env n = Some c ->
+    coredE df xs dom (extE_clo c) o ->
+    coredE df xs dom (extE_term env (var n)) o
 | coredE_abs_shallow : forall t xs dom env,
-    coredE shallow xs dom env (extE_term (abs t)) (out_ret (valEs_abs t env))
+    coredE shallow xs dom (extE_term env (abs t)) (out_ret (valEs_abs t env))
 | coredE_abs_deep : forall t x xs dom env o1 o2,
     x \notin xs -> x \in dom ->
-    coredE deep (x :: xs) dom (clo_var x :: env) (extE_term t) o1 ->
-    coredE deep xs dom env (extEd_abs x t o1) o2 ->
-    coredE deep xs dom env (extE_term (abs t)) o2
-| coredE_abs1 : forall x t xs dom env v, coredE deep xs dom env (extEd_abs x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
+    coredE deep (x :: xs) dom (extE_term (clo_var x :: env) t) o1 ->
+    coredE deep xs dom (extEd_abs env x t o1) o2 ->
+    coredE deep xs dom (extE_term env (abs t)) o2
+| coredE_abs1 : forall x t xs dom env v, coredE deep xs dom (extEd_abs env x t (out_ret v)) (out_ret (valEd_abs t env (nxlam x (getvalEd_nf v))))
 | coredE_app : forall df xs dom env t1 o1 t2 o2,
-    coredE shallow xs dom env (extE_term t1) o1 ->
-    coredE df xs dom env (extE_app o1 t2) o2 ->
-    coredE df xs dom env (extE_term (app t1 t2)) o2
+    coredE shallow xs dom (extE_term env t1) o1 ->
+    coredE df xs dom (extE_app env o1 t2) o2 ->
+    coredE df xs dom (extE_term env (app t1 t2)) o2
 | coredE_app1_nf : forall df xs dom env v o1 t2 o2,
-    coredE deep xs dom env (extE_term t2) o1 ->
-    coredE df xs dom env (extE_appnf v o1) o2 ->
-    coredE df xs dom env (extE_app (out_ret (valE_nf v)) t2) o2
+    coredE deep xs dom (extE_term env t2) o1 ->
+    coredE df xs dom (extE_appnf env v o1) o2 ->
+    coredE df xs dom (extE_app env (out_ret (valE_nf v)) t2) o2
 | coredE_app1_abs : forall df xs xs2 dom env env2 t1 t2 o,
     xs \subseteq xs2 -> xs2 \subseteq dom ->
-    coredE df xs dom (match env_get_maybe_var env t2 with Some c => c | _ => clo_term xs2 t2 env end :: env2) (extE_term t1) o ->
-    coredE df xs dom env (extE_app (out_ret (valEs_abs t1 env2)) t2) o
-| coredE_appnf : forall df xs dom env v1 v2, coredE df xs dom env (extE_appnf v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2))))
+    coredE df xs dom (extE_term (match env_get_maybe_var env t2 with Some c => c | _ => clo_term xs2 t2 env end :: env2) t1) o ->
+    coredE df xs dom (extE_app env (out_ret (valEs_abs t1 env2)) t2) o
+| coredE_appnf : forall df xs dom env v1 v2, coredE df xs dom (extE_appnf env v1 (out_ret v2)) (out_ret (valE_nf (nxapp v1 (getvalEd_nf v2))))
 | coredE_constr_shallow : forall xs dom env tag l lc,
     Forall2 (fun t c => match env_get_maybe_var env t with Some c1 => c = c1 | None => exists xs2, xs \subseteq xs2 /\ xs2 \subseteq dom /\ c = clo_term xs2 t env end) l lc ->
-    coredE shallow xs dom env (extE_term (constr tag l)) (out_ret (valEs_constr tag lc))
+    coredE shallow xs dom (extE_term env (constr tag l)) (out_ret (valEs_constr tag lc))
 | coredE_constr_deep : forall xs dom env tag l lc o,
     Forall2 (fun t c => match env_get_maybe_var env t with Some c1 => c = c1 | None => exists xs2, xs \subseteq xs2 /\ xs2 \subseteq dom /\ c = clo_term xs2 t env end) l lc ->
-    coredE deep xs dom env (extEd_constr tag lc nil None lc) o ->
-    coredE deep xs dom env (extE_term (constr tag l)) o
-| coredE_constr1_done : forall xs dom env tag l l1,
-    coredE deep xs dom env (extEd_constr tag l l1 None nil) (out_ret (valEd_constr tag l (nxconstr tag l1)))
-| coredE_constr1_step1_var : forall xs dom env tag l l1 l2 x o2,
-    coredE deep xs dom env (extEd_constr tag l l1 (Some (out_ret (valE_nf (nxvar x)))) l2) o2 ->
-    coredE deep xs dom env (extEd_constr tag l l1 None (clo_var x :: l2)) o2
-| coredE_constr1_step1_clo : forall xs dom env tag l l1 l2 t xs2 env2 o1 o2,
-    xs2 \subseteq dom -> coredE deep xs2 dom env2 (extE_term t) o1 ->
-    coredE deep xs dom env (extEd_constr tag l l1 (Some o1) l2) o2 ->
-    coredE deep xs dom env (extEd_constr tag l l1 None (clo_term xs2 t env2 :: l2)) o2
-| coredE_constr1_step2 : forall xs dom env tag l l1 l2 v o,
-    coredE deep xs dom env (extEd_constr tag l (l1 ++ getvalEd_nf v :: nil) None l2) o ->
-    coredE deep xs dom env (extEd_constr tag l l1 (Some (out_ret v)) l2) o
+    coredE deep xs dom (extEd_constr1 tag lc nil lc) o ->
+    coredE deep xs dom (extE_term env (constr tag l)) o
+| coredE_constr1_done : forall xs dom tag l l1,
+    coredE deep xs dom (extEd_constr1 tag l l1 nil) (out_ret (valEd_constr tag l (nxconstr tag l1)))
+| coredE_constr1_step : forall xs dom tag l l1 l2 c o1 o2,
+    coredE deep xs dom (extE_clo c) o1 ->
+    coredE deep xs dom (extEd_constr2 tag l l1 o1 l2) o2 ->
+    coredE deep xs dom (extEd_constr1 tag l l1 (c :: l2)) o2
+| coredE_constr2 : forall xs dom tag l l1 l2 v o,
+    coredE deep xs dom (extEd_constr1 tag l (l1 ++ getvalEd_nf v :: nil) l2) o ->
+    coredE deep xs dom (extEd_constr2 tag l l1 (out_ret v) l2) o
 | coredE_switch : forall df xs dom env t o1 m o2,
-    coredE shallow xs dom env (extE_term t) o1 ->
-    coredE df xs dom env (extE_switch o1 m) o2 ->
-    coredE df xs dom env (extE_term (switch t m)) o2
+    coredE shallow xs dom (extE_term env t) o1 ->
+    coredE df xs dom (extE_switch env o1 m) o2 ->
+    coredE df xs dom (extE_term env (switch t m)) o2
 | coredE_switch1_constr : forall df xs dom env tag l m t o,
     nth_error m tag = Some (length l, t) ->
-    coredE df xs dom (l ++ env) (extE_term t) o ->
-    coredE df xs dom env (extE_switch (out_ret (valEs_constr tag l)) m) o
+    coredE df xs dom (extE_term (l ++ env) t) o ->
+    coredE df xs dom (extE_switch env (out_ret (valEs_constr tag l)) m) o
 | coredE_switch1_nf : forall df xs dom env v m o,
-    coredE df xs dom env (extE_switchnf v nil None m) o ->
-    coredE df xs dom env (extE_switch (out_ret (valE_nf v)) m) o
-| coredE_switchnf_done : forall df xs dom env v m,
-    coredE df xs dom env (extE_switchnf v m None nil) (out_ret (valE_nf (nxswitch v m)))
-| coredE_switchnf_step1 : forall df xs ys dom env v m1 m2 p t o1 o2,
+    coredE df xs dom (extE_switchnf1 env v nil m) o ->
+    coredE df xs dom (extE_switch env (out_ret (valE_nf v)) m) o
+| coredE_switchnf1_done : forall df xs dom env v m,
+    coredE df xs dom (extE_switchnf1 env v m nil) (out_ret (valE_nf (nxswitch v m)))
+| coredE_switchnf1_step : forall df xs ys dom env v m1 m2 p t o1 o2,
     distinct xs p ys -> ys \subseteq dom ->
-    coredE deep (ys ++ xs) dom (map clo_var ys ++ env) (extE_term t) o1 ->
-    coredE df xs dom env (extE_switchnf v m1 (Some (ys, o1)) m2) o2 ->
-    coredE df xs dom env (extE_switchnf v m1 None ((p, t) :: m2)) o2
-| coredE_switchnf_step2 : forall df xs dom env m1 m2 v1 v2 ys o,
-    coredE df xs dom env (extE_switchnf v1 (m1 ++ (ys, getvalEd_nf v2) :: nil) None m2) o ->
-    coredE df xs dom env (extE_switchnf v1 m1 (Some (ys, out_ret v2)) m2) o
-| coredE_abort : forall df xs dom env e o, get_abortE e = Some o -> coredE df xs dom env e o.
+    coredE deep (ys ++ xs) dom (extE_term (map clo_var ys ++ env) t) o1 ->
+    coredE df xs dom (extE_switchnf2 env v m1 ys o1 m2) o2 ->
+    coredE df xs dom (extE_switchnf1 env v m1 ((p, t) :: m2)) o2
+| coredE_switchnf2 : forall df xs dom env m1 m2 v1 v2 ys o,
+    coredE df xs dom (extE_switchnf1 env v1 (m1 ++ (ys, getvalEd_nf v2) :: nil) m2) o ->
+    coredE df xs dom (extE_switchnf2 env v1 m1 ys (out_ret v2) m2) o
+| coredE_abort : forall df xs dom e o, get_abortE e = Some o -> coredE df xs dom e o.
 
 Arguments nth_error : simpl nomatch.
 
@@ -1654,11 +1682,12 @@ Proof.
 Qed.
 
 Lemma redE_coredE :
-  forall df xs dom env e o, redE df xs dom env e o -> coredE df xs dom env e o.
+  forall df xs dom e o, redE df xs dom e o -> coredE df xs dom e o.
 Proof.
-  intros df xs dom env e o H; induction H.
-  - eapply coredE_var_bound; eassumption.
-  - eapply coredE_var_free; eassumption.
+  intros df xs dom e o H; induction H.
+  - eapply coredE_clo_term; eassumption.
+  - eapply coredE_clo_var; eassumption.
+  - eapply coredE_var; eassumption.
   - eapply coredE_abs_shallow; eassumption.
   - eapply coredE_abs_deep; eassumption.
   - eapply coredE_abs1; eassumption.
@@ -1669,15 +1698,14 @@ Proof.
   - eapply coredE_constr_shallow; eassumption.
   - eapply coredE_constr_deep; eassumption.
   - eapply coredE_constr1_done; eassumption.
-  - eapply coredE_constr1_step1_var; eassumption.
-  - eapply coredE_constr1_step1_clo; eassumption.
-  - eapply coredE_constr1_step2; eassumption.
+  - eapply coredE_constr1_step; eassumption.
+  - eapply coredE_constr2; eassumption.
   - eapply coredE_switch; eassumption.
   - eapply coredE_switch1_constr; eassumption.
   - eapply coredE_switch1_nf; eassumption.
-  - eapply coredE_switchnf_done; eassumption.
-  - eapply coredE_switchnf_step1; eassumption.
-  - eapply coredE_switchnf_step2; eassumption.
+  - eapply coredE_switchnf1_done; eassumption.
+  - eapply coredE_switchnf1_step; eassumption.
+  - eapply coredE_switchnf2; eassumption.
   - eapply coredE_abort; eassumption.
 Qed.
 
@@ -1721,6 +1749,7 @@ Proof.
   - intros [H1 H2] x; specialize (H1 x); specialize (H2 x); rewrite list_inter_correct; tauto.
 Qed.
 
+(*
 Inductive clo_sub : clo -> clo -> Prop :=
 | clo_sub_var : forall x, clo_sub (clo_var x) (clo_var x)
 | clo_sub_term : forall xs1 xs2 t env1 env2, xs1 \subseteq xs2 -> Forall2 clo_sub env1 env2 -> clo_sub (clo_term xs1 t env1) (clo_term xs2 t env2).
@@ -1739,6 +1768,7 @@ Inductive extE_sub : forall df, extE df -> extE df -> Prop :=
 | extE_sub_app : forall df o1 o2 t, outE_sub _ o1 o2 -> extE_sub df (extE_app o1 t) (extE_app o2 t)
 | extE_sub_appnf : forall df v o1 o2, outE_sub _ o1 o2 -> extE_sub df (extE_appnf v o1) (extE_appnf v o2)
 | extEd_sub_abs : forall x t o1 o2, outE_sub _ o1 o2 -> extE_sub deep (extEd_abs x t o1) (extEd_abs x t o2).
+ *)
 
 Lemma nth_error_Forall2 :
   forall {A B : Type} {P : A -> B -> Prop} {L1 L2 n x}, Forall2 P L1 L2 -> nth_error L1 n = Some x -> exists y, nth_error L2 n = Some y /\ P x y.
@@ -1837,11 +1867,12 @@ Qed.
 *)
 
 Lemma redE_xsdom_mono :
-  forall df xs dom env e o, redE df xs dom env e o -> forall xs2 dom2, xs2 \subseteq xs -> dom \subseteq dom2 -> redE df xs2 dom2 env e o.
+  forall df xs dom e o, redE df xs dom e o -> forall xs2 dom2, xs2 \subseteq xs -> dom \subseteq dom2 -> redE df xs2 dom2 e o.
 Proof.
-  intros df xs dom env e o H; induction H; intros xs3 dom2 Hxs3 Hdom2.
-  - eapply redE_var_bound; [eassumption|etransitivity; eassumption|]. eapply IHredE; [reflexivity|assumption].
-  - eapply redE_var_free; eassumption.
+  intros df xs dom e o H; induction H; intros xs3 dom2 Hxs3 Hdom2.
+  - eapply redE_clo_term; [etransitivity; eassumption|]. eapply IHredE; [reflexivity|assumption].
+  - eapply redE_clo_var.
+  - eapply redE_var; [eassumption|]. eapply IHredE; eassumption.
   - eapply redE_abs_shallow.
   - eapply redE_abs_deep; [rewrite Hxs3; eassumption|rewrite <- Hdom2; eassumption|eapply IHredE1; [|assumption]|eapply IHredE2; assumption].
     intros y [<- | Hy]; [left; reflexivity|right; apply Hxs3; assumption].
@@ -1857,34 +1888,32 @@ Proof.
     intros t c Htc. simpl in *. destruct env_get_maybe_var; [assumption|].
     destruct Htc as (xs2 & H1 & H2 & H3); exists xs2; splits 3; try assumption; etransitivity; eassumption.
   - eapply redE_constr1_done.
-  - eapply redE_constr1_step1_var; eapply IHredE; eassumption.
-  - eapply redE_constr1_step1_clo; [|eapply IHredE1|eapply IHredE2]; try eassumption;
-      [etransitivity; eassumption|reflexivity].
-  - eapply redE_constr1_step2. eapply IHredE; eassumption.
+  - eapply redE_constr1_step; [eapply IHredE1|eapply IHredE2]; eassumption.
+  - eapply redE_constr2. eapply IHredE; eassumption.
   - eapply redE_switch; [eapply IHredE1|eapply IHredE2]; eassumption.
   - eapply redE_switch1_constr; [eassumption|].
     eapply IHredE; eassumption.
   - eapply redE_switch1_nf. eapply IHredE; eassumption.
-  - eapply redE_switchnf_done.
-  - eapply redE_switchnf_step1; [| |eapply IHredE1|eapply IHredE2].
+  - eapply redE_switchnf1_done.
+  - eapply redE_switchnf1_step; [| |eapply IHredE1|eapply IHredE2].
     + eapply distinct_incl; eassumption.
     + etransitivity; eassumption.
     + rewrite Hxs3. reflexivity.
     + eassumption.
     + eassumption.
     + eassumption.
-  - eapply redE_switchnf_step2. eapply IHredE; eassumption.
+  - eapply redE_switchnf2. eapply IHredE; eassumption.
   - eapply redE_abort. eassumption.
 Qed.
 
 Lemma redE_xs_mono :
-  forall df xs dom env e o, redE df xs dom env e o -> forall xs2, xs2 \subseteq xs -> redE df xs2 dom env e o.
+  forall df xs dom e o, redE df xs dom e o -> forall xs2, xs2 \subseteq xs -> redE df xs2 dom e o.
 Proof.
   intros; eapply redE_xsdom_mono; try eassumption. reflexivity.
 Qed.
 
 Lemma redE_dom_mono :
-  forall df xs dom env e o, redE df xs dom env e o -> forall dom2, dom \subseteq dom2 -> redE df xs dom2 env e o.
+  forall df xs dom e o, redE df xs dom e o -> forall dom2, dom \subseteq dom2 -> redE df xs dom2 e o.
 Proof.
   intros; eapply redE_xsdom_mono; try eassumption. reflexivity.
 Qed.
@@ -1905,38 +1934,42 @@ Qed.
 Lemma out_abort_div :
   forall df t (e : extE df) (o : out t), get_abortE e = Some o -> o = out_div.
 Proof.
-  intros; destruct e; simpl in *; try congruence; autoinjSome; try (eapply get_out_abort_div; eassumption).
-  - destruct o0 as [[_ o0]|]; [eapply get_out_abort_div; eassumption|congruence].
-  - destruct o0 as [o0|]; [eapply get_out_abort_div; eassumption|congruence].
+  intros; destruct e; simpl in *; try congruence; autoinjSome; eapply get_out_abort_div; eassumption.
 Qed.
 
 Lemma redE_closed :
-  forall df xs xs2 dom env e o, cl_closed xs env -> extE_closed_at e (length env) xs -> xs \subseteq xs2 -> redE df xs2 dom env e o -> outE_closed xs o.
+  forall df xs xs2 dom e o, extE_closed_at e xs -> xs \subseteq xs2 -> redE df xs2 dom e o -> outE_closed xs o.
 Proof.
-  intros df xs xs2 dom env e o Henv He Hxs H. revert xs Henv He Hxs; induction H; intros nxs Henv He Hxs; simpl in *;try (erewrite out_abort_div by eassumption; constructor); inversion He; subst.
-  - apply nth_error_In, Henv in H. destruct H as [H2 H3]. inversion H2; subst.
-    apply outE_closed_mono with (xs1 := list_inter nxs xs2); [|apply list_inter_subl1].
-    apply IHredE; [|constructor; assumption|apply list_inter_subl2].
-    simpl in H3. rewrite concat_incl, Forall_map, Forall_forall in H3.
-    intros c Hc; split; [apply H8; assumption|rewrite list_inter_subr; split; [apply H3; assumption|apply H8; assumption]].
-  - apply (Henv (clo_var x)). eapply nth_error_In. eassumption.
+  intros df xs xs2 dom e o He Hxs H.
+  revert xs He Hxs; induction H; intros nxs He Hxs; simpl in *;
+    try (erewrite out_abort_div by eassumption; constructor); inversion He; subst.
+  - apply outE_closed_mono with (xs1 := list_inter nxs xs2); [|apply list_inter_subl1].
+    apply IHredE; [|apply list_inter_subl2].
+    inversion H2; subst.
+    constructor; [|assumption].
+    intros c Hc; split; [apply H7; assumption|].
+    simpl in H4. rewrite concat_incl, Forall_map, Forall_forall in H4.
+    rewrite list_inter_subr; split; [apply H4; assumption|apply H7; assumption].
+  - assumption.
+  - apply IHredE; [|assumption].
+    apply nth_error_In, H4 in H. constructor; tauto.
   - split; [|assumption].
-    inversion H1; subst. assumption.
-  - apply IHredE2; [assumption| |assumption]. constructor; [inversion H5; subst; assumption|].
-    apply IHredE1.
-    + intros c [<- | Hc]; split; [constructor|simpl; prove_list_inc|apply Henv; assumption|].
-      etransitivity; [apply Henv; assumption|]. prove_list_inc.
-    + constructor. inversion H5; subst. assumption.
+    inversion H4; subst. assumption.
+  - apply IHredE2; [|assumption]. constructor; [assumption|inversion H8; subst; assumption|].
+    apply IHredE1; [constructor|].
+    + intros c [<- | Hc]; split; [constructor|simpl; prove_list_inc|apply H6; assumption|].
+      etransitivity; [apply H6; assumption|]. prove_list_inc.
+    + inversion H8; subst. assumption.
     + intros y [<- | Hy]; [left; reflexivity|right; apply Hxs; assumption].
   - split; [assumption|]. split; [assumption|]. intros y Hy. rewrite list_remove_correct in Hy.
     destruct (destruct_valE_deep v) as [[(v2 & ->) | (t2 & env2 & v2 & ->)] | (tag & l & v2 & ->)]; simpl in *.
-    + specialize (H5 y ltac:(tauto)). destruct H5; simpl in *; tauto.
-    + destruct H5 as (H5 & H6 & H7); specialize (H7 y ltac:(tauto)). destruct H7; simpl in *; tauto.
-    + destruct H5 as (H5 & H6); specialize (H6 y ltac:(tauto)). destruct H6; simpl in *; tauto.
-  - apply IHredE2; [assumption| |assumption]. constructor; [inversion H3; subst; assumption|].
-    apply IHredE1; [assumption| |assumption]. constructor; inversion H3; subst; assumption.
-  - apply IHredE2; [assumption| |assumption]. constructor; [assumption|].
-    apply IHredE1; [assumption| |assumption]. constructor. assumption.
+    + specialize (H6 y ltac:(tauto)). destruct H6; simpl in *; tauto.
+    + destruct H6 as (H6 & H7 & H8); specialize (H8 y ltac:(tauto)). destruct H8; simpl in *; tauto.
+    + destruct H6 as (H6 & H7); specialize (H7 y ltac:(tauto)). destruct H7; simpl in *; tauto.
+  - apply IHredE2; [|assumption]. constructor; [assumption|inversion H6; subst; assumption|].
+    apply IHredE1; [|assumption]. constructor; [assumption|inversion H6; subst; assumption].
+  - apply IHredE2; [|assumption]. constructor; [assumption|].
+    apply IHredE1; [|assumption]. constructor. assumption.
   - apply IHredE; [intros c [<- | Hc]| |assumption].
     + destruct env_get_maybe_var as [c|] eqn:Hc; [eapply Henv, env_get_maybe_var_in; eassumption|].
       split; simpl.
