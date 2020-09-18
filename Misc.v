@@ -3,6 +3,16 @@ Require Import Setoid.
 Require Import Morphisms.
 Require Import Arith.
 Require Import Psatz.
+Require Import Coq.Logic.Eqdep_dec.
+
+Lemma Some_inj : forall A (x y : A), Some x = Some y -> x = y.
+Proof.
+  intros; congruence.
+Qed.
+Ltac autoinjSome :=
+  repeat match goal with
+           [ H : Some ?x = Some ?y |- _ ] => apply Some_inj in H; subst
+         end.
 
 (* List Notations *)
 
@@ -22,6 +32,15 @@ Lemma nth_error_map :
 Proof.
   intros A B f L. induction L as [|a L]; intros [|n]; simpl; try reflexivity.
   apply IHL.
+Qed.
+
+Lemma nth_error_decompose :
+  forall (A : Type) (L : list A) x n, nth_error L n = Some x -> exists L1 L2, L = L1 ++ x :: L2 /\ length L1 = n.
+Proof.
+  intros A L. induction L as [|y L]; intros x [|n] H; simpl in *; try congruence; autoinjSome.
+  - exists nil. exists L. split; reflexivity.
+  - apply IHL in H. destruct H as (L1 & L2 & H1 & H2). exists (y :: L1). exists L2.
+    split; [rewrite H1; reflexivity|simpl; rewrite H2; reflexivity].
 Qed.
 
 (* Map for association lists *)
@@ -238,6 +257,30 @@ Proof.
   - tauto.
   - destruct Hy as [-> | Hy]; [exists x; tauto|].
     destruct (IHForall2 Hy) as (x0 & Hx1 & Hx2); exists x0; tauto.
+Qed.
+
+Lemma nth_error_Forall2 :
+  forall {A B : Type} {P : A -> B -> Prop} {L1 L2 n x}, Forall2 P L1 L2 -> nth_error L1 n = Some x -> exists y, nth_error L2 n = Some y /\ P x y.
+Proof.
+  intros A B P. intros L1 L2 n x H; revert n x; induction H; intros n x1 Hx1; destruct n as [|n]; simpl in *; try congruence.
+  - injection Hx1; intros; subst. exists y. split; [reflexivity|assumption].
+  - apply IHForall2. assumption.
+Qed.
+
+Lemma nth_error_Forall2_rev :
+  forall {A B : Type} {P : A -> B -> Prop} {L1 L2 n x}, Forall2 P L1 L2 -> nth_error L2 n = Some x -> exists y, nth_error L1 n = Some y /\ P y x.
+Proof.
+  intros A B P. intros L1 L2 n x H; revert n x; induction H; intros n x1 Hx1; destruct n as [|n]; simpl in *; try congruence.
+  - injection Hx1; intros; subst. exists x. split; [reflexivity|assumption].
+  - apply IHForall2. assumption.
+Qed.
+
+Lemma nth_error_Forall2_None :
+  forall {A B : Type} {P : A -> B -> Prop} {L1 L2 n}, Forall2 P L1 L2 -> nth_error L1 n = None <-> nth_error L2 n = None.
+Proof.
+  intros A B P. intros L1 L2 n H; revert n; induction H; intros n; destruct n as [|n]; simpl in *; try tauto.
+  - split; intros; congruence.
+  - apply IHForall2.
 Qed.
 
 
@@ -526,8 +569,6 @@ Proof.
 Qed.
 
 
-
-
 Ltac splits n :=
   match n with
   | O => fail
@@ -535,3 +576,25 @@ Ltac splits n :=
   | S ?n => split; [|splits n]
   end.
 
+
+Inductive deep_flag := shallow | deep.
+Lemma deep_flag_eq_dec : forall (df1 df2 : deep_flag), { df1 = df2 } + { df1 <> df2 }.
+Proof.
+  intros [|] [|]; solve [left; reflexivity | right; discriminate].
+Defined.
+
+Ltac unexistT :=
+  repeat match goal with
+           [ H : @existT deep_flag _ _ _ = @existT deep_flag _ _ _ |- _ ] =>
+           apply inj_pair2_eq_dec in H; [|apply deep_flag_eq_dec]
+         end.
+
+Definition option_map {A B : Type} (f : A -> B) (x : option A) := match x with Some x => Some (f x) | None => None end.
+Lemma option_map_id : forall (A : Type) (x : option A), option_map id x = x.
+Proof.
+  intros A [x|]; reflexivity.
+Qed.
+
+Definition respectful {A : Type} (R : A -> A -> Prop) (f : A -> A) := forall x y, R x y -> R (f x) (f y).
+
+Fixpoint list_sum l := match l with nil => 0 | x :: l => x + list_sum l end.

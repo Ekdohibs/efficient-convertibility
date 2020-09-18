@@ -97,6 +97,34 @@ Proof.
   split; apply list_diff_inc_Proper; tauto.
 Qed.
 
+(* List intersection *)
+Definition list_inter L1 L2 := filter (fun y => if in_dec freevar_eq_dec y L1 then true else false) L2.
+Lemma list_inter_correct :
+  forall L1 L2 x, x \in list_inter L1 L2 <-> x \in L1 /\ x \in L2.
+Proof.
+  intros L1 L2 x. unfold list_inter. rewrite filter_In.
+  destruct in_dec; try tauto. assert (~ (false = true)) by discriminate; tauto.
+Qed.
+
+Lemma list_inter_subl1 :
+  forall L1 L2, list_inter L1 L2 \subseteq L1.
+Proof.
+  intros L1 L2 x; rewrite list_inter_correct; tauto.
+Qed.
+
+Lemma list_inter_subl2 :
+  forall L1 L2, list_inter L1 L2 \subseteq L2.
+Proof.
+  intros L1 L2 x; rewrite list_inter_correct; tauto.
+Qed.
+
+Lemma list_inter_subr :
+  forall L1 L2 L3, L1 \subseteq list_inter L2 L3 <-> L1 \subseteq L2 /\ L1 \subseteq L3.
+Proof.
+  intros L1 L2 L3; split.
+  - intros H; split; intros x; specialize (H x); rewrite list_inter_correct in H; tauto.
+  - intros [H1 H2] x; specialize (H1 x); specialize (H2 x); rewrite list_inter_correct; tauto.
+Qed.
 
 
 Inductive distinct : list freevar -> nat -> list freevar -> Prop :=
