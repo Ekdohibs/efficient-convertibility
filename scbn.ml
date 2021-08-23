@@ -376,7 +376,7 @@ let rec db_encode t e =
   | App (t1, t2) -> Constr (2, [db_encode t1 e; db_encode t2 e])
   | _ -> assert false
 
-
+(*
 let () = run_and_print (app church_succ (church 4))
 let () = run_and_print (app2 church_add (church 3) (church 4))
 let () = run_and_print (app2 church_mul (church 1) (church 2))
@@ -402,6 +402,82 @@ let () = run_and_print (app2 eval_db (db_encode church_fact []) (Constr (0, []))
 let () = run_and_print (app2 eval_db (db_encode (app church_fact (church 4)) []) (Constr (0, [])))
 let () = run_and_print (Lam ("l", app2 eval_db (db_encode (Lam ("x", App (Var "x", Var "y"))) ["y"]) (Var "l")))
 let () = run_and_print eval_db
+*)
+let compile1_prelude = "
+  type nf = Var of string | Lam of nf * nf | App of nf * nf
+  type prenf = Nf of nf | Prevar of string
+  type l = Lazy of (bool -> v) | Forward of v | Blackhole
+  and v = (bool -> l ref -> v) * prenf ref
+  let mklazy f = ref (Lazy f)
+  let mkval v = ref (Forward v)
+  let getnf v = match !(snd v) with Nf nf -> nf | _ -> assert false
+  let rec mkacc v =
+    ((fun _ arg -> mkacc (App (v, getnf (lazy_force arg true)))), ref (Nf v))
+  and mkaccl v = mkval (mkacc v)
+  and lazy_force x b =
+    match !x with
+    | Lazy f -> x := Blackhole; let r = f b in x := Forward r; r
+    | Blackhole -> assert false
+    | Forward (v, nf) ->
+      if b then begin match !nf with
+      | Prevar s ->
+        let x = Var s in
+        nf := Nf (Lam (x, getnf (v true (mkaccl x))))
+      | _ -> ()
+      end; (v, nf)
+  let mklam f name b = if b then let x = Var name in (f, ref (Nf (Lam (x, getnf (f true (mkaccl x)))))) else (f, ref (Prevar name))
+  let rec print ff t =
+    match t with
+    | Var s -> Format.fprintf ff \"%s\" s
+    | Lam (x, t) -> Format.fprintf ff \"(\\\\%a.%a)\" print x print t
+    | App (t1, t2) -> Format.fprintf ff \"(%a %a)\" print t1 print t2
+
+"
+type deep_flag = Shallow | Deep | Unknown
+let compile_flag ff df = match df with
+  | Shallow -> Format.fprintf ff "false"
+  | Deep -> Format.fprintf ff "true"
+  | Unknown -> Format.fprintf ff "df"
+let rec compile1 ff (df, t) =
+  match t with
+  | Var x ->
+    begin match df with
+      | Shallow -> Format.fprintf ff "(fst (lazy_force %s false))" x
+      | Deep -> Format.fprintf ff "(getnf (lazy_force %s true))" x
+      | Unknown -> Format.fprintf ff "(lazy_force %s df)" x
+    end
+  | Lam (x, t) ->
+    begin match df with
+      | Shallow -> Format.fprintf ff "(fun df %s -> %a)" x compile1 (Unknown, t)
+      | Deep -> Format.fprintf ff "(let %s = Var %S in Lam (%s, %a))" x x x compile1 (Deep, t)
+      | Unknown -> Format.fprintf ff "(mklam (fun df %s -> %a) %S df)" x compile1 (Unknown, t) x
+    end
+  | App (t1, t2) ->
+    let print2 ff =
+      match t2 with
+      | Var x -> Format.fprintf ff "%s" x
+      | Lam (x, t) -> Format.fprintf ff "(mkval ((fun df %s -> %a), ref (Prevar %S)))" x compile1 (Unknown, t) x
+      | _ -> Format.fprintf ff "(mklazy (fun df -> %a))" compile1 (Unknown, t2)
+    in
+    begin match df with
+      | Shallow -> Format.fprintf ff "(fst (%a false %t))" compile1 (Shallow, t1) print2
+      | Deep -> Format.fprintf ff "(getnf (%a true %t))" compile1 (Shallow, t1) print2
+      | Unknown -> Format.fprintf ff "(%a df %t)" compile1 (Shallow, t1) print2
+    end
+  | _ -> assert false
+
+let compile ff t =
+  Format.fprintf ff "let result = %a let () = Format.printf \"%%a@@.\" print result" compile1 (Deep, t)
+
+let () = Format.printf "%s@." compile1_prelude
+let c t = Format.printf "%a@." compile t
+let cn t = Format.printf "let result = %a" compile1 (Deep, t)
+let () = c (app church_succ (church 4))
+let () = c (app2 church_pow (church 10) (church 2))
+let () = c (app church_is_even (app2 church_pow (church 10) (church 7)))
+let () = cn (app2 church_pow (church 10) (church 5))
+(* let () = ignore (run (app2 church_pow (church 10) (church 4))) *)
+
 
 let () = Random.init 42
 let rec randterm n l =
@@ -528,7 +604,7 @@ let () = ignore (run (app2 church_pow (church 10) (church 7)))
 (* let () = ignore (run (app2 church_mul (church 100) (church 300))) *)
 (* let () = ignore (run (app2 church_pow (church 10) (church 6))) *)
 (* let () = ignore (run_cbv (app2 church_mul (church 1000) (church 1000))) *)
-let () = run_and_print (app church_is_even (app2 church_pow (church 10) (church 6)))
+(* let () = run_and_print (app church_is_even (app2 church_pow (church 10) (church 6))) *)
 (* let () = run_and_print (app church_is_even (app2 church_mul (church 1000) (church 1000))) *)
 
 (*
