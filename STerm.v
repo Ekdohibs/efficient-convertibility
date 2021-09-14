@@ -500,3 +500,64 @@ Proof.
   eapply nth_error_In. eassumption.
 Qed.
 
+Lemma subst_subst1 :
+  forall us t1 t2, subst us (subst1 t1 t2) = subst1 (subst us t1) (subst (lift_subst us) t2).
+Proof.
+  intros us t1 t2. unfold subst1. rewrite !subst_subst.
+  apply subst_ext. unfold comp. intros [|n].
+  * reflexivity.
+  * simpl. unfold comp. rewrite subst_ren.
+    etransitivity; [symmetry; apply subst_id|].
+    apply subst_ext. intros n1. unfold comp. simpl. f_equal. lia.
+Qed.
+
+Lemma lift_ren :
+  forall r n, ren (lift r) n = lift_subst (ren r) n.
+Proof.
+  intros r n. unfold ren, lift_subst, comp.
+  rewrite lift_renv. simpl.
+  destruct n; simpl; [reflexivity|].
+  f_equal; lia.
+Qed.
+
+Lemma ren_subst1 :
+  forall r t1 t2, ren_term r (subst1 t1 t2) = subst1 (ren_term r t1) (ren_term (lift r) t2).
+Proof.
+  intros r t1 t2.
+  rewrite !ren_term_is_subst, subst_subst1.
+  f_equal. apply subst_ext.
+  intros n; rewrite lift_ren; reflexivity.
+Qed.
+
+Lemma subst_read_env :
+  forall us l t, subst us (subst (read_env l) t) = subst (read_env (map (subst us) l)) (subst (liftn_subst (length l) us) t).
+Proof.
+  intros us l t. rewrite !subst_subst. apply subst_ext; intros n.
+  unfold comp, read_env, liftn_subst.
+  destruct nth_error as [u|] eqn:Hln.
+  - destruct le_lt_dec; [apply nth_error_None in l0; congruence|]. simpl.
+    rewrite nth_error_map, Hln. reflexivity.
+  - destruct le_lt_dec; [|apply nth_error_None in Hln; lia].
+    simpl. rewrite subst_ren.
+    etransitivity; [symmetry; apply subst_id|].
+    eapply subst_ext.
+    intros m. unfold comp, ren. simpl.
+    rewrite plus_ren_correct.
+    replace (nth_error _ _) with (@None term).
+    + f_equal. rewrite map_length. lia.
+    + symmetry. apply nth_error_None. rewrite map_length; lia.
+Qed.
+
+Lemma ren_read_env :
+  forall r l t, ren_term r (subst (read_env l) t) = subst (read_env (map (ren_term r) l)) (ren_term (liftn (length l) r) t).
+Proof.
+  intros r l t.
+  rewrite !ren_term_is_subst, subst_read_env.
+  f_equal.
+  - f_equal. apply map_ext. intros; rewrite ren_term_is_subst; reflexivity.
+  - apply subst_ext. intros n.
+    unfold liftn_subst, ren. destruct le_lt_dec; simpl.
+    + rewrite plus_ren_correct.
+      rewrite liftn_renv_large; [reflexivity|assumption].
+    + rewrite liftn_renv_small; [reflexivity|assumption].
+Qed.

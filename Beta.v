@@ -8,6 +8,7 @@ Require Import Coq.Logic.Eqdep_dec.
 Require Import FEnv.
 Require Import STerm.
 Require Import Inductive.
+Require Import Rewrite.
 
 Inductive beta : term -> term -> Prop :=
 | beta_app1 : forall t1 t2 t3, beta t1 t2 -> beta (app t1 t3) (app t2 t3)
@@ -97,16 +98,6 @@ Proof.
     intros [p t2]; simpl; tauto.
 Qed.
 
-
-Lemma Forall2_impl_transparent : forall (A B : Type) (P Q : A -> B -> Prop) (L1 : list A) (L2 : list B), (forall (x : A) (y : B), P x y -> Q x y) -> Forall2 P L1 L2 -> Forall2 Q L1 L2.
-Proof.
-  intros A B P Q L1 L2 Himpl H. induction H.
-  - constructor.
-  - constructor.
-    + apply Himpl. assumption.
-    + assumption.
-Defined.
-
 Fixpoint pbeta_ind2 (P : term -> term -> Prop)
          (Hvar : forall n, P (var n) (var n))
          (Happ : forall t1 t2 t3 t4, pbeta t1 t2 -> P t1 t2 -> pbeta t3 t4 -> P t3 t4 -> P (app t1 t3) (app t2 t4))
@@ -157,19 +148,6 @@ Proof.
     apply Forall2_map_same, Forall_True; intros; apply pbeta_refl.
 Qed.
 
-Lemma Forall2_and :
-  forall (A B : Type) (P Q : A -> B -> Prop) L1 L2, Forall2 P L1 L2 -> Forall2 Q L1 L2 -> Forall2 (fun x y => P x y /\ Q x y) L1 L2.
-Proof.
-  intros A B P Q L1 L2 HP. induction HP; intros HQ; inversion HQ; subst.
-  - constructor.
-  - constructor; [split; assumption|apply IHHP; assumption].
-Qed.
-
-Lemma Forall2_length :
-  forall (A B : Type) (P : A -> B -> Prop) L1 L2, Forall2 P L1 L2 -> length L1 = length L2.
-Proof.
-  intros A B P L1 L2 H. induction H; simpl; congruence.
-Qed.
 
 Lemma pbeta_star_beta :
   forall t1 t2, pbeta t1 t2 -> star beta t1 t2.
@@ -195,111 +173,6 @@ Proof.
     + econstructor; [|constructor].
       rewrite (Forall2_length _ _ _ _ _ H).
       constructor.
-Qed.
-
-Lemma nth_error_Forall2_iff:
-  forall A B (P : A -> B -> Prop) L1 L2,
-    Forall2 P L1 L2 <-> (length L1 = length L2 /\ forall n x y, nth_error L1 n = Some x -> nth_error L2 n = Some y -> P x y).
-Proof.
-  intros A B P L1 L2. split.
-  - intros H. induction H.
-    + split; [reflexivity|]. intros; destruct n; simpl in *; discriminate.
-    + destruct IHForall2 as [Hlen Hforall].
-      split; [simpl; congruence|].
-      intros [|n]; simpl; [|apply Hforall].
-      intros; congruence.
-  - revert L2; induction L1 as [|x L1 IH]; intros [|y L2] [Hlen Hforall]; simpl in *.
-    + constructor.
-    + discriminate.
-    + discriminate.
-    + constructor; [apply (Hforall 0); reflexivity|].
-      apply IH. split; [congruence|].
-      intros n; apply (Hforall (S n)).
-Qed.
-
-Lemma nth_error_Forall_iff :
-  forall A (P : A -> Prop) L,
-    Forall P L <-> (forall n x, nth_error L n = Some x -> P x).
-Proof.
-  intros A P L. split.
-  - intros H. induction H.
-    + intros; destruct n; simpl in *; discriminate.
-    + intros [|n]; simpl; [|apply IHForall].
-      intros; congruence.
-  - induction L as [|x L IH]; intros Hforall; simpl in *.
-    + constructor.
-    + constructor.
-      * apply (Hforall 0); reflexivity.
-      * apply IH. intros n; apply (Hforall (S n)).
-Qed.
-
-Ltac ereplace t :=
-  let tmp := fresh "_tmp" in
-  let typ := type of t in
-  evar (tmp : typ);
-  replace t with tmp; unfold tmp.
-
-
-Lemma subst_subst1 :
-  forall us t1 t2, subst us (subst1 t1 t2) = subst1 (subst us t1) (subst (lift_subst us) t2).
-Proof.
-  intros us t1 t2. unfold subst1. rewrite !subst_subst.
-  apply subst_ext. unfold comp. intros [|n].
-  * reflexivity.
-  * simpl. unfold comp. rewrite subst_ren.
-    etransitivity; [symmetry; apply subst_id|].
-    apply subst_ext. intros n1. unfold comp. simpl. f_equal. lia.
-Qed.
-
-Lemma lift_ren :
-  forall r n, ren (lift r) n = lift_subst (ren r) n.
-Proof.
-  intros r n. unfold ren, lift_subst, comp.
-  rewrite lift_renv. simpl.
-  destruct n; simpl; [reflexivity|].
-  f_equal; lia.
-Qed.
-
-Lemma ren_subst1 :
-  forall r t1 t2, ren_term r (subst1 t1 t2) = subst1 (ren_term r t1) (ren_term (lift r) t2).
-Proof.
-  intros r t1 t2.
-  rewrite !ren_term_is_subst, subst_subst1.
-  f_equal. apply subst_ext.
-  intros n; rewrite lift_ren; reflexivity.
-Qed.
-
-Lemma subst_read_env :
-  forall us l t, subst us (subst (read_env l) t) = subst (read_env (map (subst us) l)) (subst (liftn_subst (length l) us) t).
-Proof.
-  intros us l t. rewrite !subst_subst. apply subst_ext; intros n.
-  unfold comp, read_env, liftn_subst.
-  destruct nth_error as [u|] eqn:Hln.
-  - destruct le_lt_dec; [apply nth_error_None in l0; congruence|]. simpl.
-    rewrite nth_error_map, Hln. reflexivity.
-  - destruct le_lt_dec; [|apply nth_error_None in Hln; lia].
-    simpl. rewrite subst_ren.
-    etransitivity; [symmetry; apply subst_id|].
-    eapply subst_ext.
-    intros m. unfold comp, ren. simpl.
-    rewrite plus_ren_correct.
-    replace (nth_error _ _) with (@None term).
-    + f_equal. rewrite map_length. lia.
-    + symmetry. apply nth_error_None. rewrite map_length; lia.
-Qed.
-
-Lemma ren_read_env :
-  forall r l t, ren_term r (subst (read_env l) t) = subst (read_env (map (ren_term r) l)) (ren_term (liftn (length l) r) t).
-Proof.
-  intros r l t.
-  rewrite !ren_term_is_subst, subst_read_env.
-  f_equal.
-  - f_equal. apply map_ext. intros; rewrite ren_term_is_subst; reflexivity.
-  - apply subst_ext. intros n.
-    unfold liftn_subst, ren. destruct le_lt_dec; simpl.
-    + rewrite plus_ren_correct.
-      rewrite liftn_renv_large; [reflexivity|assumption].
-    + rewrite liftn_renv_small; [reflexivity|assumption].
 Qed.
 
 Lemma pbeta_ren : forall t1 t2 r, pbeta t1 t2 -> pbeta (ren_term r t1) (ren_term r t2).
@@ -382,216 +255,7 @@ Proof.
     apply pbeta_refl.
 Qed.
 
-Lemma list_exists :
-  forall (A : Type) (P : nat -> A -> Prop) n, (forall k, k < n -> exists x, P k x) -> exists L, length L = n /\ (forall k x, nth_error L k = Some x -> P k x).
-Proof.
-  intros A P n. induction n; intros H.
-  - exists nil. split; [reflexivity|].
-    intros [|k]; simpl; intros; discriminate.
-  - destruct IHn as [L HL]; [intros k Hk; apply H; lia|].
-    destruct (H n) as [x Hx]; [lia|].
-    exists (L ++ x :: nil). split.
-    + rewrite app_length; simpl. lia.
-    + intros k y.
-      destruct (le_lt_dec n k).
-      * rewrite nth_error_app2 by lia.
-        destruct (k - length L) as [|u] eqn:Hu; simpl.
-        -- assert (k = n) by lia. congruence.
-        -- destruct u; simpl; discriminate.
-      * rewrite nth_error_app1 by lia. apply HL.
-Qed.
-
-Lemma nth_error_Some2 :
-  forall (A : Type) (l : list A) n, n < length l -> exists x, nth_error l n = Some x.
-Proof.
-  intros A l n. revert l; induction n; intros l H; destruct l as [|x l]; simpl in *; try lia.
-  - exists x. reflexivity.
-  - apply IHn. lia.
-Qed.
-
-Lemma nth_error_Some3 :
-  forall (A : Type) (l : list A) n x, nth_error l n = Some x -> n < length l.
-Proof.
-  intros. apply nth_error_Some. destruct nth_error; congruence.
-Qed.
-
-
-Inductive Forall3 {A B C : Type} (R : A -> B -> C -> Prop) : list A -> list B -> list C -> Prop :=
-| Forall3_nil : Forall3 R nil nil nil
-| Forall3_cons : forall x y z l1 l2 l3, R x y z -> Forall3 R l1 l2 l3 -> Forall3 R (x :: l1) (y :: l2) (z :: l3).
-
-Inductive Forall4 {A B C D : Type} (R : A -> B -> C -> D -> Prop) : list A -> list B -> list C -> list D -> Prop :=
-| Forall4_nil : Forall4 R nil nil nil nil
-| Forall4_cons : forall x y z w l1 l2 l3 l4, R x y z w -> Forall4 R l1 l2 l3 l4 -> Forall4 R (x :: l1) (y :: l2) (z :: l3) (w :: l4).
-
-Lemma Forall3_select12 :
-  forall A B C R (l1 : list A) (l2 : list B) (l3 : list C),
-    Forall3 (fun x y z => R x y) l1 l2 l3 -> Forall2 R l1 l2.
-Proof.
-  intros A B C R l1 l2 l3 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall3_select13 :
-  forall A B C R (l1 : list A) (l2 : list B) (l3 : list C),
-    Forall3 (fun x y z => R x z) l1 l2 l3 -> Forall2 R l1 l3.
-Proof.
-  intros A B C R l1 l2 l3 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall3_select23 :
-  forall A B C R (l1 : list A) (l2 : list B) (l3 : list C),
-    Forall3 (fun x y z => R y z) l1 l2 l3 -> Forall2 R l2 l3.
-Proof.
-  intros A B C R l1 l2 l3 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select123 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R x y z) l1 l2 l3 l4 -> Forall3 R l1 l2 l3.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select124 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R x y w) l1 l2 l3 l4 -> Forall3 R l1 l2 l4.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select134 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R x z w) l1 l2 l3 l4 -> Forall3 R l1 l3 l4.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select234 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R y z w) l1 l2 l3 l4 -> Forall3 R l2 l3 l4.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select12 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R x y) l1 l2 l3 l4 -> Forall2 R l1 l2.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select13 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R x z) l1 l2 l3 l4 -> Forall2 R l1 l3.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select14 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R x w) l1 l2 l3 l4 -> Forall2 R l1 l4.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select23 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R y z) l1 l2 l3 l4 -> Forall2 R l2 l3.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select24 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R y w) l1 l2 l3 l4 -> Forall2 R l2 l4.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-Lemma Forall4_select34 :
-  forall A B C D R (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D),
-    Forall4 (fun x y z w => R z w) l1 l2 l3 l4 -> Forall2 R l3 l4.
-Proof.
-  intros A B C D R l1 l2 l3 l4 H; induction H; constructor; auto.
-Qed.
-
-
-
-Lemma Forall_exists_Forall2 :
-  forall (A B : Type) (P : A -> B -> Prop) (l1 : list A),
-    Forall (fun x => exists y, P x y) l1 -> exists l2, Forall2 P l1 l2.
-Proof.
-  intros A B P l1 H; induction H.
-  - exists nil. constructor.
-  - destruct IHForall as [l2 IH].
-    destruct H as [y Hy].
-    exists (y :: l2). constructor; assumption.
-Qed.
-
-Lemma Forall2_exists_Forall3 :
-  forall (A B C : Type) (P : A -> B -> C -> Prop) (l1 : list A) (l2 : list B),
-    Forall2 (fun x y => exists z, P x y z) l1 l2 -> exists l3, Forall3 P l1 l2 l3.
-Proof.
-  intros A B C P l1 l2 H; induction H.
-  - exists nil. constructor.
-  - destruct IHForall2 as [l3 IH].
-    destruct H as [z Hz].
-    exists (z :: l3). constructor; assumption.
-Qed.
-
-Lemma Forall3_exists_Forall4 :
-  forall (A B C D: Type) (P : A -> B -> C -> D -> Prop) (l1 : list A) (l2 : list B) (l3 : list C),
-    Forall3 (fun x y z => exists w, P x y z w) l1 l2 l3 -> exists l4, Forall4 P l1 l2 l3 l4.
-Proof.
-  intros A B C D P l1 l2 l3 H; induction H.
-  - exists nil. constructor.
-  - destruct IHForall3 as [l4 IH].
-    destruct H as [w Hw].
-    exists (w :: l4). constructor; assumption.
-Qed.
-
-
-Lemma Forall3_impl :
-  forall (A B C : Type) (P Q : A -> B -> C -> Prop) l1 l2 l3,
-    (forall x y z, P x y z -> Q x y z) -> Forall3 P l1 l2 l3 -> Forall3 Q l1 l2 l3.
-Proof.
-  intros A B C P Q l1 l2 l3 HPQ H; induction H; constructor; [apply HPQ|]; assumption.
-Qed.
-
-Lemma Forall4_impl :
-  forall (A B C D : Type) (P Q : A -> B -> C -> D -> Prop) l1 l2 l3 l4,
-    (forall x y z w, P x y z w -> Q x y z w) -> Forall4 P l1 l2 l3 l4 -> Forall4 Q l1 l2 l3 l4.
-Proof.
-  intros A B C D P Q l1 l2 l3 l4 HPQ H; induction H; constructor; [apply HPQ|]; assumption.
-Qed.
-
-
-Lemma Forall3_from_Forall2 :
-  forall (A B C : Type) (P : A -> B -> Prop) (Q : A -> C -> Prop) l1 l2 l3,
-    Forall2 P l1 l2 -> Forall2 Q l1 l3 -> Forall3 (fun x y z => P x y /\ Q x z) l1 l2 l3.
-Proof.
-  intros A B C P Q l1 l2 l3 H1. revert l3; induction H1; intros l3 H2; inversion H2; subst.
-  - constructor.
-  - constructor.
-    + split; assumption.
-    + apply IHForall2. assumption.
-Qed.
-
-Lemma list_app_eq_length :
-  forall A (l1 l2 l3 l4 : list A), l1 ++ l3 = l2 ++ l4 -> length l1 = length l2 -> l1 = l2 /\ l3 = l4.
-Proof.
-  intros A l1 l2 l3 l4; revert l2; induction l1; intros l2 H1 H2; destruct l2; simpl in *; try intuition congruence.
-  specialize (IHl1 l2 ltac:(congruence) ltac:(congruence)).
-  intuition congruence.
-Qed.
-
-
-Definition locally_confluent {A : Type} (R : A -> A -> Prop) :=
-  forall x y z, R x y -> R x z -> exists w, R y w /\ R z w.
-
-Definition confluent {A : Type} (R : A -> A -> Prop) := locally_confluent (star R).
-
-Lemma pbeta_lc : locally_confluent pbeta.
+Lemma pbeta_diamond : diamond pbeta.
 Proof.
   intros t1 t2 t3 H12. revert t3. induction H12 using pbeta_ind2; intros t5 H15; inversion H15; subst.
   - exists (var n). split; constructor.
@@ -693,47 +357,75 @@ Proof.
     + eapply Forall3_select23, Forall3_impl, Hlt4; intros; simpl in *; tauto.
 Qed.
 
-Lemma lc_is_confluent :
-  forall (A : Type) (R : A -> A -> Prop), locally_confluent R -> confluent R.
-Proof.
-  intros A R H.
-  assert (H1 : forall x y z, star R x y -> R x z -> exists w, star R z w /\ R y w).
-  - intros x y z Hxy; revert z. induction Hxy.
-    + intros z Hxz. exists z. split; [apply star_refl|assumption].
-    + intros w Hw. destruct (H _ _ _ H0 Hw) as (t & Hyt & Hwt).
-      destruct (IHHxy t Hyt) as (s & Hs1 & Hs2).
-      exists s. split; [|assumption]. econstructor; eassumption.
-  - intros x y z Hxy; revert z. induction Hxy.
-    + intros z Hxz; exists z. split; [assumption|apply star_refl].
-    + intros w Hxw. destruct (H1 _ _ _ Hxw H0) as (t & Ht1 & Ht2).
-      destruct (IHHxy _ Ht1) as (s & Hs1 & Hs2).
-      exists s. split; [assumption|]. econstructor; eassumption.
-Qed.
-
-Lemma star_beta_is_star_pbeta :
-  forall x y, star beta x y <-> star pbeta x y.
-Proof.
-  intros x y. split; intros H.
-  - eapply star_map_impl with (f := id); [|eassumption].
-    intros x1 y1; simpl. apply beta_pbeta.
-  - eapply star_star.
-    eapply star_map_impl with (f := id); [|eassumption].
-    intros x1 y1; simpl. apply pbeta_star_beta.
-Qed.
-
-Lemma locally_confluent_ext :
-  forall (A : Type) (R1 R2 : A -> A -> Prop), (forall x y, R1 x y <-> R2 x y) -> locally_confluent R1 <-> locally_confluent R2.
-Proof.
-  intros A R1 R2 Heq; split; intros H x y z Hxy Hxz.
-  - rewrite <- Heq in Hxy, Hxz. destruct (H _ _ _ Hxy Hxz) as (w & Hyw & Hzw).
-    exists w; split; rewrite <- Heq; assumption.
-  - rewrite Heq in Hxy, Hxz. destruct (H _ _ _ Hxy Hxz) as (w & Hyw & Hzw).
-    exists w; split; rewrite Heq; assumption.
-Qed.
-
 Lemma beta_confluent :
   confluent beta.
 Proof.
-  eapply locally_confluent_ext; [apply star_beta_is_star_pbeta|].
-  apply lc_is_confluent, pbeta_lc.
+  eapply diamond_ext; [|apply diamond_is_confluent, pbeta_diamond].
+  apply between_star; [apply beta_pbeta|apply pbeta_star_beta].
 Qed.
+
+(*
+Inductive iota defs : nat -> term -> term -> Prop :=
+| iota_unfold : forall k n t, nth_error defs k = Some t -> iota defs n (var (k + n)) (ren_term (plus_ren n) t)
+| iota_app1 : forall n t1 t2 t3, iota defs n t1 t2 -> iota defs n (app t1 t3) (app t2 t3)
+| iota_app2 : forall n t1 t2 t3, iota defs n t1 t2 -> iota defs n (app t3 t1) (app t3 t2)
+| iota_abs : forall n t1 t2, iota defs (S n) t1 t2 -> iota defs n (abs t1) (abs t2).
+
+Lemma iota_diamond :
+  forall defs n, diamond (iota defs n).
+Proof.
+  intros defs n t1 t2 t3 H12. revert t3.
+  induction H12; intros t4 H14; inversion H14; subst.
+  - admit.
+  - destruct (IHiota _ H3) as (t4 & Ht24 & Ht34).
+    exists (app t4 t3). split; constructor; assumption.
+  - exists (app t2 t5). split; constructor; assumption.
+  - admit.
+  - admit.
+  - destruct (IHiota _ H1) as (t4 & Ht2' & Ht34).
+    exists (abs t4). split; constructor; assumption.
+Admitted.
+
+Lemma iota_subst_left :
+  forall defs n t1 t2 t3, iota defs (S n) t1 t2 -> iota defs n (subst1 t3 t1) (subst1 t3 t2).
+Proof.
+  intros defs n t1 t2 t3 H. remember (S n) as m; revert n Heqm; induction H; intros m Hm; subst.
+  - unfold subst1, scons. simpl.
+    rewrite Nat.add_succ_r. admit.
+  - unfold subst1, scons. simpl.
+    constructor. apply IHiota. reflexivity.
+  - unfold subst1, scons. simpl.
+    constructor. apply IHiota. reflexivity.
+  - unfold subst1, scons. simpl.
+    constructor. specialize (IHiota (S m) eq_refl).
+    unfold lift_subst.
+  - unfold subst1; simpl. admit.
+  - unfold subst1; simpl. 
+Abort.
+
+Lemma beta_iota_strongly_commute :
+  forall defs n, strongly_commute (iota defs n) beta.
+Proof.
+  intros defs n t1 t2 t3 Hiota Hbeta.
+  revert n t2 Hiota; induction Hbeta; intros n t4 Hiota; inversion Hiota; subst.
+  - destruct (IHHbeta _ _ H3) as (t4 & Ht34 & Ht24).
+    exists (app t4 t3). split.
+    + destruct Ht34 as [Ht34 | <-]; [left; constructor; assumption | right; reflexivity].
+    + eapply star_map_impl with (f := fun t => app t t3); [|eassumption].
+      intros; constructor; assumption.
+  - exists (app t2 t5).
+    split; [left; constructor; assumption|].
+    eapply star_1. constructor. assumption.
+  - admit.
+  - admit.
+  - destruct (IHHbeta _ _ H1) as (t4 & Ht34 & Ht24).
+    exists (abs t4). split.
+    + destruct Ht34 as [Ht34 | <-]; [left; constructor; assumption | right; reflexivity].
+    + eapply star_map_impl with (f := fun t => abs t); [|eassumption].
+      intros; constructor; assumption.
+  - inversion H3; subst.
+    exists (subst1 t2 t4). split.
+    + left. constructor.
+    + 
+    exists (subst1 )
+*)
