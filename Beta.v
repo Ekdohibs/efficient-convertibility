@@ -10,6 +10,21 @@ Require Import STerm.
 Require Import Inductive.
 Require Import Rewrite.
 
+
+Lemma star_list :
+  forall (A B : Type) (RA : A -> A -> Prop) (RB : B -> B -> Prop) (f : list A -> B) l1 l2,
+    (forall l1 l2 x y, RA x y -> RB (f (l1 ++ x :: l2)) (f (l1 ++ y :: l2))) -> Forall2 (star RA) l1 l2 -> star RB (f l1) (f l2).
+Proof.
+  intros A B RA RB f l1 l2 Himpl Hl.
+  enough (H : forall l, star RB (f (l ++ l1)) (f (l ++ l2))); [exact (H nil)|].
+  induction Hl as [|x y l1 l2 Hxy Hl IH].
+  - intros. constructor.
+  - intros l. eapply star_compose.
+    + specialize (IH (l ++ x :: nil)). rewrite <- !app_assoc in IH. apply IH.
+    + eapply star_map_impl with (f := fun t => f (l ++ t :: l2)); [|eassumption].
+      intros; apply Himpl; assumption.
+Qed.
+
 Inductive beta : term -> term -> Prop :=
 | beta_app1 : forall t1 t2 t3, beta t1 t2 -> beta (app t1 t3) (app t2 t3)
 | beta_app2 : forall t1 t2 t3, beta t1 t2 -> beta (app t3 t1) (app t3 t2)
@@ -43,14 +58,8 @@ Lemma star_beta_constr :
   forall tag l1 l2, Forall2 (star beta) l1 l2 -> star beta (constr tag l1) (constr tag l2).
 Proof.
   intros tag l1 l2 H12.
-  enough (H : forall l, star beta (constr tag (l ++ l1)) (constr tag (l ++ l2))).
-  { exact (H nil). }
-  induction H12 as [|t1 t2 l1 l2 Ht Hl IH].
-  - intros. apply star_refl.
-  - intros l. eapply star_compose.
-    + specialize (IH (l ++ (t1 :: nil))). rewrite <- !app_assoc in IH. simpl in IH. apply IH.
-    + eapply star_map_impl with (RA := beta) (f := fun t => constr tag (l ++ t :: l2)); [|eassumption].
-      intros; constructor; assumption.
+  eapply star_list; [|eassumption].
+  intros; constructor; assumption.
 Qed.
 
 Lemma star_beta_switch :
@@ -60,22 +69,22 @@ Lemma star_beta_switch :
 Proof.
   intros t1 t2 l1 l2 Ht Hl.
   eapply star_compose.
-  { eapply star_map_impl with (RA := beta) (f := fun t => switch t _); [|eassumption]; intros; constructor; assumption. }
-  enough (H : forall l, star beta (switch t2 (l ++ l1)) (switch t2 (l ++ l2))).
-  { exact (H nil). }
-  induction Hl as [|pt1 pt2 l1 l2 [Hp H] Hl IH].
-  - intros. apply star_refl.
-  - intros l. eapply star_compose.
-    + specialize (IH (l ++ (pt1 :: nil))). rewrite <- !app_assoc in IH. simpl in IH. apply IH.
-    + destruct pt1 as [p1 t3]; destruct pt2 as [p2 t4]; simpl in *; subst.
-      eapply star_map_impl with (RA := beta) (f := fun t => switch t2 (l ++ (p2, t) :: l2)); [|assumption].
-      intros; constructor; assumption.
+  - eapply star_map_impl with (RA := beta) (f := fun t => switch t _); [|eassumption].
+    intros; constructor; assumption.
+  - eapply star_list with (RA := fun pt1 pt2 => fst pt1 = fst pt2 /\ beta (snd pt1) (snd pt2)).
+    + intros l3 l4 [p1 t3] [p2 t4] [Hp Hbeta]; simpl in *; subst.
+      constructor. assumption.
+    + eapply Forall2_impl; [|eassumption].
+      intros [p1 t3] [p2 t4] [Hp Hbeta]; simpl in *; subst.
+      eapply star_map_impl; [|eassumption].
+      intros; simpl; tauto.
 Qed.
 
 
 
 Inductive pbeta : term -> term -> Prop :=
 | pbeta_var : forall n, pbeta (var n) (var n)
+| pbeta_dvar : forall n, pbeta (dvar n) (dvar n)
 | pbeta_app : forall t1 t2 t3 t4, pbeta t1 t2 -> pbeta t3 t4 -> pbeta (app t1 t3) (app t2 t4)
 | pbeta_redex : forall t1 t2 t3 t4, pbeta t1 t2 -> pbeta t3 t4 -> pbeta (app (abs t1) t3) (subst1 t4 t2)
 | pbeta_abs : forall t1 t2, pbeta t1 t2 -> pbeta (abs t1) (abs t2)
@@ -90,6 +99,7 @@ Lemma pbeta_refl :
 Proof.
   induction t using term_ind2.
   - constructor.
+  - constructor.
   - constructor. assumption.
   - constructor; assumption.
   - constructor. apply Forall2_map_same. assumption.
@@ -100,6 +110,7 @@ Qed.
 
 Fixpoint pbeta_ind2 (P : term -> term -> Prop)
          (Hvar : forall n, P (var n) (var n))
+         (Hdvar : forall n, P (dvar n) (dvar n))
          (Happ : forall t1 t2 t3 t4, pbeta t1 t2 -> P t1 t2 -> pbeta t3 t4 -> P t3 t4 -> P (app t1 t3) (app t2 t4))
          (Hredex : forall t1 t2 t3 t4, pbeta t1 t2 -> P t1 t2 -> pbeta t3 t4 -> P t3 t4 -> P (app (abs t1) t3) (subst1 t4 t2))
          (Hlam : forall t1 t2, pbeta t1 t2 -> P t1 t2 -> P (abs t1) (abs t2))
@@ -107,9 +118,10 @@ Fixpoint pbeta_ind2 (P : term -> term -> Prop)
          (Hswitch : forall t1 t2 l1 l2, pbeta t1 t2 -> P t1 t2 -> Forall2 (fun pt1 pt2 => fst pt1 = fst pt2 /\ pbeta (snd pt1) (snd pt2)) l1 l2 -> Forall2 (fun pt1 pt2 => P (snd pt1) (snd pt2)) l1 l2 -> P (switch t1 l1) (switch t2 l2))
          (Hswitch_redex : forall lt1 lt2 t1 t2 l1 l2, Forall2 pbeta lt1 lt2 -> Forall2 P lt1 lt2 -> pbeta t1 t2 -> P t1 t2 -> P (switch (constr (length l1) lt1) (l1 ++ (length lt1, t1) :: l2)) (subst (read_env lt2) t2))
          (t1 t2 : term) (H : pbeta t1 t2) {struct H} : P t1 t2 :=
-  let rec := pbeta_ind2 P Hvar Happ Hredex Hlam Hconstr Hswitch Hswitch_redex in
+  let rec := pbeta_ind2 P Hvar Hdvar Happ Hredex Hlam Hconstr Hswitch Hswitch_redex in
   match H with
   | pbeta_var n => Hvar n
+  | pbeta_dvar n => Hdvar n
   | pbeta_app t1 t2 t3 t4 H12 H34 => Happ t1 t2 t3 t4 H12 (rec t1 t2 H12) H34 (rec t3 t4 H34)
   | pbeta_redex t1 t2 t3 t4 H12 H34 => Hredex t1 t2 t3 t4 H12 (rec t1 t2 H12) H34 (rec t3 t4 H34)
   | pbeta_abs t1 t2 H12 => Hlam t1 t2 H12 (rec t1 t2 H12)
@@ -154,6 +166,7 @@ Lemma pbeta_star_beta :
 Proof.
   intros t1 t2 Hpbeta. induction Hpbeta using pbeta_ind2.
   - constructor.
+  - constructor.
   - apply star_beta_app; assumption.
   - eapply star_compose.
     + apply star_beta_app; [|eassumption].
@@ -178,6 +191,7 @@ Qed.
 Lemma pbeta_ren : forall t1 t2 r, pbeta t1 t2 -> pbeta (ren_term r t1) (ren_term r t2).
 Proof.
   intros t1 t2 r H. revert r. induction H using pbeta_ind2; intros r; simpl in *.
+  - constructor.
   - constructor.
   - constructor; [apply IHpbeta1|apply IHpbeta2].
   - rewrite ren_subst1.
@@ -208,6 +222,7 @@ Lemma pbeta_subst : forall t1 t2 us1 us2, pbeta t1 t2 -> (forall n, pbeta (us1 n
 Proof.
   intros t1 t2 us1 us2 H. revert us1 us2. induction H using pbeta_ind2; intros us1 us2 Hus; simpl in *.
   - apply Hus.
+  - constructor.
   - constructor; [apply IHpbeta1|apply IHpbeta2]; assumption.
   - rewrite subst_subst1.
     constructor; [apply IHpbeta1|apply IHpbeta2; assumption].
@@ -259,6 +274,7 @@ Lemma pbeta_diamond : diamond pbeta.
 Proof.
   intros t1 t2 t3 H12. revert t3. induction H12 using pbeta_ind2; intros t5 H15; inversion H15; subst.
   - exists (var n). split; constructor.
+  - exists (dvar n). split; constructor.
   - destruct (IHpbeta1 t6) as (t7 & H27 & H67); [assumption|].
     destruct (IHpbeta2 t8) as (t9 & H49 & H89); [assumption|].
     exists (app t7 t9). split; constructor; assumption.
@@ -364,68 +380,294 @@ Proof.
   apply between_star; [apply beta_pbeta|apply pbeta_star_beta].
 Qed.
 
-(*
-Inductive iota defs : nat -> term -> term -> Prop :=
-| iota_unfold : forall k n t, nth_error defs k = Some t -> iota defs n (var (k + n)) (ren_term (plus_ren n) t)
-| iota_app1 : forall n t1 t2 t3, iota defs n t1 t2 -> iota defs n (app t1 t3) (app t2 t3)
-| iota_app2 : forall n t1 t2 t3, iota defs n t1 t2 -> iota defs n (app t3 t1) (app t3 t2)
-| iota_abs : forall n t1 t2, iota defs (S n) t1 t2 -> iota defs n (abs t1) (abs t2).
+Inductive iota defs : term -> term -> Prop :=
+| iota_unfold : forall k t, nth_error defs k = Some t -> closed_at t 0 -> iota defs (dvar k) t
+| iota_app1 : forall t1 t2 t3, iota defs t1 t2 -> iota defs (app t1 t3) (app t2 t3)
+| iota_app2 : forall t1 t2 t3, iota defs t1 t2 -> iota defs (app t3 t1) (app t3 t2)
+| iota_abs : forall t1 t2, iota defs t1 t2 -> iota defs (abs t1) (abs t2)
+| iota_constr : forall tag t1 t2 l1 l2, iota defs t1 t2 -> iota defs (constr tag (l1 ++ t1 :: l2)) (constr tag (l1 ++ t2 :: l2))
+| iota_switch1 : forall t1 t2 l, iota defs t1 t2 -> iota defs (switch t1 l) (switch t2 l)
+| iota_switch2 : forall t p t1 t2 l1 l2, iota defs t1 t2 -> iota defs (switch t (l1 ++ (p, t1) :: l2)) (switch t (l1 ++ (p, t2) :: l2)).
 
-Lemma iota_diamond :
-  forall defs n, diamond (iota defs n).
-Proof.
-  intros defs n t1 t2 t3 H12. revert t3.
-  induction H12; intros t4 H14; inversion H14; subst.
-  - admit.
-  - destruct (IHiota _ H3) as (t4 & Ht24 & Ht34).
-    exists (app t4 t3). split; constructor; assumption.
-  - exists (app t2 t5). split; constructor; assumption.
-  - admit.
-  - admit.
-  - destruct (IHiota _ H1) as (t4 & Ht2' & Ht34).
-    exists (abs t4). split; constructor; assumption.
-Admitted.
 
 Lemma iota_subst_left :
-  forall defs n t1 t2 t3, iota defs (S n) t1 t2 -> iota defs n (subst1 t3 t1) (subst1 t3 t2).
+  forall defs t1 t2 us, iota defs t1 t2 -> iota defs (subst us t1) (subst us t2).
 Proof.
-  intros defs n t1 t2 t3 H. remember (S n) as m; revert n Heqm; induction H; intros m Hm; subst.
-  - unfold subst1, scons. simpl.
-    rewrite Nat.add_succ_r. admit.
-  - unfold subst1, scons. simpl.
-    constructor. apply IHiota. reflexivity.
-  - unfold subst1, scons. simpl.
-    constructor. apply IHiota. reflexivity.
-  - unfold subst1, scons. simpl.
-    constructor. specialize (IHiota (S m) eq_refl).
-    unfold lift_subst.
-  - unfold subst1; simpl. admit.
-  - unfold subst1; simpl. 
-Abort.
+  intros defs t1 t2 us H. revert us; induction H; intros us; unfold subst1, scons; simpl.
+  - erewrite subst_closed_at_ext, subst_id; [constructor; eassumption|eassumption|].
+    intros; lia.
+  - constructor. apply IHiota.
+  - constructor. apply IHiota.
+  - constructor. apply IHiota.
+  - rewrite !map_app; simpl.
+    constructor. apply IHiota.
+  - constructor. apply IHiota.
+  - rewrite !map_app; simpl.
+    constructor. apply IHiota.
+Qed.
+
+Lemma iota_subst_right :
+  forall defs us1 us2 t, (forall n, star (iota defs) (us1 n) (us2 n)) -> star (iota defs) (subst us1 t) (subst us2 t).
+Proof.
+  intros defs us1 us2 t Hus.
+  revert us1 us2 Hus; induction t using term_ind2; intros us1 us2 Hus; simpl.
+  - apply Hus.
+  - constructor.
+  - eapply star_map_impl with (f := fun t => abs t); [|apply IHt]; [intros; constructor; assumption|].
+    intros [|n]; unfold lift_subst; simpl.
+    + constructor.
+    + unfold comp. rewrite !ren_term_is_subst.
+      eapply star_map_impl; [|apply Hus].
+      intros t1 t2 H12; apply iota_subst_left; assumption.
+  - eapply star_compose.
+    + eapply star_map_impl with (f := fun t => app t _); [|apply IHt1, Hus].
+      intros; constructor; assumption.
+    + eapply star_map_impl with (f := fun t => app _ t); [|apply IHt2, Hus].
+      intros; constructor; assumption.
+  - eapply star_list; [intros; constructor; eassumption|].
+    rewrite Forall2_map_left, Forall2_map_right, Forall2_map_same.
+    eapply Forall_impl; [|eassumption].
+    intros t Ht; apply Ht; assumption.
+  - eapply star_compose.
+    + eapply star_map_impl with (f := fun t => switch t _); [|apply IHt; eassumption].
+      intros; constructor; assumption.
+    + eapply star_list with (RA := fun pt1 pt2 => fst pt1 = fst pt2 /\ iota defs (snd pt1) (snd pt2)).
+      * intros l1 l2 [p1 t1] [p2 t2] [Hp Hiota]; simpl in *; subst.
+        constructor; assumption.
+      * rewrite Forall2_map_left, Forall2_map_right, Forall2_map_same.
+        eapply Forall_impl; [|eassumption].
+        intros [p t1] Hpt; simpl in *.
+        eapply star_map_impl with (f := fun t1 => (p, t1)); [|apply Hpt]; [intros; simpl; tauto|].
+        intros n. unfold liftn_subst; simpl.
+        destruct le_lt_dec; [|constructor].
+        rewrite !ren_term_is_subst.
+        eapply star_map_impl; [|apply Hus].
+        intros; apply iota_subst_left; assumption.
+Qed.
+
+Lemma list_select_eq :
+  forall (A : Type) (l1a l1b l2a l2b : list A) (x1 x2 : A),
+    l1a ++ x1 :: l1b = l2a ++ x2 :: l2b ->
+    (l1a = l2a /\ x1 = x2 /\ l1b = l2b) \/
+    (exists l3, l1a ++ x1 :: l3 = l2a /\ l1b = l3 ++ x2 :: l2b) \/
+    (exists l3, l1a = l2a ++ x2 :: l3 /\ l3 ++ x1 :: l1b = l2b).
+Proof.
+  intros A l1a. induction l1a as [|x1a l1a IH]; intros l1b l2a l2b x1 x2 Heq; destruct l2a as [|x2a l2a]; simpl in *.
+  - left. split; [reflexivity|].
+    split; congruence.
+  - right. left. exists l2a. split; congruence.
+  - right. right. exists l1a. split; congruence.
+  - specialize (IH l1b l2a l2b x1 x2 ltac:(congruence)).
+    destruct IH as [IH | [IH | IH]]; [left|right; left|right; right].
+    + intuition congruence.
+    + destruct IH as (l3 & H1 & H2). exists l3. intuition congruence.
+    + destruct IH as (l3 & H1 & H2). exists l3. intuition congruence.
+Qed.
+
+Lemma select2_app_assoc :
+  forall (A : Type) (l1 l2 l3 : list A) (x1 x2 : A),
+    (l1 ++ x1 :: l2) ++ x2 :: l3 = l1 ++ x1 :: l2 ++ x2 :: l3.
+Proof.
+  intros.
+  rewrite <- app_assoc. reflexivity.
+Qed.
+
+Lemma length_select :
+  forall (A : Type) (l1 l2 : list A) (x1 x2 : A),
+    length (l1 ++ x1 :: l2) = length (l1 ++ x2 :: l2).
+Proof.
+  intros; rewrite !app_length; reflexivity.
+Qed.
 
 Lemma beta_iota_strongly_commute :
-  forall defs n, strongly_commute (iota defs n) beta.
+  forall defs, strongly_commute (iota defs) beta.
 Proof.
-  intros defs n t1 t2 t3 Hiota Hbeta.
-  revert n t2 Hiota; induction Hbeta; intros n t4 Hiota; inversion Hiota; subst.
-  - destruct (IHHbeta _ _ H3) as (t4 & Ht34 & Ht24).
-    exists (app t4 t3). split.
-    + destruct Ht34 as [Ht34 | <-]; [left; constructor; assumption | right; reflexivity].
-    + eapply star_map_impl with (f := fun t => app t t3); [|eassumption].
-      intros; constructor; assumption.
+  intros defs t1 t2 t3 Hiota Hbeta.
+  enough (exists w : term, beta t2 w /\ star (iota defs) t3 w) by (unfold reflc; firstorder).
+  revert t2 Hiota; induction Hbeta; intros t4 Hiota; inversion Hiota; subst.
+  - destruct (IHHbeta _ H2) as (t4 & Ht34 & Ht24).
+    exists (app t4 t3).
+    split; [constructor; assumption|].
+    eapply star_map_impl with (f := fun t => app t t3); [|eassumption].
+    intros; constructor; assumption.
   - exists (app t2 t5).
-    split; [left; constructor; assumption|].
+    split; [constructor; assumption|].
     eapply star_1. constructor. assumption.
-  - admit.
-  - admit.
-  - destruct (IHHbeta _ _ H1) as (t4 & Ht34 & Ht24).
-    exists (abs t4). split.
-    + destruct Ht34 as [Ht34 | <-]; [left; constructor; assumption | right; reflexivity].
-    + eapply star_map_impl with (f := fun t => abs t); [|eassumption].
+  - exists (app t5 t2).
+    split; [constructor; assumption|].
+    eapply star_1. constructor. assumption.
+  - destruct (IHHbeta _ H2) as (t4 & Ht34 & Ht24).
+    exists (app t3 t4).
+    split; [constructor; assumption|].
+    eapply star_map_impl with (f := fun t => app t3 t); [|eassumption].
+    intros; constructor; assumption.
+  - destruct (IHHbeta _ H0) as (t4 & Ht34 & Ht24).
+    exists (abs t4).
+    split; [constructor; assumption|].
+    eapply star_map_impl with (f := fun t => abs t); [|eassumption].
+    intros; constructor; assumption.
+  - inversion H2; subst.
+    exists (subst1 t2 t4).
+    split; [constructor|].
+    apply star_1, iota_subst_left. assumption.
+  - exists (subst1 t3 t1).
+    split; [constructor|].
+    apply iota_subst_right.
+    intros [|n]; simpl; [apply star_1; assumption|constructor].
+  - apply list_select_eq in H1.
+    destruct H1 as [(-> & -> & ->) | [(l4 & <- & ->) | (l4 & -> & <-)]].
+    + destruct (IHHbeta _ H2) as (t4 & Ht34 & Ht24).
+      exists (constr tag (l1 ++ t4 :: l2)).
+      split; [constructor; assumption|].
+      eapply star_map_impl with (f := fun t => constr tag (l1 ++ t :: l2)); [|eassumption].
       intros; constructor; assumption.
-  - inversion H3; subst.
-    exists (subst1 t2 t4). split.
-    + left. constructor.
-    + 
-    exists (subst1 )
-*)
+    + exists (constr tag (l0 ++ t3 :: l4 ++ t2 :: l2)). split.
+      * rewrite <- !select2_app_assoc. constructor. assumption.
+      * apply star_1. rewrite select2_app_assoc. constructor. assumption.
+    + exists (constr tag (l1 ++ t2 :: l4 ++ t3 :: l3)). split.
+      * rewrite select2_app_assoc. constructor. assumption.
+      * apply star_1. rewrite <- !select2_app_assoc. constructor. assumption.
+  - destruct (IHHbeta _ H2) as (t4 & Ht34 & Ht24).
+    exists (switch t4 l).
+    split; [constructor; assumption|].
+    eapply star_map_impl with (f := fun t => switch t l); [|eassumption].
+    intros; constructor; assumption.
+  - exists (switch t2 (l1 ++ (p, t3) :: l2)).
+    split; [constructor; assumption|].
+    apply star_1. constructor. assumption.
+  - exists (switch t3 (l1 ++ (p, t2) :: l2)).
+    split; [constructor; assumption|].
+    apply star_1. constructor. assumption.
+  - apply list_select_eq in H1.
+    destruct H1 as [(-> & [=-> ->] & ->) | [(l4 & <- & ->) | (l4 & -> & <-)]].
+    + destruct (IHHbeta _ H2) as (t4 & Ht34 & Ht24).
+      exists (switch t (l1 ++ (p, t4) :: l2)).
+      split; [constructor; assumption|].
+      eapply star_map_impl with (f := fun t1 => switch t (l1 ++ (p, t1) :: l2)); [|eassumption].
+      intros; constructor; assumption.
+    + exists (switch t (l0 ++ (p0, t5) :: l4 ++ (p, t2) :: l2)). split.
+      * rewrite <- !select2_app_assoc. constructor. assumption.
+      * apply star_1. rewrite select2_app_assoc. constructor. assumption.
+    + exists (switch t (l1 ++ (p, t2) :: l4 ++ (p0, t5) :: l3)). split.
+      * rewrite select2_app_assoc. constructor. assumption.
+      * apply star_1. rewrite <- !select2_app_assoc. constructor. assumption.
+  - inversion H2; subst.
+    exists (subst (read_env (l0 ++ t0 :: l3)) t). split.
+    + erewrite length_select; constructor.
+    + eapply iota_subst_right. intros n.
+      unfold read_env. rewrite !app_length; simpl.
+      destruct (le_lt_dec (length l0) n).
+      * rewrite !nth_error_app2 by assumption.
+        destruct (n - length l0); simpl; [apply star_1; assumption|constructor].
+      * rewrite !nth_error_app1 by assumption. constructor.
+  - apply list_select_eq in H1.
+    destruct H1 as [(-> & [=-> ->] & ->) | [(l4 & <- & ->) | (l4 & -> & <-)]].
+    + exists (subst (read_env l) t2).
+      split; [constructor|].
+      apply star_1, iota_subst_left. assumption.
+    + exists (subst (read_env l) t). split; [|constructor].
+      rewrite <- select2_app_assoc.
+      erewrite length_select; constructor.
+    + exists (subst (read_env l) t). split; [|constructor].
+      rewrite select2_app_assoc. constructor.
+Qed.
+
+Definition weak_diamond {A : Type} (R : A -> A -> Prop) :=
+  forall x y z, R x y -> R x z -> y = z \/ (exists w, R y w /\ R z w).
+
+Lemma weak_diamond_diamond_reflc {A : Type} (R : A -> A -> Prop) :
+  weak_diamond R -> diamond (reflc R).
+Proof.
+  intros HD x y z [Hxy | <-] [Hxz | <-].
+  - specialize (HD x y z Hxy Hxz).
+    destruct HD as [-> | (w & Hyw & Hzw)].
+    + exists z. split; right; reflexivity.
+    + exists w. split; left; assumption.
+  - exists y. split; [right; reflexivity|left; assumption].
+  - exists z. split; [left; assumption|right; reflexivity].
+  - exists x. split; right; reflexivity.
+Qed.
+
+Lemma star_reflc {A : Type} (R : A -> A -> Prop) :
+  same_rel (star R) (star (reflc R)).
+Proof.
+  intros x y. split; intros H.
+  - eapply star_map_impl with (f := id); [|eassumption].
+    intros; left; assumption.
+  - induction H.
+    + constructor.
+    + destruct H as [H | ->].
+      * econstructor; eassumption.
+      * assumption.
+Qed.
+
+Lemma weak_diamond_confluent {A : Type} (R : A -> A -> Prop) :
+  weak_diamond R -> confluent R.
+Proof.
+  intros H.
+  apply weak_diamond_diamond_reflc, diamond_is_confluent in H.
+  eapply diamond_ext; [|eassumption].
+  apply star_reflc.
+Qed.
+
+Lemma iota_weak_diamond :
+  forall defs, weak_diamond (iota defs).
+Proof.
+  intros defs t1 t2 t3 H12. revert t3.
+  induction H12; intros t4 H14; inversion H14; subst.
+  - left. congruence.
+  - destruct (IHiota _ H2) as [-> | (t4 & Ht24 & Ht34)]; [left; reflexivity|right].
+    exists (app t4 t3). split; constructor; assumption.
+  - right. exists (app t2 t5). split; constructor; assumption.
+  - right. exists (app t5 t2). split; constructor; assumption.
+  - destruct (IHiota _ H2) as [-> | (t4 & Ht24 & Ht34)]; [left; reflexivity|right].
+    exists (app t3 t4). split; constructor; assumption.
+  - destruct (IHiota _ H0) as [-> | (t4 & Ht2' & Ht34)]; [left; reflexivity|right].
+    exists (abs t4). split; constructor; assumption.
+  - apply list_select_eq in H1.
+    destruct H1 as [(-> & -> & ->) | [(l4 & <- & ->) | (l4 & -> & <-)]].
+    + destruct (IHiota _ H2) as [-> | (t4 & Ht24 & Ht34)]; [left; reflexivity|right].
+      exists (constr tag (l1 ++ t4 :: l2)). split; constructor; assumption.
+    + right.
+      exists (constr tag (l0 ++ t3 :: l4 ++ t2 :: l2)). split.
+      * rewrite select2_app_assoc. constructor; assumption.
+      * rewrite <- !select2_app_assoc. constructor; assumption.
+    + right.
+      exists (constr tag (l1 ++ t2 :: l4 ++ t3 :: l3)). split.
+      * rewrite <- !select2_app_assoc. constructor; assumption.
+      * rewrite select2_app_assoc. constructor; assumption.
+  - destruct (IHiota _ H2) as [-> | (t4 & Ht24 & Ht34)]; [left; reflexivity|right].
+    exists (switch t4 l). split; constructor; assumption.
+  - right. exists (switch t2 (l1 ++ (p, t3) :: l2)).
+    split; constructor; assumption.
+  - right. exists (switch t3 (l1 ++ (p, t2) :: l2)).
+    split; constructor; assumption.
+  - apply list_select_eq in H1.
+    destruct H1 as [(-> & [=-> ->] & ->) | [(l4 & <- & ->) | (l4 & -> & <-)]].
+    + destruct (IHiota _ H2) as [-> | (t4 & Ht24 & Ht34)]; [left; reflexivity|right].
+      exists (switch t (l1 ++ (p, t4) :: l2)). split; constructor; assumption.
+    + right.
+      exists (switch t (l0 ++ (p0, t5) :: l4 ++ (p, t2) :: l2)). split.
+      * rewrite select2_app_assoc. constructor; assumption.
+      * rewrite <- !select2_app_assoc. constructor; assumption.
+    + right.
+      exists (switch t (l1 ++ (p, t2) :: l4 ++ (p0, t5) :: l3)). split.
+      * rewrite <- !select2_app_assoc. constructor; assumption.
+      * rewrite select2_app_assoc. constructor; assumption.
+Qed.
+
+Lemma iota_confluent :
+  forall defs, confluent (iota defs).
+Proof.
+  intros defs. apply weak_diamond_confluent, iota_weak_diamond.
+Qed.
+
+Lemma beta_iota_confluent :
+  forall defs, confluent (union (iota defs) beta).
+Proof.
+  intros defs.
+  apply commuting_confluent.
+  - apply iota_confluent.
+  - apply beta_confluent.
+  - apply strongly_commute_commutes, beta_iota_strongly_commute.
+Qed.

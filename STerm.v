@@ -215,6 +215,7 @@ Qed.
 
 Inductive term :=
 | var : nat -> term
+| dvar : nat -> term
 | abs : term -> term
 | app : term -> term -> term
 | constr : nat -> list term -> term
@@ -222,6 +223,7 @@ Inductive term :=
 
 Fixpoint term_ind2 (P : term -> Prop)
          (Hvar : forall n, P (var n))
+         (Hdvar : forall n, P (dvar n))
          (Habs : forall t, P t -> P (abs t))
          (Happ : forall t1 t2, P t1 -> P t2 -> P (app t1 t2))
          (Hconstr : forall tag l, Forall P l -> P (constr tag l))
@@ -229,25 +231,26 @@ Fixpoint term_ind2 (P : term -> Prop)
          (t : term) : P t :=
   match t with
   | var n => Hvar n
-  | abs t => Habs t (term_ind2 P Hvar Habs Happ Hconstr Hswitch t)
+  | dvar n => Hdvar n
+  | abs t => Habs t (term_ind2 P Hvar Hdvar Habs Happ Hconstr Hswitch t)
   | app t1 t2 =>
     Happ t1 t2
-      (term_ind2 P Hvar Habs Happ Hconstr Hswitch t1)
-      (term_ind2 P Hvar Habs Happ Hconstr Hswitch t2)
+      (term_ind2 P Hvar Hdvar Habs Happ Hconstr Hswitch t1)
+      (term_ind2 P Hvar Hdvar Habs Happ Hconstr Hswitch t2)
   | constr tag l =>
     Hconstr tag l
             ((fix H (l : _) : Forall P l :=
               match l with
               | nil => @Forall_nil _ _
-              | cons t l => @Forall_cons _ _ t l (term_ind2 P Hvar Habs Happ Hconstr Hswitch t) (H l)
+              | cons t l => @Forall_cons _ _ t l (term_ind2 P Hvar Hdvar Habs Happ Hconstr Hswitch t) (H l)
               end) l)
   | switch t m =>
     Hswitch t m
-            (term_ind2 P Hvar Habs Happ Hconstr Hswitch t)
+            (term_ind2 P Hvar Hdvar Habs Happ Hconstr Hswitch t)
             ((fix H (m : _) : Forall (fun '(p, t2) => P t2) m :=
               match m with
               | nil => @Forall_nil _ _
-              | cons (p, t2) m => @Forall_cons _ _ (p, t2) m (term_ind2 P Hvar Habs Happ Hconstr Hswitch t2) (H m)
+              | cons (p, t2) m => @Forall_cons _ _ (p, t2) m (term_ind2 P Hvar Hdvar Habs Happ Hconstr Hswitch t2) (H m)
               end) m)
   end.
 
@@ -255,6 +258,7 @@ Fixpoint term_ind2 (P : term -> Prop)
 Fixpoint ren_term (r : renaming) t :=
   match t with
   | var n => var (renv r n)
+  | dvar n => dvar n
   | abs t => abs (ren_term (lift r) t)
   | app t1 t2 => app (ren_term r t1) (ren_term r t2)
   | constr tag l => constr tag (map (ren_term r) l)
@@ -267,6 +271,7 @@ Definition liftn_subst p us n := if le_lt_dec p n then ren_term (plus_ren p) (us
 Fixpoint subst us t :=
   match t with
   | var n => us n
+  | dvar n => dvar n
   | abs t => abs (subst (lift_subst us) t)
   | app t1 t2 => app (subst us t1) (subst us t2)
   | constr tag l => constr tag (map (subst us) l)
@@ -280,6 +285,7 @@ Lemma subst_ext :
 Proof.
   induction t using term_ind2; intros us1 us2 Heq; simpl.
   - apply Heq.
+  - reflexivity.
   - f_equal. apply IHt. intros [|n]; simpl; [reflexivity|unfold comp; f_equal; apply Heq].
   - f_equal; [apply IHt1|apply IHt2]; assumption.
   - f_equal. apply map_ext_in. intros t Ht. rewrite Forall_forall in H. apply H; assumption.
@@ -295,6 +301,7 @@ Lemma ren_term_is_subst :
   forall t r, ren_term r t = subst (ren r) t.
 Proof.
   induction t using term_ind2; intros r; simpl.
+  - reflexivity.
   - reflexivity.
   - f_equal. rewrite IHt. apply subst_ext.
     intros [|n]; simpl.
@@ -330,6 +337,7 @@ Lemma unfold_subst :
   forall t us, subst us t =
           match t with
           | var n => us n
+          | dvar n => dvar n
           | abs t => abs (subst (lift_subst us) t)
           | app t1 t2 => app (subst us t1) (subst us t2)
           | constr tag l => constr tag (map (subst us) l)
@@ -344,6 +352,7 @@ Lemma ren_ren :
 Proof.
   induction t using term_ind2; intros r1 r2; simpl.
   - rewrite renv_comp_correct. reflexivity.
+  - reflexivity.
   - f_equal. rewrite IHt. f_equal.
     apply renv_ext.
     intros [|n]; rewrite !lift_renv, !renv_comp_correct, !lift_renv; reflexivity.
@@ -368,6 +377,7 @@ Lemma ren_subst :
 Proof.
   induction t using term_ind2; intros r us; simpl.
   - unfold comp; simpl. rewrite ren_term_is_subst. reflexivity.
+  - reflexivity.
   - f_equal. rewrite IHt. unfold comp. apply subst_ext.
     intros [|n]; simpl.
     + rewrite lift_renv. reflexivity.
@@ -391,6 +401,7 @@ Lemma subst_ren :
 Proof.
   induction t using term_ind2; intros r us; simpl.
   - unfold comp; simpl. reflexivity.
+  - reflexivity.
   - f_equal. rewrite IHt. unfold comp. apply subst_ext.
     intros [|n]; simpl.
     + rewrite lift_renv. reflexivity.
@@ -412,6 +423,7 @@ Lemma subst_subst :
 Proof.
   induction t using term_ind2; intros us1 us2; simpl.
   - unfold comp. reflexivity.
+  - reflexivity.
   - f_equal. rewrite IHt. unfold lift_subst, comp. apply subst_ext.
     intros [|n]; simpl; [reflexivity|].
     rewrite ren_subst. rewrite subst_ren. apply subst_ext.
@@ -450,6 +462,7 @@ Definition read_env (e : list term) :=
 Fixpoint size t :=
   match t with
   | var n => 0
+  | dvar n => 0
   | abs t => S (size t)
   | app t1 t2 => S (size t1 + size t2)
   | constr tag l => S (list_sum (map (fun t => S (size t)) l))
@@ -458,6 +471,7 @@ Fixpoint size t :=
 
 Inductive closed_at : term -> nat -> Prop :=
 | closed_at_var : forall n k, n < k -> closed_at (var n) k
+| closed_at_dvar : forall n k, closed_at (dvar n) k
 | closed_at_app : forall t1 t2 k, closed_at t1 k -> closed_at t2 k -> closed_at (app t1 t2) k
 | closed_at_abs : forall t k, closed_at t (S k) -> closed_at (abs t) k
 | closed_at_constr : forall tag l k, (forall t, t \in l -> closed_at t k) -> closed_at (constr tag l) k
@@ -469,6 +483,7 @@ Lemma subst_closed_at_ext :
 Proof.
   induction t using term_ind2; intros k us1 us2 Hclosed Hext; inversion Hclosed; subst; simpl.
   - apply Hext. assumption.
+  - reflexivity.
   - f_equal. eapply IHt; [eassumption|].
     intros [|n] Hn; simpl in *; [reflexivity|].
     unfold comp. f_equal. apply Hext. lia.
