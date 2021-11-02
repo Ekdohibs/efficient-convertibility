@@ -671,3 +671,772 @@ Proof.
   - apply beta_confluent.
   - apply strongly_commute_commutes, beta_iota_strongly_commute.
 Qed.
+
+Definition betaiota defs := union (iota defs) beta.
+
+
+Inductive is_head : term -> Prop :=
+| is_head_var : forall n, is_head (var n)
+| is_head_dvar : forall n, is_head (dvar n).
+
+Inductive is_head_betaiota : list term -> term -> Prop :=
+| is_head_betaiota_var : forall defs n, is_head_betaiota defs (var n)
+| is_head_betaiota_dvar : forall defs n, nth_error defs n = None -> is_head_betaiota defs (dvar n).
+
+Inductive hctx : Type :=
+| h_hole : hctx
+| h_app : hctx -> term -> hctx
+| h_switch : hctx -> list (nat * term) -> hctx.
+
+Fixpoint fill_hctx (h : hctx) (t : term) : term :=
+  match h with
+  | h_hole => t
+  | h_app h t2 => app (fill_hctx h t) t2
+  | h_switch h l => switch (fill_hctx h t) l
+  end.
+
+
+Fixpoint compose_hctx (h1 h2 : hctx) : hctx :=
+  match h1 with
+  | h_hole => h2
+  | h_app h t => h_app (compose_hctx h h2) t
+  | h_switch h l => h_switch (compose_hctx h h2) l
+  end.
+
+Theorem fill_compose :
+  forall h1 h2 t, fill_hctx (compose_hctx h1 h2) t = fill_hctx h1 (fill_hctx h2 t).
+Proof.
+  induction h1; simpl in *; congruence.
+Qed.
+
+Definition in_ctx (P : term -> Prop) t := exists h t2, P t2 /\ t = fill_hctx h t2.
+Definition is_hnf := in_ctx is_head.
+Definition is_hnf_betaiota defs := in_ctx (is_head_betaiota defs).
+
+Definition in_ctx_hole :
+  forall (P : term -> Prop) t, P t -> in_ctx P t.
+Proof.
+  intros P t H; exists h_hole; exists t. split; [assumption|reflexivity].
+Qed.
+
+Definition in_ctx_fill :
+  forall P h t, in_ctx P t -> in_ctx P (fill_hctx h t).
+Proof.
+  intros P h t (h2 & t2 & H & Ht).
+  exists (compose_hctx h h2). exists t2.
+  split; [assumption|]. rewrite Ht, fill_compose. reflexivity.
+Qed.
+
+Lemma in_ctx_app : forall P t1 t2, in_ctx P t1 -> in_ctx P (app t1 t2).
+Proof.
+  intros P t1 t2. apply in_ctx_fill with (h := h_app h_hole t2).
+Qed.
+
+Lemma in_ctx_switch : forall P t l, in_ctx P t -> in_ctx P (switch t l).
+Proof.
+  intros P t l. apply in_ctx_fill with (h := h_switch h_hole l).
+Qed.
+
+Lemma in_ctx_imp : forall (P Q : term -> Prop), (forall t, P t -> Q t) -> forall t, in_ctx P t -> in_ctx Q t.
+Proof.
+  intros P Q H t (h & t2 & Ht2 & ->).
+  exists h. exists t2. split; [|reflexivity]. apply H; assumption.
+Qed.
+
+Lemma is_hnf_var : forall n, is_hnf (var n).
+Proof.
+  intros n. apply in_ctx_hole. constructor.
+Qed.
+
+Lemma is_hnf_dvar : forall n, is_hnf (dvar n).
+Proof.
+  intros n. apply in_ctx_hole. constructor.
+Qed.
+
+Lemma is_hnf_ctx : forall h t, is_hnf t -> is_hnf (fill_hctx h t).
+Proof.
+  apply in_ctx_fill.
+Qed.
+
+Lemma is_hnf_app : forall t1 t2, is_hnf t1 -> is_hnf (app t1 t2).
+Proof.
+  apply in_ctx_app.
+Qed.
+
+Lemma is_hnf_switch : forall t l, is_hnf t -> is_hnf (switch t l).
+Proof.
+  apply in_ctx_switch.
+Qed.
+
+Inductive is_value : term -> Prop :=
+| is_value_abs : forall t, is_value (abs t)
+| is_value_constr : forall tag l, is_value (constr tag l)
+| is_value_hnf : forall t, is_hnf t -> is_value t.
+
+Inductive beta_err : term -> Prop :=
+| beta_err_app_constr : forall tag l t, beta_err (app (constr tag l) t)
+| beta_err_switch_abs : forall t l, beta_err (switch (abs t) l)
+| beta_err_switch_overflow : forall tag l l1, length l1 <= tag -> beta_err (switch (constr tag l) l1)
+| beta_err_switch_numvars: forall l p t l1 l2, length l <> p -> beta_err (switch (constr (length l1) l) (l1 ++ (p, t) :: l2)).
+
+Definition beta_herr := in_ctx beta_err.
+
+Lemma beta_herr_err :
+  forall t, beta_err t -> beta_herr t.
+Proof.
+  apply in_ctx_hole.
+Qed.
+
+Lemma beta_herr_ctx :
+  forall h t, beta_herr t -> beta_herr (fill_hctx h t).
+Proof.
+  apply in_ctx_fill.
+Qed.
+
+Inductive beta_red : term -> term -> Prop :=
+| beta_red_lam : forall t1 t2, beta_red (app (abs t1) t2) (subst1 t2 t1)
+| beta_red_switch : forall l t l1 l2, beta_red (switch (constr (length l1) l) (l1 ++ (length l, t) :: l2)) (subst (read_env l) t).
+
+Definition beta_hnf t1 t2 :=
+  exists h t3 t4, t1 = fill_hctx h t3 /\ t2 = fill_hctx h t4 /\ beta_red t3 t4.
+
+Definition beta_hnf_ctx :
+  forall h t1 t2, beta_hnf t1 t2 -> beta_hnf (fill_hctx h t1) (fill_hctx h t2).
+Proof.
+  intros h t1 t2 (h2 & t3 & t4 & -> & -> & Hbeta).
+  rewrite <- !fill_compose. eexists; eauto.
+Qed.
+
+Definition beta_hnf_red :
+  forall t1 t2, beta_red t1 t2 -> beta_hnf t1 t2.
+Proof.
+  intros t1 t2 H. exists h_hole, t1, t2.
+  auto.
+Qed.
+
+Lemma beta_hnf_beta :
+  forall t1 t2, beta_hnf t1 t2 -> beta t1 t2.
+Proof.
+  intros t1 t2 (h & t3 & t4 & -> & -> & Hbeta).
+  induction h; simpl in *; try (constructor; assumption).
+  inversion Hbeta; constructor; assumption.
+Qed.
+
+Lemma beta_progress :
+  forall t, is_value t \/ beta_herr t \/ exists t2, beta_hnf t t2.
+Proof.
+  induction t using term_ind2.
+  - left. constructor. apply is_hnf_var.
+  - left. constructor. apply is_hnf_dvar.
+  - left. constructor.
+  - destruct IHt1 as [Hval | [Herr | [t3 Ht3]]].
+    + inversion Hval; subst.
+      * right. right. eexists. apply beta_hnf_red. constructor.
+      * right. left. apply beta_herr_err, beta_err_app_constr.
+      * left. constructor. apply is_hnf_app. assumption.
+    + right. left. apply in_ctx_app; eassumption.
+    + right. right. eexists.
+      apply beta_hnf_ctx with (h := h_app h_hole t2); eassumption.
+  - left. constructor.
+  - destruct IHt as [Hval | [Herr | [t2 Ht2]]].
+    + inversion Hval; subst.
+      * right. left. apply beta_herr_err, beta_err_switch_abs.
+      * right.
+        destruct (nth_error m tag) as [[p t]|] eqn:Htag.
+        -- apply nth_error_split in Htag.
+           destruct Htag as (l1 & l2 & -> & <-).
+           destruct (Nat.eq_dec (length l) p).
+           ++ subst. right. eexists. apply beta_hnf_red. constructor.
+           ++ left. apply beta_herr_err, beta_err_switch_numvars. assumption.
+        -- left. apply beta_herr_err, beta_err_switch_overflow.
+           apply nth_error_None. assumption.
+      * left. constructor. apply is_hnf_switch. assumption.
+    + right. left. apply in_ctx_switch; eassumption.
+    + right. right. eexists.
+      apply beta_hnf_ctx with (h := h_switch h_hole m); eassumption.
+Qed.
+
+
+Definition mk_merge {A : Type} (l1 l2 : option (list A)) :=
+  match l1, l2 with
+  | Some l1, Some l2 => Some (l1 ++ l2)
+  | _, _ => None
+  end.
+
+Arguments mk_merge {A} l1 l2 : simpl nomatch.
+
+Lemma Forall_1 {A : Type} (P : A -> Prop) x : Forall P (x :: nil) <-> P x.
+Proof.
+  split; intros H.
+  - inversion H; subst; assumption.
+  - constructor; [assumption|constructor].
+Qed.
+
+Fixpoint compare_branches (l1 l2 : list (nat * term)) :=
+  match l1, l2 with
+  | nil, nil => Some nil
+  | (p1, t1) :: l1, (p2, t2) :: l2 =>
+    if Nat.eq_dec p1 p2 then mk_merge (Some ((t1, t2) :: nil)) (compare_branches l1 l2) else None
+  | _, _ => None
+  end.
+
+Lemma compare_branches_app :
+  forall l1 l2 l3 l4, length l1 = length l3 ->
+                 compare_branches (l1 ++ l2) (l3 ++ l4) = mk_merge (compare_branches l1 l3) (compare_branches l2 l4).
+Proof.
+  induction l1; intros l2 l3 l4 Hlen; destruct l3; simpl in *.
+  - destruct compare_branches; reflexivity.
+  - discriminate.
+  - discriminate.
+  - destruct a; destruct p; simpl.
+    destruct Nat.eq_dec; [|reflexivity].
+    rewrite IHl1 by congruence.
+    destruct compare_branches; simpl in *; [|reflexivity].
+    destruct compare_branches; simpl in *; reflexivity.
+Qed.
+
+Fixpoint compare_hnf (t1 t2 : term) :=
+  match t1, t2 with
+  | var n1, var n2 => if Nat.eq_dec n1 n2 then Some nil else None
+  | dvar d1, dvar d2 => if Nat.eq_dec d1 d2 then Some nil else None
+  | app t1 u1, app t2 u2 => mk_merge (compare_hnf t1 t2) (Some ((u1, u2) :: nil))
+  | switch t1 l1, switch t2 l2 => mk_merge (compare_hnf t1 t2) (compare_branches l1 l2)
+  | _, _ => None
+  end.
+
+Definition curry {A B C : Type} (f : A * B -> C) x y := f (x, y).
+Definition uncurry {A B C : Type} (f : A -> B -> C) '(x, y) := f x y.
+Definition flip {A B C : Type} (f : A -> B -> C) x y := f y x.
+Definition symc {A : Type} (R : A -> A -> Prop) := union R (flip R).
+Definition convertible {A : Type} (R : A -> A -> Prop) := star (symc R).
+
+Lemma convertible_refl {A : Type} (R : A -> A -> Prop) x : convertible R x x.
+Proof.
+  intros; apply star_refl.
+Qed.
+
+Lemma symc_sym {A : Type} (R : A -> A -> Prop) :
+  forall x y, symc R x y -> symc R y x.
+Proof.
+  intros x y [H | H]; [right | left]; assumption.
+Qed.
+
+Lemma star_sym {A : Type} (R : A -> A -> Prop) (Hsym : forall x y, R x y -> R y x) :
+  forall x y, star R x y -> star R y x.
+Proof.
+  intros x y H; induction H.
+  - apply star_refl.
+  - eapply star_compose; [eassumption|apply star_1, Hsym; assumption].
+Qed.
+
+Lemma convertible_sym {A : Type} (R : A -> A -> Prop) :
+  forall x y, convertible R x y -> convertible R y x.
+Proof.
+  apply star_sym, symc_sym.
+Qed.
+
+Lemma beta_convertible_app :
+  forall t1 t2 u1 u2, convertible beta t1 t2 -> convertible beta u1 u2 -> convertible beta (app t1 u1) (app t2 u2).
+Proof.
+  intros t1 t2 u1 u2 Ht Hu.
+  eapply star_compose.
+  - eapply star_map_impl with (f := fun t => app t u1); [|eassumption].
+    intros x y [Hxy | Hxy]; [left|right]; constructor; assumption.
+  - eapply star_map_impl with (f := fun u => app t2 u); [|eassumption].
+    intros x y [Hxy | Hxy]; [left|right]; constructor; assumption.
+Qed.
+
+Lemma beta_convertible_switch :
+  forall t1 t2 l1 l2, convertible beta t1 t2 -> Forall2 (fun '(p1, t1) '(p2, t2) => p1 = p2 /\ convertible beta t1 t2) l1 l2 -> convertible beta (switch t1 l1) (switch t2 l2).
+Proof.
+  intros t1 t2 l1 l2 Ht Hl.
+  eapply star_compose.
+  - eapply star_map_impl with (f := fun t => switch t l1); [|eassumption].
+    intros x y [Hxy | Hxy]; [left|right]; constructor; assumption.
+  - apply star_list with (RA := (fun '(p1, t1) '(p2, t2) => p1 = p2 /\ symc beta t1 t2)).
+    + intros la lb [? u1] [p u2] [-> Hu].
+      destruct Hu as [Hu | Hu]; [left | right]; constructor; assumption.
+    + eapply Forall2_impl; [|eassumption].
+      intros [? u1] [p u2] [-> Hu].
+      eapply star_map_impl; [|eassumption].
+      intros; tauto.
+Qed.
+
+Lemma betaiota_convertible_app :
+  forall defs t1 t2 u1 u2, convertible (betaiota defs) t1 t2 -> convertible (betaiota defs) u1 u2 -> convertible (betaiota defs) (app t1 u1) (app t2 u2).
+Proof.
+  intros defs t1 t2 u1 u2 Ht Hu.
+  eapply star_compose.
+  - eapply star_map_impl with (f := fun t => app t u1); [|eassumption].
+    intros x y [[Hxy | Hxy] | [Hxy | Hxy]]; [left; left|left; right|right; left|right; right]; constructor; assumption.
+  - eapply star_map_impl with (f := fun u => app t2 u); [|eassumption].
+    intros x y [[Hxy | Hxy] | [Hxy | Hxy]]; [left; left|left; right|right; left|right; right]; constructor; assumption.
+Qed.
+
+Lemma betaiota_convertible_switch :
+  forall defs t1 t2 l1 l2, convertible (betaiota defs) t1 t2 -> Forall2 (fun '(p1, t1) '(p2, t2) => p1 = p2 /\ convertible (betaiota defs) t1 t2) l1 l2 -> convertible (betaiota defs) (switch t1 l1) (switch t2 l2).
+Proof.
+  intros defs t1 t2 l1 l2 Ht Hl.
+  eapply star_compose.
+  - eapply star_map_impl with (f := fun t => switch t l1); [|eassumption].
+    intros x y [[Hxy | Hxy] | [Hxy | Hxy]]; [left; left|left; right|right; left|right; right]; constructor; assumption.
+  - apply star_list with (RA := (fun '(p1, t1) '(p2, t2) => p1 = p2 /\ symc (betaiota defs) t1 t2)).
+    + intros la lb [? u1] [p u2] [-> Hu].
+      destruct Hu as [[Hu | Hu] | [Hu | Hu]]; [left; left|left; right|right; left|right; right]; constructor; assumption.
+    + eapply Forall2_impl; [|eassumption].
+      intros [? u1] [p u2] [-> Hu].
+      eapply star_map_impl; [|eassumption].
+      intros; tauto.
+Qed.
+
+
+Lemma Forall3_app :
+  forall (A B C : Type) (P : A -> B -> C -> Prop) l1a l1b l1c l2a l2b l2c, Forall3 P l1a l1b l1c -> Forall3 P l2a l2b l2c -> Forall3 P (l1a ++ l2a) (l1b ++ l2b) (l1c ++ l2c).
+Proof.
+  intros A B C P l1a l1b l1c l2a l2b l2c H1 H2; induction H1; simpl in *.
+  - assumption.
+  - constructor; assumption.
+Qed.
+
+Lemma compare_branches_trans :
+  forall l1 l2 l3 l12 l23, compare_branches l1 l2 = Some l12 -> compare_branches l2 l3 = Some l23 ->
+                      exists l13, compare_branches l1 l3 = Some l13 /\ Forall3 (fun '(x1, x2) '(y2, y3) '(z1, z3) => x1 = z1 /\ x2 = y2 /\ y3 = z3) l12 l23 l13.
+Proof.
+  induction l1; intros l2 l3 l12 l23 H12 H23; destruct l2; simpl in *; try discriminate; destruct l3; simpl in *; try discriminate.
+  - exists nil. split; [reflexivity|].
+    injection H12 as H12; injection H23 as H23; subst. constructor.
+  - destruct a; discriminate.
+  - destruct p; discriminate.
+  - destruct a; destruct p; destruct p0.
+    destruct Nat.eq_dec; [|discriminate].
+    destruct Nat.eq_dec; [|discriminate].
+    destruct Nat.eq_dec; [|congruence].
+    destruct (compare_branches l1 l2) eqn:Hl12; [|discriminate].
+    destruct (compare_branches l2 l3) eqn:Hl23; [|discriminate].
+    specialize (IHl1 _ _ _ _ Hl12 Hl23). destruct IHl1 as (l13 & Hl13 & Hall).
+    exists ((t, t1) :: l13). rewrite Hl13.
+    split; [reflexivity|].
+    injection H12 as H12; injection H23 as H23; subst.
+    constructor; [|assumption].
+    tauto.
+Qed.
+
+Lemma compare_hnf_trans :
+  forall t1 t2 t3 l12 l23, compare_hnf t1 t2 = Some l12 -> compare_hnf t2 t3 = Some l23 ->
+                      exists l13, compare_hnf t1 t3 = Some l13 /\ Forall3 (fun '(x1, x2) '(y2, y3) '(z1, z3) => x1 = z1 /\ x2 = y2 /\ y3 = z3) l12 l23 l13.
+Proof.
+  induction t1; intros t2 t3 l12 l23 H12 H23; destruct t2; simpl in *; try discriminate; destruct t3; simpl in *; try discriminate.
+  - destruct Nat.eq_dec; [|discriminate]. destruct Nat.eq_dec; [|discriminate].
+    exists nil. split; [destruct Nat.eq_dec; congruence|].
+    injection H12 as H12; injection H23 as H23; subst. constructor.
+  - destruct Nat.eq_dec; [|discriminate]. destruct Nat.eq_dec; [|discriminate].
+    exists nil. split; [destruct Nat.eq_dec; congruence|].
+    injection H12 as H12; injection H23 as H23; subst. constructor.
+  - specialize (IHt1_1 t2_1 t3_1).
+    destruct compare_hnf as [l12a|]; [|discriminate].
+    destruct compare_hnf as [l23a|]; [|discriminate].
+    simpl in *; injection H12 as H12; injection H23 as H23.
+    destruct (IHt1_1 _ _ eq_refl eq_refl) as (l13a & H13 & Hall).
+    exists (l13a ++ (t1_2, t3_2) :: nil). split.
+    + rewrite H13; reflexivity.
+    + subst. apply Forall3_app; [assumption|].
+      constructor; [|constructor]. tauto.
+  - destruct (compare_hnf t1 t2) eqn:Hl12; [|discriminate].
+    destruct (compare_hnf t2 t3) eqn:Hl23; [|discriminate].
+    specialize (IHt1 _ _ _ _ Hl12 Hl23).
+    destruct IHt1 as (l13 & Hl13 & Hall).
+    destruct (compare_branches l l0) eqn:Hb12; [|discriminate].
+    destruct (compare_branches l0 l1) eqn:Hb23; [|discriminate].
+    destruct (compare_branches_trans _ _ _ _ _ Hb12 Hb23) as (l13b & Hl13b & Hallb).
+    exists (l13 ++ l13b). rewrite Hl13, Hl13b.
+    split; [reflexivity|].
+    injection H12 as H12; injection H23 as H23; subst.
+    apply Forall3_app; assumption.
+Qed.
+
+Definition all_are {A : Type} (R : A -> Prop) (x : option (list A)) :=
+  match x with
+  | Some l => Forall R l
+  | None => False
+  end.
+
+Lemma all_are_impl {A : Type} (R1 R2 : A -> Prop) (H : forall x, R1 x -> R2 x) :
+  forall l, all_are R1 l -> all_are R2 l.
+Proof.
+  intros [l|] Hl; [|assumption]; simpl in *.
+  eapply Forall_impl; eassumption.
+Qed.
+
+Lemma all_are_merge :
+  forall A (R : A -> Prop) l1 l2, all_are R l1 -> all_are R l2 -> all_are R (mk_merge l1 l2).
+Proof.
+  intros A R [l1|] [l2|] H1 H2; simpl in *; try tauto.
+  apply Forall_app_iff; tauto.
+Qed.
+
+Lemma all_are_merge_iff :
+  forall A (R : A -> Prop) l1 l2, all_are R (mk_merge l1 l2) <-> all_are R l1 /\ all_are R l2.
+Proof.
+  intros A R [l1|] [l2|]; simpl in *; try tauto.
+  rewrite Forall_app_iff; tauto.
+Qed.
+
+Definition all_are2 {A B : Type} (R : A -> B -> Prop) l := all_are (uncurry R) l.
+Lemma all_are2_impl {A B : Type} (R1 R2 : A -> B -> Prop) (H : forall x y, R1 x y -> R2 x y) :
+  forall l, all_are2 R1 l -> all_are2 R2 l.
+Proof.
+  apply all_are_impl.
+  intros [x y] Hxy; apply H; assumption.
+Qed.
+
+Lemma all_are2_merge :
+  forall A B (R : A -> B -> Prop) l1 l2, all_are2 R l1 -> all_are2 R l2 -> all_are2 R (mk_merge l1 l2).
+Proof.
+  intros; apply all_are_merge; assumption.
+Qed.
+
+Lemma all_are2_merge_iff :
+  forall A B (R : A -> B -> Prop) l1 l2, all_are2 R (mk_merge l1 l2) <-> all_are2 R l1 /\ all_are2 R l2.
+Proof.
+  intros; apply all_are_merge_iff.
+Qed.
+
+Lemma Forall3_select3 :
+  forall A B C (P : C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall3 (fun _ _ c => P c) l1 l2 l3 -> Forall P l3.
+Proof.
+  intros A B C P l1 l2 l3 H; induction H; simpl in *; constructor; tauto.
+Qed.
+
+Lemma Forall3_and :
+  forall A B C (P Q : A -> B -> C -> Prop) l1 l2 l3, Forall3 P l1 l2 l3 -> Forall3 Q l1 l2 l3 -> Forall3 (fun a b c => P a b c /\ Q a b c) l1 l2 l3.
+Proof.
+  intros A B C P Q l1 l2 l3 H1 H2; induction H1; simpl in *; inversion H2; subst; constructor; tauto.
+Qed.
+
+Lemma Forall3_unselect1 :
+  forall A B C (P : A -> Prop) (R : A -> B -> C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall P l1 -> Forall3 R l1 l2 l3 -> Forall3 (fun a _ _ => P a) l1 l2 l3.
+Proof.
+  intros A B C P R l1 l2 l3 H1 H2; induction H2; simpl in *; inversion H1; subst; constructor; tauto.
+Qed.
+
+Lemma Forall3_unselect2 :
+  forall A B C (P : B -> Prop) (R : A -> B -> C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall P l2 -> Forall3 R l1 l2 l3 -> Forall3 (fun _ b _ => P b) l1 l2 l3.
+Proof.
+  intros A B C P R l1 l2 l3 H1 H2; induction H2; simpl in *; inversion H1; subst; constructor; tauto.
+Qed.
+
+Lemma compare_hnf_all_are_trans :
+  forall t1 t2 t3 P12 P23, all_are2 P12 (compare_hnf t1 t2) -> all_are2 P23 (compare_hnf t2 t3) -> all_are2 (fun x z => exists y, P12 x y /\ P23 y z) (compare_hnf t1 t3).
+Proof.
+  intros t1 t2 t3 P12 P23 H12 H13.
+  destruct (compare_hnf t1 t2) as [l12|] eqn:Hhnf12; simpl in *; [|tauto].
+  destruct (compare_hnf t2 t3) as [l23|] eqn:Hhnf23; simpl in *; [|tauto].
+  destruct (compare_hnf_trans _ _ _ _ _ Hhnf12 Hhnf23) as (l13 & Hhnf13 & Hall).
+  rewrite Hhnf13; simpl.
+  eapply Forall3_select3, Forall3_impl; [|eapply Forall3_and; [eassumption|apply Forall3_and with (P := fun x _ _ => uncurry P12 x) (Q := fun _ y _ => uncurry P23 y)]].
+  - intros [x1 x2] [y2 y3] [z1 z3] ((-> & -> & ->) & Hxy & Hyz). exists y2. split; [exact Hxy | exact Hyz].
+  - eapply Forall3_unselect1; eassumption.
+  - eapply Forall3_unselect2; eassumption.
+Qed.
+
+Lemma compare_branches_refl :
+  forall l, all_are2 eq (compare_branches l l).
+Proof.
+  induction l; simpl in *.
+  - constructor.
+  - destruct a. destruct Nat.eq_dec; [|congruence].
+    apply all_are2_merge; [|assumption].
+    simpl. constructor; [|constructor]. reflexivity.
+Qed.
+
+Lemma compare_hnf_refl :
+  forall t, is_hnf t -> all_are2 eq (compare_hnf t t).
+Proof.
+  intros t (h & t1 & Hhead & Hfill); subst. induction h.
+  - simpl. inversion Hhead; subst; simpl; destruct Nat.eq_dec; simpl; try tauto; apply Forall_nil.
+  - simpl. apply all_are2_merge; [assumption|].
+    simpl. apply Forall_1. reflexivity.
+  - simpl. apply all_are2_merge; [assumption|].
+    apply compare_branches_refl.
+Qed.
+
+Lemma beta_for_hnf :
+  forall t1 t2, is_hnf t1 -> beta t1 t2 -> all_are2 (reflc beta) (compare_hnf t1 t2).
+Proof.
+  intros t1 t2 (h & t & Hhead & Hfill); revert t2; subst.
+  induction h; intros t2 Hbeta; inversion Hbeta; subst; simpl in *; subst; try solve [inversion Hhead].
+  - apply all_are2_merge; simpl.
+    + apply IHh; assumption.
+    + apply Forall_1. right; reflexivity.
+  - apply all_are2_merge; simpl.
+    + eapply all_are2_impl; [|apply compare_hnf_refl; exists h; exists t; split; [assumption|reflexivity]].
+      intros x y ->; right; reflexivity.
+    + apply Forall_1. left; assumption.
+  - destruct h; simpl in *; try discriminate; subst.
+    inversion Hhead.
+  - apply all_are2_merge; simpl.
+    + apply IHh; assumption.
+    + eapply all_are2_impl; [|apply compare_branches_refl].
+      intros x y ->; right; reflexivity.
+  - apply all_are2_merge; simpl.
+    + eapply all_are2_impl; [|apply compare_hnf_refl; exists h; exists t; split; [assumption|reflexivity]].
+      intros x y ->; right; reflexivity.
+    + rewrite compare_branches_app by reflexivity.
+      simpl.
+      apply all_are2_merge; [eapply all_are2_impl; [|apply compare_branches_refl]; intros x y ->; right; reflexivity|].
+      destruct Nat.eq_dec; [|tauto].
+      apply all_are2_merge; [|eapply all_are2_impl; [|apply compare_branches_refl]; intros x y ->; right; reflexivity].
+      simpl. constructor; [|constructor]. left; assumption.
+  - destruct h; simpl in *; try discriminate; subst.
+    inversion Hhead.
+Qed.
+
+Lemma beta_is_hnf :
+  forall t1 t2, is_hnf t1 -> beta t1 t2 -> is_hnf t2.
+Proof.
+  intros t1 t2 (h & t & Hhead & Hfill); revert t2; subst.
+  induction h; intros t2 Hbeta; inversion Hbeta; subst; simpl in *; subst; try solve [inversion Hhead].
+  - apply IHh in H2. apply is_hnf_app; assumption.
+  - apply is_hnf_app. exists h; exists t; tauto.
+  - destruct h; simpl in *; try discriminate; subst; inversion Hhead.
+  - apply IHh in H2. apply is_hnf_switch. assumption.
+  - apply is_hnf_switch. exists h; exists t; tauto.
+  - destruct h; simpl in *; try discriminate; subst; inversion Hhead.
+Qed.
+
+Lemma is_head_betaiota_head :
+  forall defs t, is_head_betaiota defs t -> is_head t.
+Proof.
+  intros defs t H; inversion H; subst; constructor.
+Qed.
+
+Lemma iota_for_hnf :
+  forall defs t1 t2, is_hnf_betaiota defs t1 -> iota defs t1 t2 -> all_are2 (reflc (iota defs)) (compare_hnf t1 t2).
+Proof.
+  intros defs t1 t2 (h & t & Hhead & Hfill); revert t2; subst.
+  induction h; intros t2 Hbeta; inversion Hbeta; subst; simpl in *; subst; try solve [inversion Hhead].
+  - inversion Hhead. congruence.
+  - apply all_are2_merge; simpl.
+    + apply IHh; assumption.
+    + apply Forall_1. right; reflexivity.
+  - apply all_are2_merge; simpl.
+    + eapply all_are2_impl; [|apply compare_hnf_refl; exists h; exists t; split; [eapply is_head_betaiota_head; eassumption|reflexivity]].
+      intros x y ->; right; reflexivity.
+    + apply Forall_1. left; assumption.
+  - apply all_are2_merge; simpl.
+    + apply IHh; assumption.
+    + eapply all_are2_impl; [|apply compare_branches_refl].
+      intros x y ->; right; reflexivity.
+  - apply all_are2_merge; simpl.
+    + eapply all_are2_impl; [|apply compare_hnf_refl; exists h; exists t; split; [eapply is_head_betaiota_head; eassumption|reflexivity]].
+      intros x y ->; right; reflexivity.
+    + rewrite compare_branches_app by reflexivity.
+      simpl.
+      apply all_are2_merge; [eapply all_are2_impl; [|apply compare_branches_refl]; intros x y ->; right; reflexivity|].
+      destruct Nat.eq_dec; [|tauto].
+      apply all_are2_merge; [|eapply all_are2_impl; [|apply compare_branches_refl]; intros x y ->; right; reflexivity].
+      simpl. constructor; [|constructor]. left; assumption.
+Qed.
+
+Lemma beta_is_hnf_betaiota :
+  forall defs t1 t2, is_hnf_betaiota defs t1 -> beta t1 t2 -> is_hnf_betaiota defs t2.
+Proof.
+  intros defs t1 t2 (h & t & Hhead & Hfill); revert t2; subst.
+  induction h; intros t2 Hbeta; inversion Hbeta; subst; simpl in *; subst; try solve [inversion Hhead].
+  - apply IHh in H2. apply in_ctx_app; assumption.
+  - apply in_ctx_app. exists h; exists t; tauto.
+  - destruct h; simpl in *; try discriminate; subst; inversion Hhead.
+  - apply IHh in H2. apply in_ctx_switch. assumption.
+  - apply in_ctx_switch. exists h; exists t; tauto.
+  - destruct h; simpl in *; try discriminate; subst; inversion Hhead.
+Qed.
+
+Lemma iota_is_hnf_betaiota :
+  forall defs t1 t2, is_hnf_betaiota defs t1 -> iota defs t1 t2 -> is_hnf_betaiota defs t2.
+  intros defs t1 t2 (h & t & Hhead & Hfill); revert t2; subst.
+  induction h; intros t2 Hbeta; inversion Hbeta; subst; simpl in *; subst; try solve [inversion Hhead].
+  - inversion Hhead; congruence.
+  - apply IHh in H2. apply in_ctx_app; assumption.
+  - apply in_ctx_app. exists h; exists t; tauto.
+  - apply IHh in H2. apply in_ctx_switch. assumption.
+  - apply in_ctx_switch. exists h; exists t; tauto.
+Qed.
+
+Lemma star_beta_for_hnf :
+  forall t1 t2, is_hnf t1 -> star beta t1 t2 -> all_are2 (star beta) (compare_hnf t1 t2).
+Proof.
+  intros t1 t2 Ht1 Ht12. induction Ht12.
+  - eapply all_are2_impl; [|apply compare_hnf_refl; assumption].
+    intros ? ? ->; simpl; apply star_refl.
+  - assert (is_hnf y) by (eapply beta_is_hnf; eassumption).
+    apply beta_for_hnf in H; [|assumption].
+    eapply all_are2_impl; [|eapply compare_hnf_all_are_trans; [eassumption|apply IHHt12; assumption]].
+    intros u v (w & Huw & Hwv); simpl in *.
+    destruct Huw as [Huw | ->]; [econstructor; eassumption|assumption].
+Qed.
+
+Lemma star_betaiota_for_hnf :
+  forall defs t1 t2, is_hnf_betaiota defs t1 -> star (betaiota defs) t1 t2 -> all_are2 (star (betaiota defs)) (compare_hnf t1 t2).
+Proof.
+  intros defs t1 t2 Ht1 Ht12. induction Ht12.
+  - eapply all_are2_impl; [|eapply compare_hnf_refl, (in_ctx_imp _ _ (is_head_betaiota_head defs)); assumption].
+    intros ? ? ->; simpl; apply star_refl.
+  - destruct H as [H | H].
+    + assert (is_hnf_betaiota defs y) by (eapply iota_is_hnf_betaiota; eassumption).
+      apply iota_for_hnf in H; [|eassumption].
+      eapply all_are2_impl; [|eapply compare_hnf_all_are_trans; [eassumption|apply IHHt12; assumption]].
+      intros u v (w & Huw & Hwv); simpl in *.
+      destruct Huw as [Huw | ->]; [econstructor; [left|]; eassumption|assumption].
+    + assert (is_hnf_betaiota defs y) by (eapply beta_is_hnf_betaiota; eassumption).
+      apply beta_for_hnf in H; [|eapply (in_ctx_imp _ _ (is_head_betaiota_head defs)); eassumption].
+      eapply all_are2_impl; [|eapply compare_hnf_all_are_trans; [eassumption|apply IHHt12; assumption]].
+      intros u v (w & Huw & Hwv); simpl in *.
+      destruct Huw as [Huw | ->]; [econstructor; [right|]; eassumption|assumption].
+Qed.
+
+Lemma star_flip :
+  forall (A : Type) (R : A -> A -> Prop) x y, star R x y <-> star (flip R) y x.
+Proof.
+  intros A R x y; split; intros H; induction H; try apply star_refl; eapply star_compose; try eassumption; apply star_1; assumption.
+Qed.
+
+Lemma common_reduce_convertible :
+  forall (A : Type) (R : A -> A -> Prop) x y z, star R x z -> star R y z -> convertible R x y.
+Proof.
+  intros A R x y z Hxz Hyz.
+  eapply star_compose.
+  - eapply star_map_impl with (f := fun x => x); [|eassumption].
+    intros; left; assumption.
+  - eapply star_map_impl with (f := fun x => x); [|apply -> star_flip; eassumption].
+    intros; right; assumption.
+Qed.
+
+Lemma convertible_confluent_common_reduce :
+  forall (A : Type) (R : A -> A -> Prop),
+    confluent R -> forall x y, convertible R x y -> exists z, star R x z /\ star R y z.
+Proof.
+  intros A R Hconf x y Hconv. induction Hconv.
+  - exists x. split; constructor.
+  - destruct IHHconv as (w & Hyw & Hzw).
+    destruct H as [Hxy | Hyx].
+    + exists w. split; [|assumption]. econstructor; eassumption.
+    + destruct (Hconf y x w) as (t & Hxt & Hwt).
+      * apply star_1. assumption.
+      * assumption.
+      * exists t. split; [assumption|].
+        eapply star_compose; eassumption.
+Qed.
+
+Definition flipl {A : Type} (l : option (list (A * A))) :=
+  match l with None => None | Some l => Some (map (fun '(x, y) => (y, x)) l) end.
+
+Lemma mk_merge_flipl :
+  forall (A : Type) (l1 l2 : option (list (A * A))), flipl (mk_merge l1 l2) = mk_merge (flipl l1) (flipl l2).
+Proof.
+  intros A [l1|] [l2|]; simpl in *; try reflexivity; rewrite map_app; reflexivity.
+Qed.
+
+Lemma compare_branches_flip :
+  forall l1 l2, compare_branches l2 l1 = flipl (compare_branches l1 l2).
+Proof.
+  induction l1; intros l2; destruct l2; simpl in *.
+  - reflexivity.
+  - destruct p; reflexivity.
+  - destruct a; reflexivity.
+  - destruct p; destruct a; simpl in *.
+    destruct Nat.eq_dec; simpl in *; destruct Nat.eq_dec; simpl in *; try congruence.
+    rewrite IHl1. destruct compare_branches; simpl in *; reflexivity.
+Qed.
+
+Lemma compare_hnf_flip :
+  forall t1 t2, compare_hnf t2 t1 = flipl (compare_hnf t1 t2).
+Proof.
+  induction t1; intros t2; destruct t2; simpl in *; try congruence.
+  - destruct Nat.eq_dec; destruct Nat.eq_dec; simpl in *; congruence.
+  - destruct Nat.eq_dec; destruct Nat.eq_dec; simpl in *; congruence.
+  - rewrite IHt1_1; simpl.
+    destruct compare_hnf; simpl in *; try rewrite map_app; reflexivity.
+  - rewrite IHt1; simpl.
+    rewrite mk_merge_flipl, compare_branches_flip. reflexivity.
+Qed.
+
+Lemma all_are2_flip :
+  forall (A : Type) (P : A -> A -> Prop) l, all_are2 P (flipl l) <-> all_are2 (flip P) l.
+Proof.
+  intros A P [l|]; simpl in *; [|reflexivity].
+  rewrite Forall_map.
+  eapply Forall_ext; intros [a b]; reflexivity.
+Qed.
+
+Lemma convertible_compare_hnf :
+  forall t1 t2, is_hnf t1 -> is_hnf t2 -> convertible beta t1 t2 -> all_are2 (convertible beta) (compare_hnf t1 t2).
+Proof.
+  intros t1 t2 Ht1 Ht2 Ht.
+  apply convertible_confluent_common_reduce in Ht; [|apply beta_confluent].
+  destruct Ht as (t3 & Ht13 & Ht23).
+  apply star_beta_for_hnf in Ht13; [|assumption].
+  apply star_beta_for_hnf in Ht23; [|assumption].
+  rewrite compare_hnf_flip, all_are2_flip in Ht23.
+  eapply all_are2_impl; [|eapply compare_hnf_all_are_trans; eassumption].
+  intros x y (z & Hxz & Hyz).
+  eapply common_reduce_convertible; eassumption.
+Qed.
+
+Lemma compare_branches_forall :
+  forall l1 l2 R, all_are2 R (compare_branches l1 l2) -> Forall2 (fun '(p1, t1) '(p2, t2) => p1 = p2 /\ R t1 t2) l1 l2.
+Proof.
+  induction l1; intros l2 R H; destruct l2; simpl in *; try tauto.
+  - constructor.
+  - destruct a; simpl in *; tauto.
+  - destruct a; destruct p; simpl in *.
+    destruct Nat.eq_dec; simpl in *; [|tauto].
+    rewrite all_are2_merge_iff in H.
+    simpl in *; rewrite Forall_1 in H.
+    constructor; [tauto|].
+    apply IHl1; tauto.
+Qed.
+
+Lemma compare_hnf_convertible :
+  forall t1 t2, all_are2 (convertible beta) (compare_hnf t1 t2) -> convertible beta t1 t2.
+Proof.
+  induction t1; intros t2 H12; destruct t2; simpl in *; try tauto.
+  - destruct Nat.eq_dec; subst; [apply convertible_refl|simpl in *; tauto].
+  - destruct Nat.eq_dec; subst; [apply convertible_refl|simpl in *; tauto].
+  - rewrite all_are2_merge_iff in H12; simpl in *.
+    apply beta_convertible_app; [apply IHt1_1; tauto|].
+    rewrite Forall_1 in H12; apply H12.
+  - rewrite all_are2_merge_iff in H12; simpl in *.
+    apply beta_convertible_switch; [apply IHt1; tauto|].
+    eapply compare_branches_forall; tauto.
+Qed.
+
+
+
+Lemma convertible_compare_hnf_betaiota :
+  forall defs t1 t2, is_hnf_betaiota defs t1 -> is_hnf_betaiota defs t2 -> convertible (betaiota defs) t1 t2 -> all_are2 (convertible (betaiota defs)) (compare_hnf t1 t2).
+Proof.
+  intros defs t1 t2 Ht1 Ht2 Ht.
+  apply convertible_confluent_common_reduce in Ht; [|apply beta_iota_confluent].
+  destruct Ht as (t3 & Ht13 & Ht23).
+  apply star_betaiota_for_hnf in Ht13; [|assumption].
+  apply star_betaiota_for_hnf in Ht23; [|assumption].
+  rewrite compare_hnf_flip, all_are2_flip in Ht23.
+  eapply all_are2_impl; [|eapply compare_hnf_all_are_trans; eassumption].
+  intros x y (z & Hxz & Hyz).
+  eapply common_reduce_convertible; eassumption.
+Qed.
+
+Lemma compare_hnf_convertible_betaiota :
+  forall defs t1 t2, all_are2 (convertible (betaiota defs)) (compare_hnf t1 t2) -> convertible (betaiota defs) t1 t2.
+Proof.
+  intros defs; induction t1; intros t2 H12; destruct t2; simpl in *; try tauto.
+  - destruct Nat.eq_dec; subst; [apply convertible_refl|simpl in *; tauto].
+  - destruct Nat.eq_dec; subst; [apply convertible_refl|simpl in *; tauto].
+  - rewrite all_are2_merge_iff in H12; simpl in *.
+    apply betaiota_convertible_app; [apply IHt1_1; tauto|].
+    rewrite Forall_1 in H12; apply H12.
+  - rewrite all_are2_merge_iff in H12; simpl in *.
+    apply betaiota_convertible_switch; [apply IHt1; tauto|].
+    eapply compare_branches_forall; tauto.
+Qed.
+
