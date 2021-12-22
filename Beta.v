@@ -3,12 +3,11 @@ Require Import Arith.
 Require Import Freevar.
 Require Import Misc.
 Require Import Psatz.
-Require Import Star.
 Require Import Coq.Logic.Eqdep_dec.
 Require Import FEnv.
+Require Import Rewrite.
 Require Import STerm.
 Require Import Inductive.
-Require Import Rewrite.
 
 
 Lemma star_list :
@@ -572,44 +571,6 @@ Proof.
       rewrite select2_app_assoc. constructor.
 Qed.
 
-Definition weak_diamond {A : Type} (R : A -> A -> Prop) :=
-  forall x y z, R x y -> R x z -> y = z \/ (exists w, R y w /\ R z w).
-
-Lemma weak_diamond_diamond_reflc {A : Type} (R : A -> A -> Prop) :
-  weak_diamond R -> diamond (reflc R).
-Proof.
-  intros HD x y z [Hxy | <-] [Hxz | <-].
-  - specialize (HD x y z Hxy Hxz).
-    destruct HD as [-> | (w & Hyw & Hzw)].
-    + exists z. split; right; reflexivity.
-    + exists w. split; left; assumption.
-  - exists y. split; [right; reflexivity|left; assumption].
-  - exists z. split; [left; assumption|right; reflexivity].
-  - exists x. split; right; reflexivity.
-Qed.
-
-Lemma star_reflc {A : Type} (R : A -> A -> Prop) :
-  same_rel (star R) (star (reflc R)).
-Proof.
-  intros x y. split; intros H.
-  - eapply star_map_impl with (f := id); [|eassumption].
-    intros; left; assumption.
-  - induction H.
-    + constructor.
-    + destruct H as [H | ->].
-      * econstructor; eassumption.
-      * assumption.
-Qed.
-
-Lemma weak_diamond_confluent {A : Type} (R : A -> A -> Prop) :
-  weak_diamond R -> confluent R.
-Proof.
-  intros H.
-  apply weak_diamond_diamond_reflc, diamond_is_confluent in H.
-  eapply diamond_ext; [|eassumption].
-  apply star_reflc.
-Qed.
-
 Lemma iota_weak_diamond :
   forall defs, weak_diamond (iota defs).
 Proof.
@@ -903,37 +864,6 @@ Fixpoint compare_hnf (t1 t2 : term) :=
   | switch t1 l1, switch t2 l2 => mk_merge (compare_hnf t1 t2) (compare_branches l1 l2)
   | _, _ => None
   end.
-
-Definition curry {A B C : Type} (f : A * B -> C) x y := f (x, y).
-Definition uncurry {A B C : Type} (f : A -> B -> C) '(x, y) := f x y.
-Definition flip {A B C : Type} (f : A -> B -> C) x y := f y x.
-Definition symc {A : Type} (R : A -> A -> Prop) := union R (flip R).
-Definition convertible {A : Type} (R : A -> A -> Prop) := star (symc R).
-
-Lemma convertible_refl {A : Type} (R : A -> A -> Prop) x : convertible R x x.
-Proof.
-  intros; apply star_refl.
-Qed.
-
-Lemma symc_sym {A : Type} (R : A -> A -> Prop) :
-  forall x y, symc R x y -> symc R y x.
-Proof.
-  intros x y [H | H]; [right | left]; assumption.
-Qed.
-
-Lemma star_sym {A : Type} (R : A -> A -> Prop) (Hsym : forall x y, R x y -> R y x) :
-  forall x y, star R x y -> star R y x.
-Proof.
-  intros x y H; induction H.
-  - apply star_refl.
-  - eapply star_compose; [eassumption|apply star_1, Hsym; assumption].
-Qed.
-
-Lemma convertible_sym {A : Type} (R : A -> A -> Prop) :
-  forall x y, convertible R x y -> convertible R y x.
-Proof.
-  apply star_sym, symc_sym.
-Qed.
 
 Lemma beta_convertible_app :
   forall t1 t2 u1 u2, convertible beta t1 t2 -> convertible beta u1 u2 -> convertible beta (app t1 u1) (app t2 u2).
@@ -1294,39 +1224,6 @@ Proof.
       destruct Huw as [Huw | ->]; [econstructor; [right|]; eassumption|assumption].
 Qed.
 
-Lemma star_flip :
-  forall (A : Type) (R : A -> A -> Prop) x y, star R x y <-> star (flip R) y x.
-Proof.
-  intros A R x y; split; intros H; induction H; try apply star_refl; eapply star_compose; try eassumption; apply star_1; assumption.
-Qed.
-
-Lemma common_reduce_convertible :
-  forall (A : Type) (R : A -> A -> Prop) x y z, star R x z -> star R y z -> convertible R x y.
-Proof.
-  intros A R x y z Hxz Hyz.
-  eapply star_compose.
-  - eapply star_map_impl with (f := fun x => x); [|eassumption].
-    intros; left; assumption.
-  - eapply star_map_impl with (f := fun x => x); [|apply -> star_flip; eassumption].
-    intros; right; assumption.
-Qed.
-
-Lemma convertible_confluent_common_reduce :
-  forall (A : Type) (R : A -> A -> Prop),
-    confluent R -> forall x y, convertible R x y -> exists z, star R x z /\ star R y z.
-Proof.
-  intros A R Hconf x y Hconv. induction Hconv.
-  - exists x. split; constructor.
-  - destruct IHHconv as (w & Hyw & Hzw).
-    destruct H as [Hxy | Hyx].
-    + exists w. split; [|assumption]. econstructor; eassumption.
-    + destruct (Hconf y x w) as (t & Hxt & Hwt).
-      * apply star_1. assumption.
-      * assumption.
-      * exists t. split; [assumption|].
-        eapply star_compose; eassumption.
-Qed.
-
 Definition flipl {A : Type} (l : option (list (A * A))) :=
   match l with None => None | Some l => Some (map (fun '(x, y) => (y, x)) l) end.
 
@@ -1441,106 +1338,101 @@ Proof.
 Qed.
 
 
+Definition fst3 {A B C : Type} (x : A * B * C) := fst (fst x).
+Definition snd3 {A B C : Type} (x : A * B * C) := snd (fst x).
+Definition thd3 {A B C : Type} (x : A * B * C) := snd x.
 
 
-Definition valptr := nat.
 Definition rthreadptr := nat.
 Definition cthreadptr := nat.
 Definition threadptr := (nat + nat)%type.
 
 Definition varname := nat.
 
-Definition env := list valptr.
-
-Inductive cont :=
+Inductive cont : Type :=
 | Kid : cont
-| Kapp : valptr -> cont -> cont
-| Kswitch : list (nat * term) -> env -> list (list varname * valptr) -> cont -> cont.
+| Kapp : value -> cont -> cont
+| Kswitch : list (nat * term) -> list value (* env *) -> list (list varname * value) -> cont -> cont
 
-Record neutral := mkneutral {
-  n_id : varname ;
-  n_cont : cont ;
-  n_unfold : option valptr ;
-}.
-
-Inductive value :=
+with value : Type :=
 | Thread : rthreadptr -> value
-| Neutral : neutral -> value
-| Clos : term -> env -> varname -> valptr -> value
-| Block : nat -> list valptr -> value.
+| Neutral : (varname * cont * option value) (* neutral *) -> value
+| Clos : term -> list value (* env *) -> varname -> value -> value
+| Block : nat -> list value -> value.
+
+Definition env := list value.
+Definition neutral := (varname * cont * option value)%type.
+
+Definition n_var (n : neutral) := fst3 n.
+Definition n_cont (n : neutral) := snd3 n.
+Definition n_unfold (n : neutral) := thd3 n.
 
 Inductive code :=
 | Term : term -> env -> code
-| Val : valptr -> code.
+| Val : value -> code.
 
 Record rthread := mkrthread {
   rt_code : code ;
   rt_cont : cont ;
 }.
 
+Definition cthread := False.
 
-
+(*
 Inductive addr :=
 | a_rthread : rthreadptr -> addr
-| a_val : valptr -> addr.
+| a_cthread : cthreadptr -> addr.
+ *)
+Definition addr := rthreadptr.
 
+(*
 Definition env_points_to e a :=
   match a with
   | a_val vp => In vp e
   | _ => False
   end.
+ *)
 
 Inductive cont_points_to : cont -> addr -> Prop :=
-| kapp_points_to_1 : forall vp c, cont_points_to (Kapp vp c) (a_val vp)
-| kapp_points_to_2 : forall vp c a, cont_points_to c a -> cont_points_to (Kapp vp c) a
-| kswitch_points_to_1 : forall bs e bds c a, env_points_to e a -> cont_points_to (Kswitch bs e bds c) a
-| kswitch_points_to_2 : forall bs e bds c a, cont_points_to c a -> cont_points_to (Kswitch bs e bds c) a.
+| kapp_points_to_1 : forall v c a, val_points_to v a -> cont_points_to (Kapp v c) a
+| kapp_points_to_2 : forall v c a, cont_points_to c a -> cont_points_to (Kapp v c) a
+| kswitch_points_to_1 : forall bs e bds c a, Exists (fun v => val_points_to v a) e -> cont_points_to (Kswitch bs e bds c) a
+| kswitch_points_to_2 : forall bs e bds c a,
+    Exists (fun bd => val_points_to (snd bd) a) bds -> cont_points_to (Kswitch bs e bds c) a
+| kswitch_points_to_3 : forall bs e bds c a, cont_points_to c a -> cont_points_to (Kswitch bs e bds c) a
 
-Inductive val_points_to : value -> addr -> Prop :=
-| thread_points_to : forall rid, val_points_to (Thread rid) (a_rthread rid)
-| neutral_points_to_1 : forall n a, cont_points_to n.(n_cont) a -> val_points_to (Neutral n) a
-(* todo | neutral_points_to_2 : *)
-| clos_points_to_1 : forall t e vn vp a, env_points_to e a -> val_points_to (Clos t e vn vp) a
-| clos_points_to_2 : forall t e vn vp, val_points_to (Clos t e vn vp) (a_val vp)
-| block_points_to : forall tag l a, env_points_to l a -> val_points_to (Block tag l) a.
+with val_points_to : value -> addr -> Prop :=
+| thread_points_to : forall rid, val_points_to (Thread rid) rid
+| neutral_points_to_1 : forall n a, cont_points_to (n_cont n) a -> val_points_to (Neutral n) a
+| neutral_points_to_2 : forall n v a, n_unfold n = Some v -> val_points_to v a -> val_points_to (Neutral n) a
+| clos_points_to_1 : forall t e vn vdeep a, Exists (fun v => val_points_to v a) e -> val_points_to (Clos t e vn vdeep) a
+| clos_points_to_2 : forall t e vn vdeep a, val_points_to vdeep a -> val_points_to (Clos t e vn vdeep) a
+| block_points_to : forall tag l a, Exists (fun v => val_points_to v a) l -> val_points_to (Block tag l) a.
+
+Require Import GenInd.
+Definition cont_val_ind := Induction For [cont_points_to ; val_points_to].
+Check cont_val_ind.
+
+Definition env_points_to e a := Exists (fun v => val_points_to v a) e.
 
 Inductive code_points_to : code -> addr -> Prop :=
 | term_points_to : forall t e a, env_points_to e a -> code_points_to (Term t e) a
-| cval_points_to : forall vp, code_points_to (Val vp) (a_val vp).
+| cval_points_to : forall v a, val_points_to v a -> code_points_to (Val v) a.
 
 Definition rthread_points_to rt a := code_points_to rt.(rt_code) a \/ cont_points_to rt.(rt_cont) a.
 
-Definition points_to rthreads vals a1 a2 :=
-  match a1 with
-  | a_rthread rid =>
-    match nth_error rthreads rid with
-    | Some rt => rthread_points_to rt a2
-    | None => False
-    end
-  | a_val vp =>
-    match nth_error vals vp with
-    | Some v => val_points_to v a2
-    | None => False
-    end
+Definition points_to rthreads (a1 a2 : rthreadptr):=
+  match nth_error rthreads a1 with
+  | Some rt => rthread_points_to rt a2
+  | None => False
   end.
-
-Definition valid (rthreads : list rthread) (vals : list value) a :=
-  match a with
-  | a_rthread rid => rid < length rthreads
-  | a_val vp => vp < length vals
-  end.
-
-Definition valid_addrs rthreads vals :=
-  forall a1 a2, points_to rthreads vals a1 a2 -> valid rthreads vals a2.
-
-Definition state_ok rthreads vals := well_founded (flip (points_to rthreads vals)) /\ valid_addrs rthreads vals.
 
 Record state := mkstate {
   st_rthreads : list rthread ;
-  st_vals : list value ;
   st_freename : nat ;
-(*  st_ok : state_ok st_rthreads st_vals ; *)
 }.
+
+Definition points st := points_to st.(st_rthreads).
 
 Fixpoint update {A : Type} (l : list A) (k : nat) (x : A) : list A :=
   match l with
@@ -1552,10 +1444,6 @@ Fixpoint update {A : Type} (l : list A) (k : nat) (x : A) : list A :=
     end
   end.
 Arguments update {A} _ _ _ : simpl nomatch.
-
-Inductive plus {A : Type} (R : A -> A -> Prop) : A -> A -> Prop :=
-| plus_1 : forall x y, R x y -> plus R x y
-| plus_S : forall x y z, R x y -> plus R y z -> plus R x z.
 
 Lemma nth_error_update :
   forall (A : Type) (l : list A) k x y, nth_error l k = Some x -> nth_error (update l k y) k = Some y.
@@ -1578,26 +1466,6 @@ Proof.
   apply IHl; congruence.
 Qed.
 
-Lemma plus_star :
-  forall (A : Type) (R : A -> A -> Prop) x y, plus R x y -> star R x y.
-Proof.
-  intros A R x y H; induction H.
-  - apply star_1. assumption.
-  - econstructor; eassumption.
-Qed.
-
-Lemma plus_star_iff :
-  forall (A : Type) (R : A -> A -> Prop) x y, plus R x y <-> compose R (star R) x y.
-Proof.
-  intros A R x y; split; intros H.
-  - inversion H; subst.
-    + exists y; split; [assumption|apply star_refl].
-    + exists y0. split; [assumption|apply plus_star; assumption].
-  - destruct H as (z & Hxz & Hzy).
-    revert x Hxz; induction Hzy; intros w Hw.
-    + apply plus_1; assumption.
-    + eapply plus_S; [eassumption|apply IHHzy; assumption].
-Qed.
 
 Lemma Acc_star_down :
   forall (A : Type) (R : A -> A -> Prop) x y, Acc R x -> star R y x -> Acc R y.
@@ -1608,56 +1476,6 @@ Proof.
     apply H0. assumption.
 Qed.
 
-Lemma plus_compose_star_left :
-  forall (A : Type) (R : A -> A -> Prop) x y z, star R x y -> plus R y z -> plus R x z.
-Proof.
-  intros A R x y z H1 H2; induction H1; [assumption|].
-  econstructor; [eassumption|].
-  apply IHstar; assumption.
-Qed.
-
-Lemma flip_plus :
-  forall (A : Type) (R : A -> A -> Prop) x y, plus (flip R) x y -> plus R y x.
-Proof.
-  intros A R x y H. induction H.
-  - apply plus_1. assumption.
-  - eapply plus_compose_star_left; [eapply plus_star; eassumption|].
-    apply plus_1. assumption.
-Qed.
-
-Lemma plus_same_rel :
-  forall (A : Type) (R1 R2 : A -> A -> Prop), same_rel R1 R2 -> same_rel (plus R1) (plus R2).
-Proof.
-  intros A R1 R2 H x y. split; intros Hplus; induction Hplus.
-  - apply plus_1, H. assumption.
-  - eapply plus_S; [|eassumption]. apply H. assumption.
-  - apply plus_1, H. assumption.
-  - eapply plus_S; [|eassumption]. apply H. assumption.
-Qed.
-
-Lemma flip_flip :
-  forall (A : Type) (R : A -> A -> Prop), same_rel (flip (flip R)) R.
-Proof.
-  intros A R x y. reflexivity.
-Qed.
-
-Lemma flip_plus_iff :
-  forall (A : Type) (R : A -> A -> Prop) x y, plus (flip R) x y <-> plus R y x.
-Proof.
-  intros A R x y; split; intros H.
-  - apply flip_plus. assumption.
-  - eapply flip_plus, plus_same_rel; [|eassumption].
-    apply flip_flip.
-Qed.
-
-Lemma plus_compose_star_right :
-  forall (A : Type) (R : A -> A -> Prop) x y z, plus R x y -> star R y z -> plus R x z.
-Proof.
-  intros A R x y z H1 H2.
-  apply flip_plus_iff.
-  eapply plus_compose_star_left; [|apply flip_plus_iff; eassumption].
-  apply star_flip in H2. eassumption.
-Qed.
 
 Lemma Acc_plus :
   forall (A : Type) (R : A -> A -> Prop) x, Acc R x -> Acc (plus R) x.
@@ -1673,32 +1491,6 @@ Qed.
 
 Definition updatep {A B : Type} (f : A -> B -> Prop) (x : A) (P : B -> Prop) (u : A) (v : B) :=
   (u <> x /\ f u v) \/ (u = x /\ P v).
-
-(*
-Lemma updatep_wf :
-  forall (A : Type) (R : A -> A -> Prop) u (P : A -> Prop),
-    (forall v, P v -> plus R u v) -> well_founded R -> well_founded (updatep R u P).
-Proof.
-  intros A R u P H Hwf v.
-  induction (Acc_plus _ _ _ (Hwf v)). constructor.
-  intros v [[Huv HR] | [-> HP]].
-  - apply H1, plus_1, HR.
-  - apply H1, H, HP.
-Qed.
-*)
-
-(*
-Lemma updatep_wf :
-  forall (A : Type) (R : A -> A -> Prop) u (P : A -> Prop),
-    (forall v, P v -> plus R u v \/ Acc (flip (updatep R u P)) v) -> well_founded (flip R) -> well_founded (flip (updatep R u P)).
-Proof.
-  intros A R u P H Hwf v.
-  induction (Acc_plus _ _ _ (Hwf v)). constructor.
-  intros v [[Huv HR] | [-> HP]].
-  - apply H1, plus_1, HR.
-  - destruct (H _ HP) as [Hplus | Hacc]; [apply H1, flip_plus_iff, Hplus|apply Hacc].
-Qed.
-*)
 
 Inductive AccI {A : Type} (B : A -> Prop) (R : A -> A -> Prop) : A -> Prop :=
 | AccI_base : forall a, B a -> AccI B R a
@@ -1756,11 +1548,11 @@ Qed.
 
 
 Lemma points_to_updatep_rthread :
-  forall rthreads vals rid rt a1 a2,
-    points_to (update rthreads rid rt) vals a1 a2 <->
-    updatep (points_to rthreads vals) (a_rthread rid) (fun a => rid < length rthreads /\ rthread_points_to rt a) a1 a2.
+  forall rthreads rid rt a1 a2,
+    points_to (update rthreads rid rt) a1 a2 <->
+    updatep (points_to rthreads) rid (fun a => rid < length rthreads /\ rthread_points_to rt a) a1 a2.
 Proof.
-  intros rthreads vals rid rt [rid2|vp] a; unfold updatep; simpl; [|intuition congruence].
+  intros rthreads rid rt rid2 a; unfold updatep, points_to; simpl.
   destruct (Nat.eq_dec rid rid2); subst.
   - rewrite nth_error_update2.
     destruct nth_error eqn:Hnth; [apply nth_error_Some3 in Hnth|apply nth_error_None in Hnth]; intuition lia.
@@ -1768,25 +1560,12 @@ Proof.
     intuition congruence.
 Qed.
 
-Lemma points_to_updatep_vals :
-  forall rthreads vals vp v a1 a2,
-    points_to rthreads (update vals vp v) a1 a2 <->
-    updatep (points_to rthreads vals) (a_val vp) (fun a => vp < length vals /\ val_points_to v a) a1 a2.
-Proof.
-  intros rthreads vals vp v [rid|vp2] a; unfold updatep; simpl; [intuition congruence|].
-  destruct (Nat.eq_dec vp vp2); subst.
-  - rewrite nth_error_update2.
-    destruct nth_error eqn:Hnth; [apply nth_error_Some3 in Hnth|apply nth_error_None in Hnth]; intuition lia.
-  - rewrite nth_error_update3; [|assumption].
-    intuition congruence.
-Qed.
-
 Lemma points_to_updatep_rthread_extend :
-  forall rthreads vals rt a1 a2,
-    points_to (rthreads ++ rt :: nil) vals a1 a2 <->
-    updatep (points_to rthreads vals) (a_rthread (length rthreads)) (rthread_points_to rt) a1 a2.
+  forall rthreads rt a1 a2,
+    points_to (rthreads ++ rt :: nil) a1 a2 <->
+    updatep (points_to rthreads) (length rthreads) (rthread_points_to rt) a1 a2.
 Proof.
-  intros rthreads vals rt [rid|vp] a; unfold updatep; simpl; [|intuition congruence].
+  intros rthreads rt rid a; unfold updatep, points_to; simpl.
   destruct (le_lt_dec (length rthreads) rid).
   - rewrite nth_error_app2 by assumption.
     remember (rid - length rthreads) as n. destruct n as [|m] eqn:Hn.
@@ -1798,24 +1577,6 @@ Proof.
     destruct nth_error; intuition congruence.
 Qed.
 
-Lemma points_to_updatep_val_extend :
-  forall rthreads vals v a1 a2,
-    points_to rthreads (vals ++ v :: nil) a1 a2 <->
-    updatep (points_to rthreads vals) (a_val (length vals)) (val_points_to v) a1 a2.
-Proof.
-  intros rthreads vals v [rid|vp] a; unfold updatep; simpl; [intuition congruence|].
-  destruct (le_lt_dec (length vals) vp).
-  - rewrite nth_error_app2 by assumption.
-    remember (vp - length vals) as n. destruct n as [|m] eqn:Hn.
-    + simpl. assert (vp = length vals) by lia. intuition congruence.
-    + simpl. do 2 (replace (nth_error _ _) with (@None value) by (symmetry; apply nth_error_None; simpl; lia)).
-      assert (vp <> length vals) by lia. intuition congruence.
-  - rewrite nth_error_app1 by assumption.
-    assert (vp <> length vals) by lia.
-    destruct nth_error; intuition congruence.
-Qed.
-
-
 
 
 Lemma update_length :
@@ -1824,386 +1585,37 @@ Proof.
   induction l; intros [|k] x; simpl in *; congruence.
 Qed.
 
-Definition update_rthread_hyp rthreads vals rid rt :=
-  forall a, rthread_points_to rt a -> AccI (plus (points_to rthreads vals) (a_rthread rid)) (flip (points_to (update rthreads rid rt) vals)) a /\ valid rthreads vals a.
-
-Lemma update_rthread_wf :
-  forall rthreads vals rid rt,
-    update_rthread_hyp rthreads vals rid rt ->
-     well_founded (flip (points_to rthreads vals)) -> well_founded (flip (points_to (update rthreads rid rt) vals)).
-Proof.
-  intros rthreads vals rid rt H Hwf.
-  eapply well_founded_ext; [|apply updatep_wf2; [|eassumption]].
-  - intros. apply points_to_updatep_rthread; eassumption.
-  - intros a [Hrid Ha].
-    eapply AccI_ext; [|eapply H; eassumption].
-    intros; apply points_to_updatep_rthread; eassumption.
-Qed.
-
-Lemma update_rthread_valid :
-  forall rthreads vals rid rt,
-    update_rthread_hyp rthreads vals rid rt ->
-    valid_addrs rthreads vals -> valid_addrs (update rthreads rid rt) vals.
-Proof.
-  intros rthreads vals rid rt H Hvalid [rid2|vp] a2 Ha; simpl in *; unfold valid.
-  - destruct (Nat.eq_dec rid rid2); subst.
-    + rewrite nth_error_update2 in Ha.
-      destruct nth_error eqn:Hrid2; [|tauto].
-      rewrite update_length.
-      apply H; assumption.
-    + rewrite nth_error_update3 in Ha by assumption.
-      rewrite update_length.
-      apply Hvalid with (a1 := a_rthread rid2); assumption.
-  - rewrite update_length.
-    apply Hvalid with (a1 := a_val vp); assumption.
-Qed.
-
-Lemma update_rthread_ok :
-  forall rthreads vals rid rt,
-    update_rthread_hyp rthreads vals rid rt ->
-    state_ok rthreads vals -> state_ok (update rthreads rid rt) vals.
-Proof.
-  intros rthreads vals rid rt H [Hwf Hvalid].
-  split; [apply update_rthread_wf|apply update_rthread_valid]; assumption.
-Qed.
-
-Definition update_val_hyp rthreads vals vp v :=
-  forall a, val_points_to v a -> AccI (plus (points_to rthreads vals) (a_val vp)) (flip (points_to rthreads (update vals vp v))) a /\ valid rthreads vals a.
-
-Lemma update_val_wf :
-  forall rthreads vals vp v,
-    update_val_hyp rthreads vals vp v ->
-     well_founded (flip (points_to rthreads vals)) -> well_founded (flip (points_to rthreads (update vals vp v))).
-Proof.
-  intros rthreads vals vp v H Hwf.
-  eapply well_founded_ext; [|apply updatep_wf2; [|eassumption]].
-  - intros. apply points_to_updatep_vals; eassumption.
-  - intros a [Hrid Ha].
-    eapply AccI_ext; [|eapply H; eassumption].
-    intros; apply points_to_updatep_vals; eassumption.
-Qed.
-
-Lemma update_val_valid :
-  forall rthreads vals vp v,
-    update_val_hyp rthreads vals vp v ->
-    valid_addrs rthreads vals -> valid_addrs rthreads (update vals vp v).
-Proof.
-  intros rthreads vals vp v H Hvalid [rid|vp2] a2 Ha; simpl in *; unfold valid.
-  - rewrite update_length.
-    apply Hvalid with (a1 := a_rthread rid); assumption.
-  - destruct (Nat.eq_dec vp vp2); subst.
-    + rewrite nth_error_update2 in Ha.
-      destruct nth_error eqn:Hvp2; [|tauto].
-      rewrite update_length.
-      apply H; assumption.
-    + rewrite nth_error_update3 in Ha by assumption.
-      rewrite update_length.
-      apply Hvalid with (a1 := a_val vp2); assumption.
-Qed.
-
-Lemma update_val_ok :
-  forall rthreads vals vp v,
-    update_val_hyp rthreads vals vp v ->
-    state_ok rthreads vals -> state_ok rthreads (update vals vp v).
-Proof.
-  intros rthreads vals vp v H [Hwf Hvalid].
-  split; [apply update_val_wf|apply update_val_valid]; assumption.
-Qed.
-
-Definition add_rthread_hyp rthreads vals rt :=
-  forall a, rthread_points_to rt a -> valid rthreads vals a.
-
-Lemma add_rthread_wf :
-  forall rthreads vals rt,
-    add_rthread_hyp rthreads vals rt ->
-    well_founded (flip (points_to rthreads vals)) ->
-    valid_addrs rthreads vals ->
-    well_founded (flip (points_to (rthreads ++ rt :: nil) vals)).
-Proof.
-  intros rthreads vals rt H Hwf Hvalid.
-  eapply well_founded_ext; [|apply updatep_wf_none; [| |eassumption]].
-  - intros. apply points_to_updatep_rthread_extend; eassumption.
-  - intros Hrt. apply H in Hrt; simpl in Hrt. lia.
-  - intros a Ha. apply Hvalid in Ha. simpl in Ha. lia.
-Qed.
-
-Lemma add_rthread_valid :
-  forall rthreads vals rt,
-    add_rthread_hyp rthreads vals rt ->
-    valid_addrs rthreads vals ->
-    valid_addrs (rthreads ++ rt :: nil) vals.
-Proof.
-  intros rthreads vals rt H Hvalid [rid|vp] a2 Ha; simpl in *; unfold valid; rewrite app_length; simpl.
-  - destruct (le_lt_dec (length rthreads) rid).
-    + rewrite nth_error_app2 in Ha by assumption.
-      destruct (rid - length rthreads) as [|n]; simpl in *; [|destruct n; simpl in *; tauto].
-      apply H in Ha. destruct a2; simpl in *; lia.
-    + rewrite nth_error_app1 in Ha by assumption.
-      apply (Hvalid (a_rthread rid)) in Ha.
-      destruct a2; simpl in *; lia.
-  - apply (Hvalid (a_val vp)) in Ha.
-    destruct a2; simpl in *; lia.
-Qed.
-
-Lemma add_rthread_ok :
-  forall rthreads vals rt,
-    add_rthread_hyp rthreads vals rt ->
-    state_ok rthreads vals -> state_ok (rthreads ++ rt :: nil) vals.
-Proof.
-  intros rthreads vals rt H [Hwf Hvalid].
-  split; [apply add_rthread_wf|apply add_rthread_valid]; assumption.
-Qed.
-
-
-Definition add_val_hyp rthreads vals v :=
-  forall a, val_points_to v a -> valid rthreads vals a.
-
-Lemma add_val_wf :
-  forall rthreads vals v,
-    add_val_hyp rthreads vals v ->
-    well_founded (flip (points_to rthreads vals)) ->
-    valid_addrs rthreads vals ->
-    well_founded (flip (points_to rthreads (vals ++ v :: nil))).
-Proof.
-  intros rthreads vals v H Hwf Hvalid.
-  eapply well_founded_ext; [|apply updatep_wf_none; [| |eassumption]].
-  - intros. apply points_to_updatep_val_extend; eassumption.
-  - intros Hv. apply H in Hv; simpl in Hv. lia.
-  - intros a Ha. apply Hvalid in Ha. simpl in Ha. lia.
-Qed.
-
-Lemma add_val_valid :
-  forall rthreads vals v,
-    add_val_hyp rthreads vals v ->
-    valid_addrs rthreads vals ->
-    valid_addrs rthreads (vals ++ v :: nil).
-Proof.
-  intros rthreads vals v H Hvalid [rid|vp] a2 Ha; simpl in *; unfold valid; rewrite app_length; simpl.
-  - apply (Hvalid (a_rthread rid)) in Ha.
-    destruct a2; simpl in *; lia.
-  - destruct (le_lt_dec (length vals) vp).
-    + rewrite nth_error_app2 in Ha by assumption.
-      destruct (vp - length vals) as [|n]; simpl in *; [|destruct n; simpl in *; tauto].
-      apply H in Ha. destruct a2; simpl in *; lia.
-    + rewrite nth_error_app1 in Ha by assumption.
-      apply (Hvalid (a_val vp)) in Ha.
-      destruct a2; simpl in *; lia.
-Qed.
-
-Lemma add_val_ok :
-  forall rthreads vals v,
-    add_val_hyp rthreads vals v ->
-    state_ok rthreads vals -> state_ok rthreads (vals ++ v :: nil).
-Proof.
-  intros rthreads vals v H [Hwf Hvalid].
-  split; [apply add_val_wf|apply add_val_valid]; assumption.
-Qed.
-
-
-Definition update_addr st a (v : match a return Type with a_rthread _ => rthread | a_val _ => value end) :=
-  match a, v with
-  | a_rthread rid, rt =>
-    {|
-      st_rthreads := update st.(st_rthreads) rid rt ;
-      st_vals := st.(st_vals) ;
-      st_freename := st.(st_freename) ;
-    |}
-  | a_val vp, v =>
-    {|
-      st_rthreads := st.(st_rthreads);
-      st_vals := update st.(st_vals) vp v ;
-      st_freename := st.(st_freename) ;
-    |}
-  end.
-
-Definition get_addr st a : option (match a return Type with a_rthread _ => rthread | a_val _ => value end) :=
-  match a with
-  | a_rthread rid => nth_error st.(st_rthreads) rid
-  | a_val vp => nth_error st.(st_vals) vp
-  end.
-
-Definition update_rthread st rid rt (* H *) :=
-(*  {|
+Definition update_rthread st rid rt :=
+  {|
     st_rthreads := update st.(st_rthreads) rid rt ;
-    st_vals := st.(st_vals) ;
     st_freename := st.(st_freename) ;
-(*    st_ok := update_rthread_ok _ _ _ _ H st.(st_ok) ; *)
-  |}. *)
-  update_addr st (a_rthread rid) rt.
-
-Lemma freevar_ok :
-  forall name rthreads vals,
-    state_ok rthreads vals -> state_ok rthreads (vals ++ Neutral {| n_id := name ; n_cont := Kid ; n_unfold := None |} :: nil).
-Proof.
-  intros name rthreads vals Hok.
-  apply add_val_ok; [|assumption].
-  intros a Ha; inversion Ha; subst.
-  inversion H0.
-Qed.
+  |}.
 
 Definition freevar (st : state) :=
   ({|
       st_rthreads := st.(st_rthreads) ;
-      st_vals := st.(st_vals) ++ Neutral {| n_id := st.(st_freename) ; n_cont := Kid ; n_unfold := None |} :: nil ;
       st_freename := S st.(st_freename) ;
-      (* st_ok := freevar_ok _ _ _ st.(st_ok) ; *)
-    |}, st.(st_freename), length st.(st_vals)).
+    |}, st.(st_freename)).
 
-Definition makelazy_hyp rthreads vals e :=
-  forall a, env_points_to e a -> valid rthreads vals a.
-
-Lemma makelazy_ok :
-  forall rthreads vals t e,
-    makelazy_hyp rthreads vals e ->
-    state_ok rthreads vals ->
-    state_ok (rthreads ++ {| rt_code := Term t e; rt_cont := Kid |} :: nil) (vals ++ Thread (length rthreads) :: nil).
-Proof.
-  intros rthreads vals t e Hmakelazy Hok.
-  eapply add_rthread_ok in Hok; [eapply add_val_ok; [|eassumption]|].
-  - intros a Ha. inversion Ha; subst. simpl.
-    rewrite app_length; simpl. lia.
-  - intros a Ha. inversion Ha; subst; inversion H; subst.
-    eapply Hmakelazy; eassumption.
-Qed.
-
-Definition makelazy (st : state) (t : term) (e : env) (* H *) :=
+Definition makelazy (st : state) (t : term) (e : env) :=
   (* For now, ignore variable optimization *)
   ({|
     st_rthreads := st.(st_rthreads) ++ {| rt_code := Term t e ; rt_cont := Kid |} :: nil ;
-    st_vals := st.(st_vals) ++ Thread (length st.(st_rthreads)) :: nil ;
     st_freename := st.(st_freename) ;
-    (* st_ok := makelazy_ok st.(st_rthreads) st.(st_vals) t e H st.(st_ok) ; *)
-    |}, length st.(st_vals)).
+    |}, Thread (length st.(st_rthreads))).
 
-
-(*
-Definition dummy_term := abs (var 0).
-
-Program Fixpoint read_thread st rid (acc : Acc (flip (points_to st.(st_rthreads) st.(st_vals))) (a_rthread rid)) {struct acc} :=
-  match acc with
-  | Acc_intro _ Hrec =>
-    match nth_error st.(st_rthreads) rid with
-    | None => dummy_term
-    | Some rt =>
-      let h := read_cont st rt.(rt_cont) _ in
-      match rt.(rt_code) with
-      | Val vp => read_val st vp (Hrec (a_val vp) _)
-      | Term t e => dummy_term (* todo *)
-      end
-    end
-  end
-
-with read_val st vp (acc : Acc (flip (points_to st.(st_rthreads) st.(st_vals))) (a_val vp)) {struct acc} :=
-  match acc with
-  | Acc_intro _ Hrec =>
-    match nth_error st.(st_vals) vp with
-    | None => dummy_term
-    | Some (Thread rid) => read_thread st rid (Hrec (a_rthread rid) _)
-    | Some (Clos t e x vp2) =>
-      dummy_term
-    | Some _ => dummy_term
-    end
-  end
-
-with read_cont st c (acc : forall a, cont_points_to c a -> Acc (flip (points_to st.(st_rthreads) st.(st_vals))) a) {struct c} :=
-  match c with
-  | Kid => h_hole
-  | Kapp vp c => h_app (read_cont st c _) (read_val st vp  _)
-  | Kswitch _ _ _ _ => h_hole
-  end.
-Next Obligation.
-  apply acc. apply kapp_points_to_2. assumption.
-Defined.
-Next Obligation.
-  apply acc. apply kapp_points_to_1.
-Defined.
-Next Obligation.
-  apply Hrec. unfold flip, points_to; simpl.
-  rewrite <- Heq_anonymous. right. assumption.
-Defined.
-Next Obligation.
-  unfold flip, points_to. rewrite <- Heq_anonymous0.
-  left. rewrite <- Heq_anonymous. constructor.
-Defined.
-Next Obligation.
-  unfold flip, points_to. rewrite <- Heq_anonymous.
-  constructor.
-Defined.
-Next Obligation.
-  split; intros; discriminate.
-Defined.
-Next Obligation.
-  split; intros; discriminate.
-Defined.
-
-Print read_thread.
-
-| read_thread_val : forall rid vp c t h,
-    nth_error st.(st_rthreads) rid = Some {| rt_code := Val vp ; rt_cont := c |} ->
-    read_val st vp t ->
-    read_cont st c h ->
-    read_thread st rid (fill_hctx h t)
-| read_thread_term : forall rid e el c t h,
-    nth_error st.(st_rthreads) rid = Some {| rt_code := Term t e ; rt_cont := c |} ->
-    Forall2 (read_val st) e el ->
-    read_cont st c h ->
-    read_thread st rid (fill_hctx h (subst (read_env el) t))
-
-with read_val st : valptr -> term -> Prop :=
-| read_val_thread :
-    forall vp rid t,
-      nth_error st.(st_vals) vp = Some (Thread rid) ->
-      read_thread st rid t ->
-      read_val st vp t
-| read_val_clos :
-    forall vp t e el x vp2,
-      nth_error st.(st_vals) vp = Some (Clos t e x vp2) ->
-      Forall2 (read_val st) e el ->
-      read_val st vp (subst (read_env el) (abs t))
-
-with read_cont st : cont -> hctx -> Prop :=
-| read_cont_kid : read_cont st Kid h_hole
-| read_cont_kapp :
-    forall vp c t h,
-      read_val st vp t ->
-      read_cont st c h ->
-      read_cont st (Kapp vp c) (h_app h t)
-| read_cont_kswitch :
-    forall bs e bds c el h,
-      Forall2 (read_val st) e el ->
-      read_cont st c h ->
-      read_cont st (Kswitch bs e bds c) (h_switch h (map (fun '(p, t) => (p, subst (read_env el) t)) bs)).
-
-*)
-
-
-
-
-
-
-Definition exit_rthread (st : state) (rid : rthreadptr) (vp : valptr) :=
-  update_rthread st rid {| rt_code := Val vp ; rt_cont := Kid |}.
-
-Definition addval (st : state) (v : value) :=
-  ({|
-      st_rthreads := st.(st_rthreads) ;
-      st_vals := st.(st_vals) ++ v :: nil ;
-      st_freename := st.(st_freename) ;
-    |}, length st.(st_vals)).
+Definition exit_rthread (st : state) (rid : rthreadptr) (v : value) :=
+  update_rthread st rid {| rt_code := Val v ; rt_cont := Kid |}.
 
 Definition is_finished (st : state) (rid : rthreadptr) :=
   match nth_error st.(st_rthreads) rid with
   | None => None
   | Some rthread =>
     match rthread.(rt_code), rthread.(rt_cont) with
-    | Val vp, Kid => Some vp
+    | Val v, Kid => Some v
     | _, _ => None
     end
   end.
-
-Definition fst3 {A B C : Type} (x : A * B * C) := fst (fst x).
-Definition snd3 {A B C : Type} (x : A * B * C) := snd (fst x).
-Definition thd3 {A B C : Type} (x : A * B * C) := snd x.
 
 Definition step_r (st : state) (rid : rthreadptr) : state :=
   match nth_error st.(st_rthreads) rid with
@@ -2211,46 +1623,41 @@ Definition step_r (st : state) (rid : rthreadptr) : state :=
   | Some rthread =>
     match rthread.(rt_code) with
     | Term (app u v) e =>
-      let st2vp := makelazy st v e in
-      update_rthread (fst st2vp) rid {| rt_code := Term u e ; rt_cont := Kapp (snd st2vp) rthread.(rt_cont) |}
+      let st2v := makelazy st v e in
+      update_rthread (fst st2v) rid {| rt_code := Term u e ; rt_cont := Kapp (snd st2v) rthread.(rt_cont) |}
     | Term (abs u) e =>
       match rthread.(rt_cont) with
       | Kswitch _ _ _ _ => st (* type error *)
       | Kid =>
-        let st2yfv := freevar st in
-        let st3vp := makelazy (fst3 st2yfv) u ((thd3 st2yfv) :: e) in
-        let st4vp2 := addval (fst st3vp) (Clos u e (snd3 st2yfv) (snd st3vp)) in
-        exit_rthread (fst st4vp2) rid (snd st4vp2)
+        let st2y := freevar st in
+        let st3v := makelazy (fst st2y) u ((Neutral (snd st2y, Kid, None)) :: e) in
+        exit_rthread (fst st3v) rid (Clos u e (snd st2y) (snd st3v))
       | Kapp v c =>
         update_rthread st rid {| rt_code := Term u (v :: e) ; rt_cont := c |}
       end
     | Term (var n) e =>
       match nth_error e n with
       | None => st (* variable not found *)
-      | Some vp =>
-        update_rthread st rid {| rt_code := Val vp ; rt_cont := rthread.(rt_cont) |}
+      | Some v =>
+        update_rthread st rid {| rt_code := Val v ; rt_cont := rthread.(rt_cont) |}
       end
     | Term (dvar n) e =>
       st (* todo use defs *)
     | Term _ e => st (* todo *)
-    | Val vp =>
-      match nth_error st.(st_vals) vp with
-      | None => st (* value not found *)
-      | Some (Thread rid2) =>
-        match is_finished st rid2 with
-        | None => st (* Thread is not finished yet, wait *)
-        | Some vp2 =>
-          update_rthread st rid {| rt_code := Val vp2 ; rt_cont := rthread.(rt_cont) |}
-        end
-      | Some (Clos u e y vp) =>
-        match rthread.(rt_cont) with
-        | Kid => st (* should be impossible? TODO *)
-        | Kswitch _ _ _ _  => st (* type error *)
-        | Kapp v c =>
-          update_rthread st rid {| rt_code := Term u (v :: e) ; rt_cont := c |}
-        end
-      | Some _ => st (* todo *)
+    | Val (Thread rid2) =>
+      match is_finished st rid2 with
+      | None => st (* Thread is not finished yet, wait *)
+      | Some v =>
+        update_rthread st rid {| rt_code := Val v ; rt_cont := rthread.(rt_cont) |}
       end
+    | Val (Clos u e y vp) =>
+      match rthread.(rt_cont) with
+      | Kid => st (* should be impossible? TODO *)
+      | Kswitch _ _ _ _  => st (* type error *)
+      | Kapp v c =>
+        update_rthread st rid {| rt_code := Term u (v :: e) ; rt_cont := c |}
+      end
+    | Val _ => st (* todo *)
     end
   end.
 
@@ -2261,47 +1668,50 @@ Inductive step : state -> state -> Prop :=
 
 
 
-Inductive read_addr st : addr -> term -> Prop :=
-| read_thread_val : forall rid vp c t h,
-    nth_error st.(st_rthreads) rid = Some {| rt_code := Val vp ; rt_cont := c |} ->
-    read_addr st (a_val vp) t ->
+Inductive read_thread st : rthreadptr -> term -> Prop :=
+| read_thread_val : forall rid v c t h,
+    nth_error st.(st_rthreads) rid = Some {| rt_code := Val v ; rt_cont := c |} ->
+    read_val st v t ->
     read_cont st c h ->
-    read_addr st (a_rthread rid) (fill_hctx h t)
+    read_thread st rid (fill_hctx h t)
 | read_thread_term : forall rid e el c t h,
     nth_error st.(st_rthreads) rid = Some {| rt_code := Term t e ; rt_cont := c |} ->
-    Forall2 (fun vp v => read_addr st (a_val vp) v) e el ->
+    Forall2 (read_val st) e el ->
     read_cont st c h ->
-    read_addr st (a_rthread rid) (fill_hctx h (subst (read_env el) t))
+    read_thread st rid (fill_hctx h (subst (read_env el) t))
+
+with read_val st : value -> term -> Prop :=
 | read_val_thread :
-    forall vp rid t,
-      nth_error st.(st_vals) vp = Some (Thread rid) ->
-      read_addr st (a_rthread rid) t ->
-      read_addr st (a_val vp) t
+    forall rid t, read_thread st rid t -> read_val st (Thread rid) t
 | read_val_clos :
-    forall vp t e el x vp2 t2,
-      nth_error st.(st_vals) vp = Some (Clos t e x vp2) ->
-      Forall2 (fun vp v => read_addr st (a_val vp) v) e el ->
-      read_addr st (a_val vp2) t2 ->
-      convertible beta (subst (read_env (dvar x :: el)) t) t2 ->
-      read_addr st (a_val vp) (subst (read_env el) (abs t))
+    forall t e el x vdeep tdeep,
+      Forall2 (read_val st) e el ->
+      read_val st vdeep tdeep ->
+      convertible beta (subst (read_env (dvar x :: el)) t) tdeep ->
+      read_val st (Clos t e x vdeep) (subst (read_env el) (abs t))
 | read_val_neutral :
-    forall vp x c h uf,
-      nth_error st.(st_vals) vp = Some (Neutral {| n_id := x ; n_cont := c ; n_unfold := uf |}) ->
-      read_cont st c h ->
-      read_addr st (a_val vp) (fill_hctx h (dvar x))
+    forall x c h uf,
+      read_cont st c h -> (* TODO: neutral reduction rule *)
+      read_val st (Neutral (x, c, uf)) (fill_hctx h (dvar x))
 
 with read_cont st : cont -> hctx -> Prop :=
 | read_cont_kid : read_cont st Kid h_hole
 | read_cont_kapp :
-    forall vp c t h,
-      read_addr st (a_val vp) t ->
+    forall v c t h,
+      read_val st v t ->
       read_cont st c h ->
-      read_cont st (Kapp vp c) (compose_hctx h (h_app h_hole t))
+      read_cont st (Kapp v c) (compose_hctx h (h_app h_hole t))
 | read_cont_kswitch :
-    forall bs e bds c el h,
-      Forall2 (fun vp v => read_addr st (a_val vp) v) e el ->
+    forall bs e bds tdeeps c el h,
+      Forall2 (read_val st) e el ->
       read_cont st c h ->
-      read_cont st (Kswitch bs e bds c) (compose_hctx h (h_switch h_hole (map (fun '(p, t) => (p, subst (read_env el) t)) bs))).
+      Forall3
+        (fun pt vdeeps tdeep =>
+           length (fst vdeeps) = fst pt /\
+           read_val st (snd vdeeps) tdeep /\
+           convertible beta (subst (read_env (map dvar (fst vdeeps) ++ el)) (snd pt)) tdeep
+        ) bs bds tdeeps ->
+      read_cont st (Kswitch bs e bds c) (compose_hctx h (h_switch h_hole (map (fun '(p, t) => (p, subst (liftn_subst p (read_env el)) t)) bs))).
 
 Lemma read_env_0 :
   forall t e, read_env (t :: e) 0 = t.
@@ -2315,28 +1725,23 @@ Proof.
   intros; reflexivity.
 Qed.
 
-Definition points st := points_to st.(st_rthreads) st.(st_vals).
-
-Definition no_delete st1 st2 :=
-  forall a, get_addr st2 a = None -> get_addr st1 a = None.
+Definition no_delete st1 st2 := forall rid, nth_error st2.(st_rthreads) rid = None -> nth_error st1.(st_rthreads) rid = None.
 
 Lemma no_delete_refl :
   forall st, no_delete st st.
 Proof.
-  intros st a H; assumption.
+  intros st rid H; assumption.
 Qed.
 
 Lemma no_delete_iff :
   forall st1 st2, no_delete st1 st2 <->
-             length st1.(st_rthreads) <= length st2.(st_rthreads) /\ length st1.(st_vals) <= length st2.(st_vals).
+             length st1.(st_rthreads) <= length st2.(st_rthreads).
 Proof.
   intros st1 st2. split.
-  - intros H. split.
-    + specialize (H (a_rthread (length (st_rthreads st2)))). simpl in H.
+  - intros H.
+    + specialize (H (length (st_rthreads st2))). simpl in H.
       rewrite !nth_error_None in H. lia.
-    + specialize (H (a_val (length (st_vals st2)))). simpl in H.
-      rewrite !nth_error_None in H. lia.
-  - intros [H1 H2] [rid|vp] H; simpl in *; rewrite nth_error_None in *; lia.
+  - intros Hlen rid H; simpl in *; rewrite nth_error_None in *; lia.
 Qed.
 
 Lemma nth_error_app_Some :
@@ -2366,19 +1771,58 @@ Proof.
   - destruct Hx as [-> | Hx]; [eapply HQ; eassumption|apply (IHForall2 Hx)].
 Defined.
 
-Lemma read_cont_Acc :
-  forall st a c h, read_cont st c h -> cont_points_to c a -> (forall a t, read_addr st a t -> Acc (flip (points st)) a) -> Acc (flip (points st)) a.
+Lemma Forall2_Exists_left_transparent :
+  forall (A B : Type) (P : A -> B -> Prop) (Q : A -> Prop) (R : Prop) (L1 : list A) (L2 : list B) (H : forall x y, P x y -> Q x -> R), Forall2 P L1 L2 -> Exists Q L1 -> R.
+Proof.
+  intros A B P Q R L1 L2 H HP HQ; induction HP.
+  - inversion HQ.
+  - inversion HQ; subst; [eapply H; eassumption|].
+    apply IHHP, H2.
+Defined.
+
+Lemma Forall3_Exists_2_transparent :
+  forall (A B C : Type) (P : A -> B -> C -> Prop) (Q : B -> Prop) (R : Prop) L1 L2 L3 (H : forall x y z, P x y z -> Q y -> R), Forall3 P L1 L2 L3 -> Exists Q L2 -> R.
+Proof.
+  intros A B C P Q R L1 L2 L3 H HP HQ; induction HP.
+  - inversion HQ.
+  - inversion HQ; subst; [eapply H; eassumption|].
+    apply IHHP, H2.
+Defined.
+
+Lemma read_cont_Acc_aux :
+  forall st a c h, read_cont st c h -> cont_points_to c a ->
+              (forall a v t, read_val st v t -> val_points_to v a -> Acc (flip (points st)) a) ->
+              Acc (flip (points st)) a.
 Proof.
   intros st a c h Hread Hpoint Hrec. induction Hread; inversion Hpoint; subst.
   - eapply Hrec; eassumption.
   - apply IHHread. assumption.
-  - destruct a; simpl in *; [tauto|].
-    eapply Forall2_In_left_transparent; [|eassumption|eassumption].
-    intros; eapply Hrec, H0.
-  - tauto.
+  - eapply Forall2_Exists_left_transparent; try eassumption.
+    intros; eapply Hrec; eassumption.
+  - eapply Forall3_Exists_2_transparent; try eassumption.
+    intros x y z H1 H2; eapply Hrec; [apply H1|apply H2].
+  - apply IHHread. assumption.
 Defined.
 
-Lemma read_addr_Acc :
+Axiom magic : False.
+Ltac magic := exfalso; apply magic.
+
+Lemma read_val_Acc_aux :
+  forall st a v t, read_val st v t -> val_points_to v a ->
+              (forall rid t, read_thread st rid t -> Acc (flip (points st)) rid) ->
+              Acc (flip (points st)) a.
+Proof.
+  intros st. fix Hrec 2. intros a v t Hread Hpoint Hrec1. inversion Hread; inversion Hpoint; try (subst; congruence).
+  - magic. (* eapply Hrec1; eassumption. *)
+  - eapply Forall2_Exists_left_transparent; [|exact H|exact H4].
+    intros v t Hv Ha. eapply Hrec; [exact Hv|exact Ha|exact Hrec1].
+  - (* eapply Hrec; [|exact H7|]; eassumption. *) magic.
+  - (* eapply read_cont_Acc_aux; try eassumption.
+    intros; eapply Hrec; eassumption. *) magic.
+  - magic.
+Defined.
+
+<Lemma read_addr_Acc :
   forall st a t, read_addr st a t -> Acc (flip (points st)) a.
 Proof.
   intros st. fix Hrec 3.

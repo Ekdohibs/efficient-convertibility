@@ -3,7 +3,6 @@ Require Import Arith.
 Require Import Freevar.
 Require Import Misc.
 Require Import Psatz.
-Require Import Star.
 Require Import Coq.Logic.Eqdep_dec.
 Require Import FEnv.
 Require Import Inductive.

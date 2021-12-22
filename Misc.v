@@ -164,6 +164,14 @@ Proof.
   - constructor; auto.
 Qed.
 
+Lemma Forall_True_transparent :
+  forall (A : Type) (P : A -> Prop) (L : list A), (forall x, P x) -> Forall P L.
+Proof.
+  intros. induction L.
+  - constructor.
+  - constructor; auto.
+Defined.
+
 Lemma Forall_ext :
   forall (A : Type) (P1 P2 : A -> Prop) (L : list A), (forall x, P1 x <-> P2 x) -> Forall P1 L <-> Forall P2 L.
 Proof.
@@ -233,6 +241,15 @@ Proof.
       * apply IH. intros n; apply (Hforall (S n)).
 Qed.
 
+Lemma Forall_impl_transparent :
+  forall (A : Type) (P Q : A -> Prop) L, (forall x, P x -> Q x) -> Forall P L -> Forall Q L.
+Proof.
+  intros A P Q L Himpl H. induction H.
+  - constructor.
+  - constructor.
+    + apply Himpl. assumption.
+    + assumption.
+Defined.
 
 Lemma Forall2_cons_iff :
   forall (A B : Type) (P : A -> B -> Prop) x y L1 L2, Forall2 P (x :: L1) (y :: L2) <-> P x y /\ Forall2 P L1 L2.
@@ -597,8 +614,8 @@ Lemma list_inc_app_left :
   forall A (L1 L2 L3 : list A), list_inc (L1 ++ L2) L3 <-> list_inc L1 L3 /\ list_inc L2 L3.
 Proof.
   intros; unfold list_inc in *.
-  firstorder using in_app_iff.
-  rewrite in_app_iff in *; firstorder.
+  split; [intros H; split; intros x Hx; apply H; rewrite in_app_iff; tauto|].
+  intros [H1 H2] x Hx; rewrite in_app_iff in Hx; firstorder.
 Qed.
 
 Lemma list_same_inc_iff :
