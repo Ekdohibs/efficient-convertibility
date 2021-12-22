@@ -2,9 +2,6 @@ From Ltac2 Require Import Ltac2.
 
 Require Import List.
 Require Import Misc.
-Require Import STerm. (* for testing *)
-
-Set Ltac2 Backtrace.
 
 Ltac2 eassumption_tac () := ltac1:(eassumption).
 Ltac2 Notation eassumption := eassumption_tac ().
@@ -381,20 +378,6 @@ Ltac2 gen_ind_principle (cl : constr list) :=
     )
   ).
 
-
-Inductive A : Type -> Prop :=
-| mkt : nat -> A nat -> A bool.
-
-Inductive L (A : Type) : Type :=
-  C : A -> list A -> L A -> list (L A) -> L A * nat -> list (L A * nat) -> (forall n m, n + m = m + n -> L A) -> L A.
-
-Inductive even : nat -> Prop :=
-| even_O : even O
-| even_S : forall n, odd n -> even (S n)
-
-with odd : nat -> Prop :=
-| odd_S : forall n, even n -> odd (S n).
-
 Notation "'Induction' 'For' [ x ]" := ltac2:(let l := [x] in Control.refine (fun () => gen_ind_principle (List.map Constr.pretype l))) (at level 0, only parsing).
 Notation "'Induction' 'For' [ x ; y ]" :=
   ltac2:(let l := [x; y] in Control.refine (fun () => gen_ind_principle (List.map Constr.pretype l))) (at level 0, only parsing).
@@ -404,30 +387,3 @@ Notation "'Induction' 'For' [ x ; y ; z ; w ]" :=
   ltac2:(let l := [x; y; z; w] in Control.refine (fun () => gen_ind_principle (List.map Constr.pretype l))) (at level 0, only parsing).
 Notation "'Induction' 'For' [ x ; y ; z ; w ; t ]" :=
   ltac2:(let l := [x; y; z; w; t] in Control.refine (fun () => gen_ind_principle (List.map Constr.pretype l))) (at level 0, only parsing).
-
-Definition L_ind2 (A : Type) := Induction For [ L A ].
-Definition term_ind3 := Induction For [ term ].
-Definition test := Induction For [ A ].
-Definition testeven := Induction For [ even ; odd ].
-
-Inductive t : term -> Prop :=
-| t_var : forall n, t (var n)
-| t_constr : forall tag l, Exists t l -> t (constr tag l).
-Definition test3 := Induction For [ t ].
-Print test3.
-
-Inductive pbeta : term -> term -> Prop :=
-| pbeta_var : forall n, pbeta (var n) (var n)
-| pbeta_dvar : forall n, pbeta (dvar n) (dvar n)
-| pbeta_app : forall t1 t2 t3 t4, pbeta t1 t2 -> pbeta t3 t4 -> pbeta (app t1 t3) (app t2 t4)
-| pbeta_redex : forall t1 t2 t3 t4, pbeta t1 t2 -> pbeta t3 t4 -> pbeta (app (abs t1) t3) (subst1 t4 t2)
-| pbeta_abs : forall t1 t2, pbeta t1 t2 -> pbeta (abs t1) (abs t2)
-| pbeta_constr : forall tag l1 l2, Forall2 pbeta l1 l2 -> pbeta (constr tag l1) (constr tag l2)
-| pbeta_switch : forall t1 t2 l1 l2, pbeta t1 t2 -> Forall2 (fun pt1 pt2 => fst pt1 = fst pt2 /\ pbeta (snd pt1) (snd pt2)) l1 l2 -> pbeta (switch t1 l1) (switch t2 l2)
-| pbeta_switch_redex : forall lt1 lt2 t1 t2 l1 l2,
-    Forall2 pbeta lt1 lt2 -> pbeta t1 t2 ->
-    pbeta (switch (constr (length l1) lt1) (l1 ++ (length lt1, t1) :: l2)) (subst (read_env lt2) t2).
-
-Definition test2 := Induction For [ pbeta ].
-Check test2.
-
