@@ -448,3 +448,58 @@ Proof.
       * exists t. split; [assumption|].
         eapply star_compose; eassumption.
 Qed.
+
+
+(* Rewriting one element of a list *)
+
+Inductive step_one {A : Type} (R : A -> A -> Prop) : list A -> list A -> Prop :=
+| step_one_step : forall x y L, R x y -> step_one R (x :: L) (y :: L)
+| step_one_cons : forall x L1 L2, step_one R L1 L2 -> step_one R (x :: L1) (x :: L2).
+
+Lemma step_one_decompose :
+  forall (A : Type) (R : A -> A -> Prop) l1 l2, step_one R l1 l2 <-> exists l3 l4 x y, l1 = l3 ++ x :: l4 /\ l2 = l3 ++ y :: l4 /\ R x y.
+Proof.
+  intros A R l1 l2. split; intros H.
+  - induction H.
+    + exists nil, L, x, y. tauto.
+    + destruct IHstep_one as (l3 & l4 & a & b & H1); exists (x :: l3), l4, a, b.
+      simpl; intuition congruence.
+  - destruct H as (l3 & l4 & x & y & -> & -> & H).
+    induction l3; simpl; constructor; assumption.
+Qed.
+
+Lemma step_one_star :
+  forall (A : Type) (R : A -> A -> Prop), same_rel (star (step_one R)) (Forall2 (star R)).
+Proof.
+  intros A R x y. split; intros H.
+  - induction H.
+    + apply Forall2_map_same, Forall_True. intros; apply star_refl.
+    + enough (Forall2 (star R) x y).
+      * apply Forall2_comm in H1.
+        eapply Forall3_select23, Forall3_impl; [|eapply Forall3_from_Forall2; eassumption].
+        intros ? ? ? [? ?]; eapply star_compose; simpl in *; eassumption.
+      * clear H0 IHstar. induction H; constructor.
+        -- apply star_1; assumption.
+        -- apply Forall2_map_same, Forall_True. intros; apply star_refl.
+        -- apply star_refl.
+        -- assumption.
+  - induction H.
+    + apply star_refl.
+    + eapply star_compose; [|eapply star_map_impl with (f := fun l => y :: l); [|eassumption]; intros; constructor; assumption].
+      eapply star_map_impl with (f := fun x => x :: l); [|eassumption].
+      intros; constructor; assumption.
+Qed.
+
+Lemma step_one_impl_transparent :
+  forall (A : Type) (R1 R2 : A  -> A -> Prop) L1 L2, (forall x y, R1 x y -> R2 x y) -> step_one R1 L1 L2 -> step_one R2 L1 L2.
+Proof.
+  intros A R1 R2 L1 L2 H1 H2; induction H2; constructor; [|assumption].
+  apply H1, H.
+Defined.
+
+Lemma step_one_impl_strong_transparent :
+  forall (A : Type) (R1 R2 : A -> A -> Prop) L1 L2, (forall x y, R1 x y -> R2 x y) -> step_one R1 L1 L2 -> step_one (fun x y => R1 x y /\ R2 x y) L1 L2.
+Proof.
+  intros A R1 R2 L1 L2 H1 H2. eapply step_one_impl_transparent; [|eassumption].
+  intros; split; [assumption|apply H1; assumption].
+Defined.
