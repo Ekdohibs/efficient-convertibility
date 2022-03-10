@@ -490,7 +490,7 @@ let rec randterm n l =
     let k = Random.int n in
     App (randterm k l, randterm (n - k - 1) l)
 
-(*
+
 let rec print_eole_term ff t =
   match t with
   | Var x -> Format.fprintf ff "%sA" x
@@ -500,7 +500,7 @@ let rec print_eole_term ff t =
 
 let rec print_eole_result ff v =
   match v with
-  | Lazy _ | Blackhole | Block _ | StructSwitch _ -> assert false
+  | Lazy _ | Blackhole | Block _ | StructSwitch _ | StructFix _ -> assert false
   | Freevar x -> Format.fprintf ff "%s" x
   | StructApp (v1, v2) ->
     Format.fprintf ff "(%a %a)" print_eole_result v1 print_eole_result v2
@@ -510,6 +510,46 @@ let rec print_eole_result ff v =
       | Some v ->
         Format.fprintf ff "(%s->%a)" (fst v) print_eole_result (snd v);
     end
+
+let rec print_hvm_term ff t =
+  match t with
+  | Var x -> Format.fprintf ff "%s" x
+  | Lam (x, t) -> Format.fprintf ff "(λ%s %a)" x print_hvm_term t
+  | App (t1, t2) -> Format.fprintf ff "(%a %a)" print_hvm_term t1 print_hvm_term t2
+  | _ -> assert false
+
+let rec print_hvm_result ff v =
+  match v with
+  | Lazy _ | Blackhole | Block _ | StructSwitch _ | StructFix _ -> assert false
+  | Freevar x -> Format.fprintf ff "%s" x
+  | StructApp (v1, v2) ->
+    Format.fprintf ff "(%a %a)" print_hvm_result v1 print_hvm_result v2
+  | Clos (_, _, e, n) ->
+    begin match !n with
+      | None -> assert false
+      | Some v ->
+        Format.fprintf ff "λ%s %a" (fst v) print_hvm_result (snd v);
+    end
+
+let rec parse_hvm_result s i =
+  if s.[i] = '(' then begin
+    let t1, i = parse_hvm_result s (i + 1) in
+    assert (s.[i] = ' ');
+    let t2, i = parse_hvm_result s (i + 1) in
+    assert (s.[i] = ')');
+    App (t1, t2), i + 1
+  end else if s.[i] = '\206' then begin
+    assert (s.[i + 1] = '\187');
+    let p = ref (i + 2) in
+    while s.[!p] <> ' ' do incr p done;
+    let name = String.sub s (i + 2) (!p - (i + 2)) in
+    let body, i = parse_hvm_result s (!p + 1) in
+    Lam (name, body), i
+  end else begin
+    let p = ref i in
+    while !p < String.length s && s.[!p] <> ' ' && s.[!p] <> ')' && s.[!p] <> '\n' do incr p done;
+    Var (String.sub s i (!p - i)), !p
+  end
 
 let result_size r =
   let l = ref [] in
@@ -539,6 +579,12 @@ let is_result_big r =
   in
   try aux r; false with Exit -> true
 
+let rec compare_result t r mp =
+  match t, r with
+  | Var x1, Freevar x2 -> SMap.find x1 mp = x2
+  | App (t1, t2), StructApp (r1, r2) -> compare_result t1 r1 mp && compare_result t2 r2 mp
+  | Lam (x1, t), Clos (_, _, _, {contents = Some (x2, r)}) -> compare_result t r (SMap.add x1 x2 mp)
+  | _ -> false
 
 let run_diverging i t =
   let mxred = 100000 in
@@ -549,12 +595,18 @@ let run_diverging i t =
       if is_result_big r then
         Format.printf "Result too big to print@."
       else begin
-        let f = open_out ("eole_test/test_" ^ string_of_int i ^ ".in") in
-        Format.fprintf (Format.formatter_of_out_channel f) "%a.@." print_eole_term t;
+        let f = open_out ("hvm_test/test_" ^ string_of_int i ^ ".hvm") in
+        Format.fprintf (Format.formatter_of_out_channel f) "(Main arg) = %a@." print_hvm_term t;
         close_out f;
-        let f = open_out ("eole_test/test_" ^ string_of_int i ^ ".out") in
-        Format.fprintf (Format.formatter_of_out_channel f) "%a@." print_eole_result r;
-        close_out f
+        let _ = Sys.command ("cd hvm_test && ~/.cargo/bin/hvm r test_" ^ string_of_int i ^ " 0 | tail -n +5 > test_" ^ string_of_int i ^ ".out") in
+        let f = open_in ("hvm_test/test_" ^ string_of_int i ^ ".out") in
+        let hvm = input_line f in
+        close_in f;
+        let hvm, _ = parse_hvm_result hvm 0 in
+        let f = open_out ("hvm_test/test_" ^ string_of_int i ^ ".exp") in
+        Format.fprintf (Format.formatter_of_out_channel f) "%a@." print_hvm_result r;
+        close_out f;
+        assert (compare_result hvm r SMap.empty)
       end
     | exception Timeout -> Format.printf "Timeout@."
   end;
@@ -562,9 +614,8 @@ let run_diverging i t =
 
 let () =
   for i = 1 to 10000 do
-    run_diverging i (randterm 1000 []);
+    run_diverging i (randterm 11 []);
   done
-*)
 
 
 
