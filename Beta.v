@@ -3777,6 +3777,7 @@ Proof.
   - simpl. lia.
 Qed.
 
+
 Lemma compose_hctx_hole_r :
   forall h, compose_hctx h h_hole = h.
 Proof.
@@ -7387,3 +7388,171 @@ Proof.
   - eapply cthread_red_correct; try eassumption; apply Hwf.
 Qed.
 
+Lemma star_step_correct :
+  forall ctst1 ctst2 defs b,
+    complete_wf defs ctst1 ->
+    star step ctst1 ctst2 ->
+    read_cthread (snd ctst2) defs (fst ctst2) b ->
+    read_cthread (snd ctst1) defs (fst ctst1) b.
+Proof.
+  intros ctst1 ctst2 defs b Hwf Hstep Hread.
+  induction Hstep.
+  - assumption.
+  - destruct x, y, z; simpl in *. apply IHHstep in Hread.
+    + eapply step_correct; eassumption.
+    + eapply step_wf; eassumption.
+Qed.
+
+
+Definition init_conv (defs : list term) (t1 t2 : term) :=
+  let (st, vs) := init_all {| st_rthreads := nil ; st_freename := length defs |} nil defs in
+  let (st1, v1) := makelazy st (init_at 0 t1) vs in
+  let (st2, v2) := makelazy st1 (init_at 0 t2) vs in
+  (cthread_reduce v1 v2 nil nil, st2).
+
+Lemma init_all_freename :
+  forall st defs1 defs2, st_freename (fst (init_all st defs1 defs2)) = st_freename st.
+Proof.
+  intros st defs1 defs2; revert st defs1; induction defs2; intros st defs1; simpl in *.
+  - reflexivity.
+  - rewrite IHdefs2. reflexivity.
+Qed.
+
+
+Lemma init_all_incl :
+  forall st defs1 defs2 v, In v defs1 -> In v (snd (init_all st defs1 defs2)).
+Proof.
+  intros st defs1 defs2 v. revert st defs1; induction defs2; intros st defs1 H; simpl.
+  - assumption.
+  - apply IHdefs2. rewrite in_app_iff; tauto.
+Qed.
+
+Lemma init_all_new_threads :
+  forall st defs1 defs2 rid,
+    nth_error (st_rthreads st) rid = None ->
+    nth_error (st_rthreads (fst (init_all st defs1 defs2))) rid <> None ->
+    exists x, In (Neutral (x, Kid, Some (Thread rid))) (snd (init_all st defs1 defs2)).
+Proof.
+  intros st defs1 defs2 rid; revert st defs1; induction defs2; intros st defs1 H1 H2; simpl in *.
+  - tauto.
+  - destruct (nth_error (st_rthreads (extend_rthread st {| rt_code := Term (init_at 0 a) defs1; rt_cont := Kid |})) rid) eqn:Hnth.
+    + simpl in Hnth. rewrite nth_error_app2 in Hnth; [|apply nth_error_None; eassumption].
+      apply nth_error_None in H1.
+      destruct (_ - _) as [|n] eqn:Hn; [|destruct n; simpl in *; congruence].
+      replace rid with (length (st_rthreads st)) by lia.
+      eexists.
+      eapply init_all_incl. rewrite in_app_iff; simpl.
+      right; left. reflexivity.
+    + eapply IHdefs2; eassumption.
+Qed.
+
+Lemma init_conv_correct :
+  forall defs t1 t2 st c,
+    defs_wf defs ->
+    closed_at t1 0 -> closed_at t2 0 ->
+    dvar_below (length defs) t1 -> dvar_below (length defs) t2 ->
+    init_conv defs t1 t2 = (c, st) ->
+    complete_wf defs (c, st) /\ (forall b, read_cthread st defs c b -> reflect (convertible (betaiota defs) t1 t2) b).
+Proof.
+  intros defs t1 t2 st c Hdefswf Hclosed1 Hclosed2 Hbelow1 Hbelow2 Hcv.
+  unfold init_conv in Hcv; simpl in *.
+  destruct init_all as [st2 vs] eqn:Hinit; simpl in *.
+  assert (Hinit2 := Hinit).
+  apply init_all_correct with (defs1 := nil) in Hinit; simpl; [|assumption|constructor|lia].
+  assert (Ht1 : read_thread st defs nil (length (st_rthreads st2)) t1).
+  {
+    injection Hcv as Hcv; subst.
+    refine (eq_rect _ (read_thread _ _ _ _) _ t1 _);
+      [eapply read_thread_term with (h := h_hole)|symmetry; apply init_at_correct]; simpl.
+    + rewrite nth_error_app1; [|rewrite app_length; simpl; lia].
+      apply nth_error_extend.
+    + apply Forall2_length in Hinit. rewrite Hinit, map_length, seq_length.
+      apply init_at_closed with (p := 0); assumption.
+    + eapply Forall2_impl; [|eassumption].
+      intros v3 t3 H; simpl. eapply read_val_same; [|eassumption|]; [simpl; lia|].
+      intros a Ha. eapply read_val_points in Ha; [|eassumption]. destruct Ha as (? & ? & ?).
+      eapply unchanged_from_only_extended; [eassumption|].
+      eapply only_extended_trans; eapply only_extended_makelazy.
+    + constructor.
+    + apply init_at_no_dvar.
+    + assumption.
+    + assumption.
+  }
+  assert (Ht2 : read_thread st defs nil (length (st_rthreads st2) + 1) t2).
+  {
+    injection Hcv as Hcv; subst.
+    refine (eq_rect _ (read_thread _ _ _ _) _ t2 _);
+      [eapply read_thread_term with (h := h_hole)|symmetry; apply init_at_correct]; simpl.
+    + rewrite nth_error_app2; [|rewrite app_length; simpl; lia].
+      rewrite app_length; simpl. destruct (_ - _) eqn:Heq; [|lia].
+      reflexivity.
+    + apply Forall2_length in Hinit. rewrite Hinit, map_length, seq_length.
+      apply init_at_closed with (p := 0); assumption.
+    + eapply Forall2_impl; [|eassumption].
+      intros v3 t3 H; simpl. eapply read_val_same; [|eassumption|]; [simpl; lia|].
+      intros a Ha. eapply read_val_points in Ha; [|eassumption]. destruct Ha as (? & ? & ?).
+      eapply unchanged_from_only_extended; [eassumption|].
+      eapply only_extended_trans; eapply only_extended_makelazy.
+    + constructor.
+    + apply init_at_no_dvar.
+    + assumption.
+    + assumption.
+  }
+  repeat split.
+  - assumption.
+  - simpl. unfold defs_ok. simpl.
+    injection Hcv as Hcv; subst; simpl.
+    replace st2 with (fst (st2, vs)) by reflexivity. rewrite <- Hinit2, init_all_freename.
+    simpl. lia.
+  - simpl. intros rid Hrid.
+    injection Hcv as Hcv; subst; simpl.
+    simpl in Hrid. destruct (le_lt_dec (length (st_rthreads st2) + 1) rid).
+    + rewrite nth_error_app2 in Hrid by (rewrite app_length; simpl; lia).
+      rewrite app_length in Hrid; simpl in Hrid.
+      destruct (_ - _) as [|n] eqn:Heq; [|destruct n; simpl in *; congruence].
+      eexists. eexists. replace rid with  (length (st_rthreads st2) + 1) by lia.
+      split; [|eassumption]. split; constructor.
+    + rewrite nth_error_app1 in Hrid by (rewrite app_length; simpl; lia).
+      destruct (le_lt_dec (length (st_rthreads st2)) rid).
+      * replace rid with (length (st_rthreads st2)) by lia.
+        eexists. eexists. split; [|eassumption]. split; constructor.
+      * rewrite nth_error_app1 in Hrid by assumption.
+        replace st2 with (fst (st2, vs)) in Hrid by reflexivity.
+        rewrite <- Hinit2 in Hrid.
+        eapply init_all_new_threads in Hrid; [|simpl; destruct rid; reflexivity].
+        destruct Hrid as (x & Hx). rewrite Hinit2 in Hx; simpl in Hx.
+        eapply Forall2_In_left_transparent; [|eassumption|eassumption].
+        intros t Ht. inversion Ht; subst. inversion H4; subst. destruct H3 as (H3 & _ & _).
+        inversion H3; subst.
+        eexists; eexists.
+        split; [|eapply read_thread_only_extended; [simpl|eapply only_extended_trans; eapply only_extended_makelazy|eassumption]; lia].
+        split; constructor.
+  - injection Hcv as Hcv; subst; simpl. econstructor.
+    + constructor.
+    + constructor.
+    + split; constructor.
+    + split; constructor.
+    + reflexivity.
+    + constructor; eassumption.
+    + constructor. rewrite app_length; simpl. eassumption.
+  - intros b Hb. injection Hcv as Hcv; subst; simpl.
+    inversion Hb; subst. apply H4.
+    + constructor. assumption.
+    + constructor. rewrite app_length; simpl. assumption.
+Qed.
+
+Lemma all_correct :
+  forall defs t1 t2 st b,
+    defs_wf defs ->
+    closed_at t1 0 -> closed_at t2 0 ->
+    dvar_below (length defs) t1 -> dvar_below (length defs) t2 ->
+    star step (init_conv defs t1 t2) (cthread_done b, st) ->
+    reflect (convertible (betaiota defs) t1 t2) b.
+Proof.
+  intros defs t1 t2 st b H1 H2 H3 H4 H5 H6.
+  eapply star_step_correct in H6; simpl; [| |constructor].
+  - eapply init_conv_correct in H6; try eassumption.
+    destruct init_conv; reflexivity.
+  - eapply init_conv_correct with (t1 := t1) (t2 := t2); try eassumption.
+    destruct init_conv; reflexivity.
+Qed.
