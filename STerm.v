@@ -455,8 +455,77 @@ Proof.
     rewrite plus_ren_correct; f_equal; lia.
 Qed.
 
+Lemma liftn_subst_comp :
+  forall p us1 us2 n, comp (subst (liftn_subst p us1)) (liftn_subst p us2) n = liftn_subst p (comp (subst us1) us2) n.
+Proof.
+  intros p us1 us2 n. unfold comp, liftn_subst.
+  destruct le_lt_dec.
+  - rewrite ren_subst, subst_ren. apply subst_ext.
+    intros m. unfold comp; simpl. rewrite plus_ren_correct. destruct le_lt_dec; [|lia].
+    f_equal. f_equal. lia.
+  - simpl. destruct le_lt_dec; [lia|]. reflexivity.
+Qed.
+
+
+Lemma liftn_subst_1 :
+  forall us, (forall n, liftn_subst 1 us n = lift_subst us n).
+Proof.
+  intros us n. unfold liftn_subst, lift_subst.
+  destruct n as [|n]; simpl in *; [reflexivity|].
+  rewrite Nat.sub_0_r. reflexivity.
+Qed.
+
+Lemma liftn_subst_add :
+  forall us p q, (forall n, liftn_subst p (liftn_subst q us) n = liftn_subst (p + q) us n).
+Proof.
+  intros us p q n. unfold liftn_subst.
+  repeat destruct le_lt_dec; try lia; try rewrite !ren_ren; simpl; f_equal.
+  - apply renv_ext; intros m; rewrite renv_comp_correct, !plus_ren_correct. lia.
+  - f_equal. lia.
+  - rewrite plus_ren_correct. lia.
+Qed.
+
+Lemma liftn_subst_0 :
+  forall us, (forall n, liftn_subst 0 us n = us n).
+Proof.
+  intros us n. unfold liftn_subst. destruct le_lt_dec; [|lia].
+  erewrite Nat.sub_0_r, ren_term_is_subst, subst_ext, subst_id; [reflexivity|].
+  intros; reflexivity.
+Qed.
+
 Definition read_env (e : list term) :=
   fun n => match nth_error e n with Some u => u | None => var (n - length e) end.
+
+Lemma read_env_0 :
+  forall t e, read_env (t :: e) 0 = t.
+Proof.
+  intros; reflexivity.
+Qed.
+
+Lemma read_env_S :
+  forall t e n, read_env (t :: e) (S n) = read_env e n.
+Proof.
+  intros; reflexivity.
+Qed.
+
+Lemma read_env_app :
+  forall e1 e2 n, read_env (e1 ++ e2) n = subst (read_env e1) (liftn_subst (length e1) (read_env e2) n).
+Proof.
+  intros e1 e2 n. unfold read_env, liftn_subst.
+  destruct le_lt_dec.
+  - rewrite nth_error_app2 by assumption.
+    destruct nth_error eqn:Hn.
+    + rewrite ren_term_is_subst, subst_subst.
+      erewrite subst_ext; [symmetry; apply subst_id|].
+      intros m. unfold comp; simpl. rewrite plus_ren_correct.
+      rewrite nth_error_None_rw by lia. f_equal. lia.
+    + simpl. rewrite plus_ren_correct.
+      rewrite nth_error_None_rw by lia. f_equal. rewrite app_length; lia.
+  - rewrite nth_error_app1 by assumption. simpl.
+    destruct nth_error eqn:Hnth; [reflexivity|].
+    apply nth_error_None in Hnth. lia.
+Qed.
+
 
 Fixpoint size t :=
   match t with
@@ -498,6 +567,101 @@ Proof.
     + f_equal. apply Hext. lia.
     + reflexivity.
 Qed.
+
+Lemma subst_closed_at_id :
+  forall us t k, closed_at t k -> (forall n, n < k -> us n = var n) -> subst us t = t.
+Proof.
+  intros us t k H1 H2. erewrite subst_closed_at_ext; [apply subst_id|eassumption|eassumption].
+Qed.
+
+Lemma closed_at_ren :
+  forall t ren k1 k2, closed_at t k1 -> (forall n, n < k1 -> renv ren n < k2) -> closed_at (ren_term ren t) k2.
+Proof.
+  induction t using term_ind2; intros ren k1 k2 Ht Hren; inversion Ht; subst; simpl.
+  - constructor. apply Hren. assumption.
+  - constructor.
+  - constructor. eapply IHt; [eassumption|].
+    intros [|n]; rewrite lift_renv; [lia|]. intros; specialize (Hren n); lia.
+  - constructor; [eapply IHt1|eapply IHt2]; eassumption.
+  - constructor. rewrite <- Forall_forall in *.
+    rewrite Forall_map. eapply Forall_impl; [|rewrite <- Forall_and; split; [apply H|apply H3]].
+    intros t [IH Ht2]; eapply IH; eassumption.
+  - constructor; [eapply IHt; eassumption|].
+    intros p t2 Hpt2; rewrite in_map_iff in Hpt2; destruct Hpt2 as [[p3 t3] [Hpt2 Hpt3]]; simpl in *.
+    injection Hpt2 as Hpt2; subst. rewrite Forall_forall in H. specialize (H _ Hpt3); simpl in H.
+    eapply H; [apply H4; eassumption|].
+    intros n Hn. destruct (le_lt_dec p n).
+    + rewrite liftn_renv_large by assumption. specialize (Hren (n - p)); lia.
+    + rewrite liftn_renv_small by assumption; lia.
+Qed.
+
+Lemma closed_at_plus_ren :
+  forall t p k, closed_at t k -> closed_at (ren_term (plus_ren p) t) (p + k).
+Proof.
+  intros t p k H. eapply closed_at_ren; [eassumption|].
+  intros n Hn; rewrite plus_ren_correct; lia.
+Qed.
+
+Lemma closed_at_subst_read_env_lift :
+  forall t k p el, Forall (fun t => closed_at t k) el -> closed_at t (p + length el + k) -> closed_at (subst (liftn_subst p (read_env el)) t) (p + k).
+Proof.
+  intros t k p el Hel Ht; revert p Ht; induction t using term_ind2; intros p Ht; inversion Ht; subst; simpl.
+  - unfold read_env, liftn_subst. destruct le_lt_dec.
+    + destruct nth_error eqn:Hnth.
+      * apply closed_at_plus_ren. rewrite Forall_forall in Hel. eapply Hel, nth_error_In, Hnth.
+      * simpl. constructor. rewrite plus_ren_correct. rewrite nth_error_None in Hnth. lia.
+    + constructor. lia.
+  - constructor.
+  - constructor. erewrite subst_ext; [|intros n; rewrite <- liftn_subst_1; apply liftn_subst_add].
+    apply IHt. assumption.
+  - constructor; [apply IHt1|apply IHt2]; assumption.
+  - constructor. rewrite <- Forall_forall in *.
+    rewrite Forall_map. eapply Forall_impl; [|rewrite <- Forall_and; split; [apply H|apply H3]].
+    intros t [IH Ht2]; eapply IH; eassumption.
+  - constructor; [apply IHt; assumption|].
+    intros p2 t2 Hpt2; rewrite in_map_iff in Hpt2; destruct Hpt2 as [[p3 t3] [Hpt2 Hpt3]]; simpl in *.
+    injection Hpt2 as Hpt2; subst. rewrite Forall_forall in H. specialize (H _ Hpt3); simpl in H.
+    rewrite plus_assoc.
+    erewrite subst_ext; [|apply liftn_subst_add].
+    eapply H. specialize (H4 _ _ Hpt3). rewrite !plus_assoc in H4. assumption.
+Qed.
+
+Lemma closed_at_subst_read_env :
+  forall t k el, Forall (fun t => closed_at t k) el -> closed_at t (length el + k) -> closed_at (subst (read_env el) t) k.
+Proof.
+  intros t k el H1 H2. assert (H := closed_at_subst_read_env_lift t k 0 el H1 H2).
+  erewrite subst_ext in H; [eassumption|].
+  intros n. apply liftn_subst_0.
+Qed.
+
+Lemma closed_at_mono :
+  forall t n m, n <= m -> closed_at t n -> closed_at t m.
+Proof.
+  intros t n m Hnm H; revert m Hnm. induction H; intros n2 Hn; constructor.
+  - lia.
+  - apply IHclosed_at1. assumption.
+  - apply IHclosed_at2. assumption.
+  - apply IHclosed_at. lia.
+  - intros t Ht; apply H0; assumption.
+  - apply IHclosed_at. assumption.
+  - intros; eapply H1; [eassumption|lia].
+Qed.
+
+Lemma liftn_subst_read_env :
+  forall t p e, closed_at t (p + length e) -> subst (liftn_subst p (read_env e)) t = subst (read_env (map var (seq 0 p) ++ map (subst (ren (plus_ren p))) e)) t.
+Proof.
+  intros t p e Ht. eapply subst_closed_at_ext; [eassumption|]. intros n Hn.
+  unfold liftn_subst, read_env.
+  destruct le_lt_dec.
+  - rewrite nth_error_app2; [|rewrite map_length, seq_length; assumption].
+    rewrite map_length, seq_length, nth_error_map.
+    destruct nth_error eqn:Hnth.
+    + rewrite ren_term_is_subst. reflexivity.
+    + simpl. rewrite nth_error_None in Hnth. lia.
+  - rewrite nth_error_app1 by (rewrite map_length, seq_length; assumption). rewrite nth_error_map.
+    rewrite seq_nth_error by assumption. reflexivity.
+Qed.
+
 
 
 (* TODO move? *)
@@ -574,4 +738,74 @@ Proof.
     + rewrite plus_ren_correct.
       rewrite liftn_renv_large; [reflexivity|assumption].
     + rewrite liftn_renv_small; [reflexivity|assumption].
+Qed.
+
+
+
+Lemma lift_liftn_1 :
+  forall r, lift r = liftn 1 r.
+Proof.
+  intros r. apply renv_ext. intros [|n].
+  - rewrite lift_renv, liftn_renv_small; lia.
+  - rewrite lift_renv, liftn_renv_large by lia.
+    simpl; f_equal. f_equal. lia.
+Qed.
+
+Lemma liftn_liftn :
+  forall r k1 k2, liftn k1 (liftn k2 r) = liftn (k1 + k2) r.
+Proof.
+  intros r k1 k2. apply renv_ext. intros n.
+  destruct (le_lt_dec k1 n).
+  - rewrite liftn_renv_large by assumption.
+    destruct (le_lt_dec k2 (n - k1)).
+    + rewrite !liftn_renv_large by lia.
+      replace (n - (k1 + k2)) with (n - k1 - k2) by lia. lia.
+    + rewrite !liftn_renv_small; lia.
+  - rewrite !liftn_renv_small; lia.
+Qed.
+
+Lemma liftn_0 :
+  forall r, liftn 0 r = r.
+Proof.
+  intros. apply renv_ext. intros n.
+  rewrite liftn_renv_large by lia. simpl. f_equal. lia.
+Qed.
+
+Lemma liftn_subst_1_subst :
+  forall us t, subst (liftn_subst 1 us) t = subst (lift_subst us) t.
+Proof.
+  intros us t. apply subst_ext, liftn_subst_1.
+Qed.
+
+Lemma liftn_subst_add_subst :
+  forall us t k1 k2, subst (liftn_subst k1 (liftn_subst k2 us)) t = subst (liftn_subst (k1 + k2) us) t.
+Proof.
+  intros; apply subst_ext, liftn_subst_add.
+Qed.
+
+Lemma liftn_subst_0_subst :
+  forall us t, subst (liftn_subst 0 us) t = subst us t.
+Proof.
+  intros us t. apply subst_ext, liftn_subst_0.
+Qed.
+
+Lemma subst1_read_env :
+  forall t1 t2, subst1 t1 t2 = subst (read_env (t1 :: nil)) t2.
+Proof.
+  intros t1 t2. apply subst_ext. intros [|n].
+  - reflexivity.
+  - unfold read_env. simpl. destruct n; simpl; f_equal; lia.
+Qed.
+
+Lemma read_env_app_subst :
+  forall t e1 e2, subst (read_env (e1 ++ e2)) t = subst (read_env e1) (subst (liftn_subst (length e1) (read_env e2)) t).
+Proof.
+  intros t e1 e2. rewrite subst_subst.
+  eapply subst_ext. apply read_env_app.
+Qed.
+
+Lemma read_env_app_subst1 :
+  forall t e t2, subst (read_env (t2 :: e)) t = subst1 t2 (subst (lift_subst (read_env e)) t).
+Proof.
+  intros t e t2. rewrite subst1_read_env, <- liftn_subst_1_subst, <- read_env_app_subst. reflexivity.
 Qed.

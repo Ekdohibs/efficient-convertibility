@@ -27,6 +27,90 @@ Fixpoint index {A : Type} (dec : forall x y : A, {x = y} + {x <> y}) L x :=
   | y :: L => if dec x y then Some 0 else option_map S (index dec L x)
   end.
 
+Lemma index_notin_None :
+  forall A eq_dec (l : list A) (x : A), x \notin l -> index eq_dec l x = None.
+Proof.
+  intros A eq_dec l x H; induction l.
+  - reflexivity.
+  - simpl in *. destruct eq_dec; [intuition congruence|].
+    rewrite IHl; tauto.
+Qed.
+
+Lemma index_app :
+  forall A eq_dec (l1 l2 : list A) x,
+    index eq_dec (l1 ++ l2) x =
+    match index eq_dec l1 x with
+    | Some n => Some n
+    | None => option_map (fun n => length l1 + n) (index eq_dec l2 x)
+    end.
+Proof.
+  intros A eq_dec l1 l2 x; induction l1; simpl in *.
+  - destruct index; reflexivity.
+  - destruct eq_dec; [reflexivity|].
+    rewrite IHl1. destruct (index eq_dec l1 x); [reflexivity|].
+    destruct (index eq_dec l2 x); reflexivity.
+Qed.
+
+Lemma index_in_Some :
+  forall A eq_dec (l : list A) (x : A), x \in l -> exists k, index eq_dec l x = Some k.
+Proof.
+  intros A eq_dec l x H; induction l.
+  - simpl in *; tauto.
+  - simpl. destruct eq_dec; [exists 0; reflexivity|].
+    destruct IHl as (k & Hk).
+    + destruct H; [symmetry in H|]; tauto.
+    + exists (S k). rewrite Hk; reflexivity.
+Qed.
+
+Lemma index_in_not_None :
+  forall A eq_dec (l : list A) (x : A), x \in l -> index eq_dec l x <> None.
+Proof.
+  intros A eq_dec l x H. destruct (index_in_Some A eq_dec l x H) as (k & Hk). congruence.
+Qed.
+
+Lemma nth_error_index :
+  forall A eq_dec (x : A) l n, index eq_dec l x = Some n -> nth_error l n = Some x.
+Proof.
+  intros A eq_dec x. induction l; intros [|n]; simpl in *; try congruence; destruct eq_dec; simpl in *; try congruence.
+  - destruct index; simpl; congruence.
+  - destruct index; simpl; [|congruence]. intros; apply IHl; congruence.
+Qed.
+
+Lemma index_nth_error :
+  forall (A : Type) eq_dec (vars : list A) k x, NoDup vars -> nth_error vars k = Some x -> index eq_dec vars x = Some k.
+Proof.
+  intros A eq_dec vars k x H1 H2. revert k H2; induction vars as [|y vars]; intros k H2; simpl in *.
+  - destruct k; simpl in *; congruence.
+  - destruct k; simpl in *.
+    + injection H2 as H2; subst. destruct eq_dec; [|tauto]. reflexivity.
+    + destruct eq_dec; [subst|].
+      * inversion H1; subst. exfalso. apply H3. eapply nth_error_In; eassumption.
+      * erewrite IHvars; [reflexivity| |eassumption].
+        inversion H1; subst; assumption.
+Qed.
+
+Lemma index_seq :
+  forall eq_dec a len x,
+    a <= x < a + len ->
+    index eq_dec (seq a len) x = Some (x - a).
+Proof.
+  intros eq_dec a len x Hx. revert a Hx; induction len; intros a Hx.
+  - lia.
+  - simpl index. destruct eq_dec.
+    + subst. f_equal. lia.
+    + rewrite IHlen; [|lia]. simpl. f_equal. lia.
+Qed.
+
+Lemma index_length :
+  forall A eq_dec (x : A) l n, index eq_dec l x = Some n -> n < length l.
+Proof.
+  induction l; intros n Hn; simpl in *.
+  - congruence.
+  - destruct eq_dec; [injection Hn as Hn; lia|].
+    destruct index eqn:Hidx; simpl in *; [|congruence].
+    specialize (IHl n1 eq_refl). injection Hn as Hn; lia.
+Qed.
+
 Lemma nth_error_map :
   forall (A B : Type) (f : A -> B) L n, nth_error (map f L) n = match nth_error L n with Some x => Some (f x) | None => None end.
 Proof.
@@ -57,6 +141,44 @@ Proof.
   intros. apply nth_error_Some. destruct nth_error; congruence.
 Qed.
 
+Lemma nth_error_app_Some :
+  forall (A : Type) (l1 l2 : list A) k x, nth_error l1 k = Some x -> nth_error (l1 ++ l2) k = Some x.
+Proof.
+  induction l1; intros l2 [|k] x; simpl in *; intros; try congruence.
+  apply IHl1; assumption.
+Qed.
+
+Lemma nth_error_extend :
+  forall {A : Type} (l : list A) x, nth_error (l ++ x :: nil) (length l) = Some x.
+Proof.
+  intros A l x. rewrite nth_error_app2 by lia.
+  destruct (length l - length l) eqn:Hll; [reflexivity|lia].
+Qed.
+
+Lemma nth_error_extend_case :
+  forall {A : Type} l (x : A) n,
+    nth_error (l ++ x :: nil) n = nth_error l n \/ (n = length l /\ nth_error (l ++ x :: nil) n = Some x).
+Proof.
+  intros A l x n.
+  destruct (le_lt_dec (length l) n).
+  - rewrite nth_error_app2 by assumption.
+    destruct (n - length l) eqn:Hn; simpl; [right; split; [lia|reflexivity]|].
+    left. destruct n0; symmetry; apply nth_error_None; assumption.
+  - left. rewrite nth_error_app1; tauto.
+Qed.
+
+Definition nth_error_None_rw :
+  forall {A : Type} (l : list A) (n : nat), length l <= n -> nth_error l n = None.
+Proof.
+  intros. apply nth_error_None. assumption.
+Qed.
+
+Lemma nth_error_select :
+  forall (A : Type) (l1 l2 : list A) (x : A), nth_error (l1 ++ x :: l2) (length l1) = Some x.
+Proof.
+  intros; induction l1; simpl in *; [reflexivity|assumption].
+Qed.
+
 
 Lemma list_exists :
   forall (A : Type) (P : nat -> A -> Prop) n, (forall k, k < n -> exists x, P k x) -> exists L, length L = n /\ (forall k x, nth_error L k = Some x -> P k x).
@@ -83,6 +205,40 @@ Proof.
   intros A l1 l2 l3 l4; revert l2; induction l1; intros l2 H1 H2; destruct l2; simpl in *; try intuition congruence.
   specialize (IHl1 l2 ltac:(congruence) ltac:(congruence)).
   intuition congruence.
+Qed.
+
+Lemma list_select_eq :
+  forall (A : Type) (l1a l1b l2a l2b : list A) (x1 x2 : A),
+    l1a ++ x1 :: l1b = l2a ++ x2 :: l2b ->
+    (l1a = l2a /\ x1 = x2 /\ l1b = l2b) \/
+    (exists l3, l1a ++ x1 :: l3 = l2a /\ l1b = l3 ++ x2 :: l2b) \/
+    (exists l3, l1a = l2a ++ x2 :: l3 /\ l3 ++ x1 :: l1b = l2b).
+Proof.
+  intros A l1a. induction l1a as [|x1a l1a IH]; intros l1b l2a l2b x1 x2 Heq; destruct l2a as [|x2a l2a]; simpl in *.
+  - left. split; [reflexivity|].
+    split; congruence.
+  - right. left. exists l2a. split; congruence.
+  - right. right. exists l1a. split; congruence.
+  - specialize (IH l1b l2a l2b x1 x2 ltac:(congruence)).
+    destruct IH as [IH | [IH | IH]]; [left|right; left|right; right].
+    + intuition congruence.
+    + destruct IH as (l3 & H1 & H2). exists l3. intuition congruence.
+    + destruct IH as (l3 & H1 & H2). exists l3. intuition congruence.
+Qed.
+
+Lemma select2_app_assoc :
+  forall (A : Type) (l1 l2 l3 : list A) (x1 x2 : A),
+    (l1 ++ x1 :: l2) ++ x2 :: l3 = l1 ++ x1 :: l2 ++ x2 :: l3.
+Proof.
+  intros.
+  rewrite <- app_assoc. reflexivity.
+Qed.
+
+Lemma length_select :
+  forall (A : Type) (l1 l2 : list A) (x1 x2 : A),
+    length (l1 ++ x1 :: l2) = length (l1 ++ x2 :: l2).
+Proof.
+  intros; rewrite !app_length; reflexivity.
 Qed.
 
 
@@ -251,6 +407,15 @@ Proof.
     + assumption.
 Defined.
 
+Lemma Forall_Exists :
+  forall (A : Type) (P : A -> Prop) (Q : A -> Prop) (R : Prop) (L : list A),
+    (forall x, P x -> Q x -> R) -> Forall P L -> Exists Q L -> R.
+Proof.
+  intros A P Q R L H1 H2; induction H2; intros H3; inversion H3; subst.
+  - eapply H1; eassumption.
+  - apply IHForall; assumption.
+Qed.
+
 Lemma Forall2_cons_iff :
   forall (A B : Type) (P : A -> B -> Prop) x y L1 L2, Forall2 P (x :: L1) (y :: L2) <-> P x y /\ Forall2 P L1 L2.
 Proof.
@@ -345,6 +510,37 @@ Proof.
     destruct (IHForall2 Hy) as (x0 & Hx1 & Hx2); exists x0; tauto.
 Qed.
 
+
+Lemma Forall2_impl_In_left_transparent :
+  forall (A B : Type) (P Q : A -> B -> Prop) L1 L2,
+    (forall x y, In x L1 -> P x y -> Q x y) -> Forall2 P L1 L2 -> Forall2 Q L1 L2.
+Proof.
+  intros A B P Q L1 L2 H Hforall. induction Hforall.
+  - constructor.
+  - econstructor.
+    + apply H; [left; reflexivity|assumption].
+    + apply IHHforall.
+      intros; eapply H; [right|]; eassumption.
+Defined.
+
+Lemma Forall2_In_left_transparent :
+  forall (A B : Type) (P : A -> B -> Prop) (Q : Prop) (L1 : list A) (L2 : list B) (x : A) (H : forall y, P x y -> Q), Forall2 P L1 L2 -> x ∈ L1 -> Q.
+Proof.
+  intros A B P Q L1 L2 x HQ H Hx; induction H.
+  - simpl in Hx; tauto.
+  - destruct Hx as [-> | Hx]; [eapply HQ; eassumption|apply (IHForall2 Hx)].
+Defined.
+
+Lemma Forall2_Exists_left_transparent :
+  forall (A B : Type) (P : A -> B -> Prop) (Q : A -> Prop) (R : Prop) (L1 : list A) (L2 : list B) (H : forall x y, P x y -> Q x -> R), Forall2 P L1 L2 -> Exists Q L1 -> R.
+Proof.
+  intros A B P Q R L1 L2 H HP HQ; induction HP.
+  - inversion HQ.
+  - inversion HQ; subst; [eapply H; eassumption|].
+    apply IHHP, H2.
+Defined.
+
+
 Lemma nth_error_Forall2 :
   forall {A B : Type} {P : A -> B -> Prop} {L1 L2 n x}, Forall2 P L1 L2 -> nth_error L1 n = Some x -> exists y, nth_error L2 n = Some y /\ P x y.
 Proof.
@@ -403,6 +599,81 @@ Proof.
   - constructor; [split; assumption|apply IHHP; assumption].
 Qed.
 
+Lemma Forall2_select1 :
+  forall (A B : Type) (P : A -> Prop) (l1 : list A) (l2 : list B), Forall2 (fun a b => P a) l1 l2 -> Forall P l1.
+Proof.
+  intros A B P l1 l2 H; induction H; constructor; assumption.
+Qed.
+
+Lemma Forall2_select2 :
+  forall (A B : Type) (P : B -> Prop) (l1 : list A) (l2 : list B), Forall2 (fun a b => P b) l1 l2 -> Forall P l2.
+Proof.
+  intros A B P l1 l2 H; induction H; constructor; assumption.
+Qed.
+
+Lemma Forall2_and_Forall_left :
+  forall (A B : Type) (P : A -> B -> Prop) (Q : A -> Prop) (L1 : list A) (L2 : list B), Forall2 P L1 L2 -> Forall Q L1 -> Forall2 (fun x y => P x y /\ Q x) L1 L2.
+Proof.
+  intros A B P Q L1 L2 H1; induction H1; intros H2; inversion H2; subst; constructor; tauto.
+Qed.
+
+Lemma Forall2_and_Forall_right :
+  forall (A B : Type) (P : A -> B -> Prop) (Q : B -> Prop) (L1 : list A) (L2 : list B), Forall2 P L1 L2 -> Forall Q L2 -> Forall2 (fun x y => P x y /\ Q y) L1 L2.
+Proof.
+  intros A B P Q L1 L2 H1; induction H1; intros H2; inversion H2; subst; constructor; tauto.
+Qed.
+
+Lemma Forall2_eq :
+  forall (A : Type) (l1 l2 : list A), Forall2 eq l1 l2 -> l1 = l2.
+Proof.
+  intros A l1 l2 H; induction H.
+  - reflexivity.
+  - congruence.
+Qed.
+
+Lemma Forall2_from_combine :
+  forall (A B : Type) (P : A * B -> Prop) l1 l2, length l1 = length l2 -> Forall P (combine l1 l2) -> Forall2 (fun x y => P (x, y)) l1 l2.
+Proof.
+  intros A B P; induction l1; intros l2; destruct l2; intros H1 Hforall; simpl in *; try congruence.
+  - constructor.
+  - inversion Hforall; subst. constructor; [assumption|].
+    apply IHl1; [congruence|assumption].
+Qed.
+
+Lemma Forall_combine_from_Forall2 :
+  forall (A B : Type) (P : A * B -> Prop) l1 l2, Forall2 (fun a b => P (a, b)) l1 l2 -> Forall P (combine l1 l2).
+Proof.
+  intros A B P l1 l2 H; induction H; constructor; assumption.
+Qed.
+
+Lemma Forall_square :
+  forall (A B C D : Type) (P : A -> B -> Prop) (Q : C -> D -> Prop) (R : A -> C -> Prop) l1 l2 l3 l4,
+    Forall2 P l1 l2 -> Forall2 Q l3 l4 -> Forall2 R l1 l3 -> Forall2 (fun b d => exists a c, P a b /\ Q c d /\ R a c) l2 l4.
+Proof.
+  intros A B C D P Q R; induction l1; intros l2 l3 l4 H1 H2 H3; inversion H1; subst; inversion H3; subst; inversion H2; subst;
+    constructor.
+  - eexists. eexists. split; [eassumption|]. split; eassumption.
+  - eapply IHl1; eassumption.
+Qed.
+
+Lemma Exists_neg_Forall2 :
+  forall (A B : Type) (P : A -> B -> Prop) l1 l2, Exists (fun xy => ~ P (fst xy) (snd xy)) (combine l1 l2) -> ~ (Forall2 P l1 l2).
+Proof.
+  intros A B P; induction l1; intros l2 H1 H2; destruct l2; simpl in *; inversion H1; subst; inversion H2; subst; simpl in *.
+  - tauto.
+  - eapply IHl1; eassumption.
+Qed.
+
+Lemma Exists_square :
+  forall (A B C D : Type) (P : A -> B -> Prop) (Q : C -> D -> Prop) (R : A * C -> Prop) l1 l2 l3 l4,
+    Forall2 P l1 l2 -> Forall2 Q l3 l4 -> Exists R (combine l1 l3) -> Exists (fun bd => exists a c, P a (fst bd) /\ Q c (snd bd) /\ R (a, c)) (combine l2 l4).
+Proof.
+  intros A B C D P Q R; induction l1; intros l2 l3 l4 H1 H2 H3; inversion H1; subst; simpl in *; inversion H2; subst; simpl in *; inversion H3; subst.
+  - apply Exists_cons_hd. eexists. eexists. split; [eassumption|]. split; eassumption.
+  - apply Exists_cons_tl. eapply IHl1; eassumption.
+Qed.
+
+
 
 Inductive Forall3 {A B C : Type} (R : A -> B -> C -> Prop) : list A -> list B -> list C -> Prop :=
 | Forall3_nil : Forall3 R nil nil nil
@@ -413,6 +684,20 @@ Lemma Forall3_impl :
     (forall x y z, P x y z -> Q x y z) -> Forall3 P l1 l2 l3 -> Forall3 Q l1 l2 l3.
 Proof.
   intros A B C P Q l1 l2 l3 HPQ H; induction H; constructor; [apply HPQ|]; assumption.
+Qed.
+
+Lemma Forall3_app :
+  forall (A B C : Type) (P : A -> B -> C -> Prop) l1a l1b l1c l2a l2b l2c, Forall3 P l1a l1b l1c -> Forall3 P l2a l2b l2c -> Forall3 P (l1a ++ l2a) (l1b ++ l2b) (l1c ++ l2c).
+Proof.
+  intros A B C P l1a l1b l1c l2a l2b l2c H1 H2; induction H1; simpl in *.
+  - assumption.
+  - constructor; assumption.
+Qed.
+
+Lemma Forall3_and :
+  forall A B C (P Q : A -> B -> C -> Prop) l1 l2 l3, Forall3 P l1 l2 l3 -> Forall3 Q l1 l2 l3 -> Forall3 (fun a b c => P a b c /\ Q a b c) l1 l2 l3.
+Proof.
+  intros A B C P Q l1 l2 l3 H1 H2; induction H1; simpl in *; inversion H2; subst; constructor; tauto.
 Qed.
 
 Lemma Forall3_select12 :
@@ -436,6 +721,24 @@ Proof.
   intros A B C R l1 l2 l3 H; induction H; constructor; auto.
 Qed.
 
+Lemma Forall3_select3 :
+  forall A B C (P : C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall3 (fun _ _ c => P c) l1 l2 l3 -> Forall P l3.
+Proof.
+  intros A B C P l1 l2 l3 H; induction H; simpl in *; constructor; tauto.
+Qed.
+
+Lemma Forall3_unselect1 :
+  forall A B C (P : A -> Prop) (R : A -> B -> C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall P l1 -> Forall3 R l1 l2 l3 -> Forall3 (fun a _ _ => P a) l1 l2 l3.
+Proof.
+  intros A B C P R l1 l2 l3 H1 H2; induction H2; simpl in *; inversion H1; subst; constructor; tauto.
+Qed.
+
+Lemma Forall3_unselect2 :
+  forall A B C (P : B -> Prop) (R : A -> B -> C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall P l2 -> Forall3 R l1 l2 l3 -> Forall3 (fun _ b _ => P b) l1 l2 l3.
+Proof.
+  intros A B C P R l1 l2 l3 H1 H2; induction H2; simpl in *; inversion H1; subst; constructor; tauto.
+Qed.
+
 Lemma Forall3_from_Forall2 :
   forall (A B C : Type) (P : A -> B -> Prop) (Q : A -> C -> Prop) l1 l2 l3,
     Forall2 P l1 l2 -> Forall2 Q l1 l3 -> Forall3 (fun x y z => P x y /\ Q x z) l1 l2 l3.
@@ -445,6 +748,62 @@ Proof.
   - constructor.
     + split; assumption.
     + apply IHForall2. assumption.
+Qed.
+
+Lemma Forall3_Exists_2_transparent :
+  forall (A B C : Type) (P : A -> B -> C -> Prop) (Q : B -> Prop) (R : Prop) L1 L2 L3 (H : forall x y z, P x y z -> Q y -> R), Forall3 P L1 L2 L3 -> Exists Q L2 -> R.
+Proof.
+  intros A B C P Q R L1 L2 L3 H HP HQ; induction HP.
+  - inversion HQ.
+  - inversion HQ; subst; [eapply H; eassumption|].
+    apply IHHP, H2.
+Defined.
+
+Lemma Forall3_impl_In :
+  forall (A B C : Type) (P Q : A -> B -> C -> Prop) L1 L2 L3,
+    (forall x y z, In x L1 -> In y L2 -> In z L3 -> P x y z -> Q x y z) -> Forall3 P L1 L2 L3 -> Forall3 Q L1 L2 L3.
+Proof.
+  intros A B C P Q L1 L2 L3 H Hforall. induction Hforall.
+  - constructor.
+  - econstructor.
+    + apply H; try (left; reflexivity). assumption.
+    + apply IHHforall.
+      intros; eapply H; try right; assumption.
+Qed.
+
+Lemma Forall3_map3 :
+  forall (A B C D : Type) (P : A -> B -> D -> Prop) (f : C -> D) (L1 : list A) (L2 : list B) (L3 : list C), Forall3 P L1 L2 (map f L3) <-> Forall3 (fun x y z => P x y (f z)) L1 L2 L3.
+Proof.
+  intros A B C D P f L1 L2 L3; split; intros H.
+  - remember (map f L3) as L4. revert L3 HeqL4.
+    induction H; intros; destruct L3; subst; simpl in *; try congruence; constructor.
+    + injection HeqL4 as HeqL4; subst. assumption.
+    + injection HeqL4 as HeqL4; subst. apply IHForall3. reflexivity.
+  - induction H; constructor; assumption.
+Qed.
+
+Lemma Forall2_select121 :
+  forall (A B : Type) (P : A -> B -> A -> Prop) (L1 : list A) (L2 : list B), Forall2 (fun x y => P x y x) L1 L2 -> Forall3 P L1 L2 L1.
+Proof.
+  intros A B P L1 L2 H; induction H; constructor; assumption.
+Qed.
+
+Lemma Forall2_select12combine :
+  forall (A B : Type) (P : A -> B -> A * B -> Prop) (L1 : list A) (L2 : list B), Forall2 (fun x y => P x y (x, y)) L1 L2 -> Forall3 P L1 L2 (combine L1 L2).
+Proof.
+  intros A B P L1 L2 H; induction H; constructor; assumption.
+Qed.
+
+Lemma Forall3_combine23_3 :
+  forall (A B C : Type) (P : A -> B -> B * C -> Prop) l1 l2 l3, Forall3 (fun x y z => P x y (y, z)) l1 l2 l3 -> Forall3 P l1 l2 (combine l2 l3).
+Proof.
+  intros A B C P l1 l2 l3 H; induction H; simpl in *; constructor; assumption.
+Qed.
+
+Lemma Forall3_select1 :
+  forall (A B C : Type) (P : A -> Prop) l1 (l2 : list B) (l3 : list C), Forall3 (fun x y z => P x) l1 l2 l3 -> Forall P l1.
+Proof.
+  intros A B C P l1 l2 l3 H; induction H; simpl in *; constructor; assumption.
 Qed.
 
 
@@ -562,6 +921,19 @@ Proof.
     destruct H as [w Hw].
     exists (w :: l4). constructor; assumption.
 Qed.
+
+Lemma Forall4_and :
+  forall A B C D (P Q : A -> B -> C -> D -> Prop) l1 l2 l3 l4, Forall4 P l1 l2 l3 l4 -> Forall4 Q l1 l2 l3 l4 -> Forall4 (fun a b c d => P a b c d /\ Q a b c d) l1 l2 l3 l4.
+Proof.
+  intros A B C D P Q l1 l2 l3 l4 H1 H2; induction H1; simpl in *; inversion H2; subst; constructor; tauto.
+Qed.
+
+Lemma Forall4_unselect123 :
+  forall A B C D (P : A -> B -> C -> Prop) (R : A -> B -> C -> D -> Prop) (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D), Forall3 P l1 l2 l3 -> Forall4 R l1 l2 l3 l4 -> Forall4 (fun a b c _ => P a b c) l1 l2 l3 l4.
+Proof.
+  intros A B C D P R l1 l2 l3 l4 H1 H2; induction H2; simpl in *; inversion H1; subst; constructor; tauto.
+Qed.
+
 
 
 
@@ -849,6 +1221,63 @@ Proof.
   - simpl. destruct (P a); constructor; assumption.
 Qed.
 
+(* List update *)
+
+Fixpoint update {A : Type} (l : list A) (k : nat) (x : A) : list A :=
+  match l with
+  | nil => nil
+  | y :: l =>
+    match k with
+    | O => x :: l
+    | S k => y :: update l k x
+    end
+  end.
+Arguments update {A} _ _ _ : simpl nomatch.
+
+Lemma nth_error_update :
+  forall (A : Type) (l : list A) k x y, nth_error l k = Some x -> nth_error (update l k y) k = Some y.
+Proof.
+  induction l; intros [|k] x y; simpl in *; intros; try congruence.
+  eapply IHl; eassumption.
+Qed.
+
+Lemma nth_error_update2 :
+  forall (A : Type) (l : list A) k x, nth_error (update l k x) k = match nth_error l k with Some _ => Some x | None => None end.
+Proof.
+  induction l; intros [|k] x; simpl in *; intros; try congruence.
+  apply IHl.
+Qed.
+
+Lemma nth_error_update3 :
+  forall (A : Type) (l : list A) k1 k2 x, k1 <> k2 -> nth_error (update l k1 x) k2 = nth_error l k2.
+Proof.
+  induction l; intros [|k1] [|k2] x H; simpl in *; try congruence.
+  apply IHl; congruence.
+Qed.
+
+Lemma update_length :
+  forall {A : Type} (l : list A) k x, length (update l k x) = length l.
+Proof.
+  induction l; intros [|k] x; simpl in *; congruence.
+Qed.
+
+Lemma update_case :
+  forall {A : Type} (l : list A) k1 k2 x, (k1 = k2 /\ nth_error (update l k1 x) k2 = Some x) \/ (nth_error (update l k1 x) k2 = nth_error l k2).
+Proof.
+  intros A l k1 k2 x.
+  destruct (Nat.eq_dec k1 k2).
+  + subst. rewrite nth_error_update2.
+    destruct nth_error; tauto.
+  + rewrite nth_error_update3 by assumption. tauto.
+Qed.
+
+Lemma nth_error_update_None :
+  forall (A : Type) l k1 k2 (x : A), nth_error l k1 = None -> nth_error (update l k2 x) k1 = None.
+Proof.
+  intros A l; induction l; intros k1 k2 x H; destruct k1; destruct k2; simpl in *; try congruence.
+  apply IHl. assumption.
+Qed.
+
 
 Ltac splits n :=
   match n with
@@ -870,7 +1299,9 @@ Ltac unexistT :=
            apply inj_pair2_eq_dec in H; [|apply deep_flag_eq_dec]
          end.
 
-Definition option_map {A B : Type} (f : A -> B) (x : option A) := match x with Some x => Some (f x) | None => None end.
+Definition option_default {A : Type} (o : option A) (d : A) :=
+  match o with Some x => x | None => d end.
+
 Lemma option_map_id : forall (A : Type) (x : option A), option_map id x = x.
 Proof.
   intros A [x|]; reflexivity.
@@ -885,3 +1316,68 @@ Ltac ereplace t :=
   let typ := type of t in
   evar (tmp : typ);
   replace t with tmp; unfold tmp.
+
+
+
+Lemma and_left :
+  forall (A B : Prop), A -> (A -> B) -> A /\ B.
+Proof.
+  intros A B HA HB; split; [apply HA|apply HB, HA].
+Qed.
+
+Lemma and_right :
+  forall (A B : Prop), (B -> A) -> B -> A /\ B.
+Proof.
+  intros A B HA HB; split; [apply HA, HB|apply HB].
+Qed.
+
+Ltac and_left := apply and_left.
+Ltac and_right := apply and_right.
+Tactic Notation "and_left" "as" simple_intropattern(p) := and_left; [|intros p].
+Tactic Notation "and_right" "as" simple_intropattern(p) := and_right; [intros p|].
+
+Ltac dedup x :=
+  refine ((fun (x : _) => _) _).
+
+Lemma seq_shiftn :
+  forall n len a, map (fun k => k + n) (seq a len) = seq (a + n) len.
+Proof.
+  intros n; induction len; intros a; simpl in *; f_equal.
+  apply IHlen.
+Qed.
+
+Lemma seq_is_shiftn :
+  forall a len, seq a len = map (fun k => k + a) (seq 0 len).
+Proof.
+  intros a len; rewrite seq_shiftn; reflexivity.
+Qed.
+
+Lemma seq_nth_error :
+  forall len a n, n < len -> nth_error (seq a len) n = Some (a + n).
+Proof.
+  induction len; intros a [|n] Hn; simpl in *; try lia.
+  - f_equal; lia.
+  - rewrite IHlen; [f_equal|]; lia.
+Qed.
+
+
+Lemma NoDup_app :
+  forall (A : Type) (l1 l2 : list  A), NoDup l1 -> NoDup l2 -> Forall (fun x => x \notin l2) l1 -> NoDup (l1 ++ l2).
+Proof.
+  induction l1; intros l2 Hnd1 Hnd2 Hdisj; inversion Hnd1; subst; inversion Hdisj; subst; simpl in *.
+  - assumption.
+  - constructor.
+    + rewrite in_app_iff; tauto.
+    + apply IHl1; assumption.
+Qed.
+
+
+Inductive reflect (P : Prop) : bool -> Prop :=
+| reflect_true : P -> reflect P true
+| reflect_false : ~ P -> reflect P false.
+
+Lemma reflect_iff :
+  forall P Q b, P <-> Q -> reflect P b <-> reflect Q b.
+Proof.
+  intros P Q H; split; intros H1; inversion H1; subst; constructor; tauto.
+Qed.

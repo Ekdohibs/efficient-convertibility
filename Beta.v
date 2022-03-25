@@ -10,21 +10,6 @@ Require Import STerm.
 Require Import Inductive.
 Require Import GenInd.
 
-Lemma star_list :
-  forall (A B : Type) (RA : A -> A -> Prop) (RB : B -> B -> Prop) (f : list A -> B) l1 l2,
-    (forall l1 l2 x y, RA x y -> RB (f (l1 ++ x :: l2)) (f (l1 ++ y :: l2))) -> Forall2 (star RA) l1 l2 -> star RB (f l1) (f l2).
-Proof.
-  intros A B RA RB f l1 l2 Himpl Hl.
-  enough (H : forall l, star RB (f (l ++ l1)) (f (l ++ l2))); [exact (H nil)|].
-  induction Hl as [|x y l1 l2 Hxy Hl IH].
-  - intros. constructor.
-  - intros l. eapply star_compose.
-    + specialize (IH (l ++ x :: nil)). rewrite <- !app_assoc in IH. apply IH.
-    + eapply star_map_impl with (f := fun t => f (l ++ t :: l2)); [|eassumption].
-      intros; apply Himpl; assumption.
-Qed.
-
-
 Inductive beta : term -> term -> Prop :=
 | beta_app1 : forall t1 t2 t3, beta t1 t2 -> beta (app t1 t3) (app t2 t3)
 | beta_app2 : forall t1 t2 t3, beta t1 t2 -> beta (app t3 t1) (app t3 t2)
@@ -205,9 +190,6 @@ Proof.
   - constructor; [|apply pbeta_refl].
     apply Forall2_map_same, Forall_True; intros; apply pbeta_refl.
 Qed.
-
-
-
 
 (*
 Inductive beta : term -> term -> Prop :=
@@ -600,40 +582,6 @@ Proof.
         rewrite !ren_term_is_subst.
         eapply star_map_impl; [|apply Hus].
         intros; apply iota_subst_left; assumption.
-Qed.
-
-Lemma list_select_eq :
-  forall (A : Type) (l1a l1b l2a l2b : list A) (x1 x2 : A),
-    l1a ++ x1 :: l1b = l2a ++ x2 :: l2b ->
-    (l1a = l2a /\ x1 = x2 /\ l1b = l2b) \/
-    (exists l3, l1a ++ x1 :: l3 = l2a /\ l1b = l3 ++ x2 :: l2b) \/
-    (exists l3, l1a = l2a ++ x2 :: l3 /\ l3 ++ x1 :: l1b = l2b).
-Proof.
-  intros A l1a. induction l1a as [|x1a l1a IH]; intros l1b l2a l2b x1 x2 Heq; destruct l2a as [|x2a l2a]; simpl in *.
-  - left. split; [reflexivity|].
-    split; congruence.
-  - right. left. exists l2a. split; congruence.
-  - right. right. exists l1a. split; congruence.
-  - specialize (IH l1b l2a l2b x1 x2 ltac:(congruence)).
-    destruct IH as [IH | [IH | IH]]; [left|right; left|right; right].
-    + intuition congruence.
-    + destruct IH as (l3 & H1 & H2). exists l3. intuition congruence.
-    + destruct IH as (l3 & H1 & H2). exists l3. intuition congruence.
-Qed.
-
-Lemma select2_app_assoc :
-  forall (A : Type) (l1 l2 l3 : list A) (x1 x2 : A),
-    (l1 ++ x1 :: l2) ++ x2 :: l3 = l1 ++ x1 :: l2 ++ x2 :: l3.
-Proof.
-  intros.
-  rewrite <- app_assoc. reflexivity.
-Qed.
-
-Lemma length_select :
-  forall (A : Type) (l1 l2 : list A) (x1 x2 : A),
-    length (l1 ++ x1 :: l2) = length (l1 ++ x2 :: l2).
-Proof.
-  intros; rewrite !app_length; reflexivity.
 Qed.
 
 Lemma beta_iota_strongly_commute :
@@ -1078,14 +1026,6 @@ Proof.
 Qed.
 
 
-Lemma Forall3_app :
-  forall (A B C : Type) (P : A -> B -> C -> Prop) l1a l1b l1c l2a l2b l2c, Forall3 P l1a l1b l1c -> Forall3 P l2a l2b l2c -> Forall3 P (l1a ++ l2a) (l1b ++ l2b) (l1c ++ l2c).
-Proof.
-  intros A B C P l1a l1b l1c l2a l2b l2c H1 H2; induction H1; simpl in *.
-  - assumption.
-  - constructor; assumption.
-Qed.
-
 Lemma compare_branches_trans :
   forall l1 l2 l3 l12 l23, compare_branches l1 l2 = Some l12 -> compare_branches l2 l3 = Some l23 ->
                       exists l13, compare_branches l1 l3 = Some l13 /\ Forall3 (fun '(x1, x2) '(y2, y3) '(z1, z3) => x1 = z1 /\ x2 = y2 /\ y3 = z3) l12 l23 l13.
@@ -1187,30 +1127,6 @@ Lemma all_are2_merge_iff :
   forall A B (R : A -> B -> Prop) l1 l2, all_are2 R (mk_merge l1 l2) <-> all_are2 R l1 /\ all_are2 R l2.
 Proof.
   intros; apply all_are_merge_iff.
-Qed.
-
-Lemma Forall3_select3 :
-  forall A B C (P : C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall3 (fun _ _ c => P c) l1 l2 l3 -> Forall P l3.
-Proof.
-  intros A B C P l1 l2 l3 H; induction H; simpl in *; constructor; tauto.
-Qed.
-
-Lemma Forall3_and :
-  forall A B C (P Q : A -> B -> C -> Prop) l1 l2 l3, Forall3 P l1 l2 l3 -> Forall3 Q l1 l2 l3 -> Forall3 (fun a b c => P a b c /\ Q a b c) l1 l2 l3.
-Proof.
-  intros A B C P Q l1 l2 l3 H1 H2; induction H1; simpl in *; inversion H2; subst; constructor; tauto.
-Qed.
-
-Lemma Forall3_unselect1 :
-  forall A B C (P : A -> Prop) (R : A -> B -> C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall P l1 -> Forall3 R l1 l2 l3 -> Forall3 (fun a _ _ => P a) l1 l2 l3.
-Proof.
-  intros A B C P R l1 l2 l3 H1 H2; induction H2; simpl in *; inversion H1; subst; constructor; tauto.
-Qed.
-
-Lemma Forall3_unselect2 :
-  forall A B C (P : B -> Prop) (R : A -> B -> C -> Prop) (l1 : list A) (l2 : list B) (l3 : list C), Forall P l2 -> Forall3 R l1 l2 l3 -> Forall3 (fun _ b _ => P b) l1 l2 l3.
-Proof.
-  intros A B C P R l1 l2 l3 H1 H2; induction H2; simpl in *; inversion H1; subst; constructor; tauto.
 Qed.
 
 Lemma compare_hnf_all_are_trans :
@@ -1538,20 +1454,7 @@ Inductive cthread :=
 | cthread_and : cthread -> cthread -> cthread
 | cthread_or : cthread -> cthread -> cthread.
 
-(*
-Inductive addr :=
-| a_rthread : rthreadptr -> addr
-| a_cthread : cthreadptr -> addr.
- *)
 Definition addr := rthreadptr.
-
-(*
-Definition env_points_to e a :=
-  match a with
-  | a_val vp => In vp e
-  | _ => False
-  end.
- *)
 
 Inductive cont_points_to : cont -> addr -> Prop :=
 | kapp_points_to_1 : forall v c a, val_points_to v a -> cont_points_to (Kapp v c) a
@@ -1570,7 +1473,6 @@ with val_points_to : value -> addr -> Prop :=
 | block_points_to : forall tag l a, Exists (fun v => val_points_to v a) l -> val_points_to (Block tag l) a.
 
 Definition cont_val_ind := Induction For [cont_points_to ; val_points_to].
-Check cont_val_ind.
 
 Definition env_points_to e a := Exists (fun v => val_points_to v a) e.
 
@@ -1592,118 +1494,6 @@ Record state := mkstate {
 }.
 
 Definition points st := points_to st.(st_rthreads).
-
-Fixpoint update {A : Type} (l : list A) (k : nat) (x : A) : list A :=
-  match l with
-  | nil => nil
-  | y :: l =>
-    match k with
-    | O => x :: l
-    | S k => y :: update l k x
-    end
-  end.
-Arguments update {A} _ _ _ : simpl nomatch.
-
-Lemma nth_error_update :
-  forall (A : Type) (l : list A) k x y, nth_error l k = Some x -> nth_error (update l k y) k = Some y.
-Proof.
-  induction l; intros [|k] x y; simpl in *; intros; try congruence.
-  eapply IHl; eassumption.
-Qed.
-
-Lemma nth_error_update2 :
-  forall (A : Type) (l : list A) k x, nth_error (update l k x) k = match nth_error l k with Some _ => Some x | None => None end.
-Proof.
-  induction l; intros [|k] x; simpl in *; intros; try congruence.
-  apply IHl.
-Qed.
-
-Lemma nth_error_update3 :
-  forall (A : Type) (l : list A) k1 k2 x, k1 <> k2 -> nth_error (update l k1 x) k2 = nth_error l k2.
-Proof.
-  induction l; intros [|k1] [|k2] x H; simpl in *; try congruence.
-  apply IHl; congruence.
-Qed.
-
-
-Lemma Acc_star_down :
-  forall (A : Type) (R : A -> A -> Prop) x y, Acc R x -> star R y x -> Acc R y.
-Proof.
-  intros A R x y H1 H2. induction H2.
-  - assumption.
-  - apply IHstar in H1. inversion H1.
-    apply H0. assumption.
-Qed.
-
-
-Lemma Acc_plus :
-  forall (A : Type) (R : A -> A -> Prop) x, Acc R x -> Acc (plus R) x.
-Proof.
-  intros A R x H. induction H.
-  constructor. intros y Hy.
-  apply flip_plus_iff in Hy.
-  inversion Hy; subst.
-  - apply H0. assumption.
-  - eapply Acc_star_down; [eapply H0; eassumption|].
-    apply star_1, flip_plus_iff; eassumption.
-Qed.
-
-Definition updatep {A B : Type} (f : A -> B -> Prop) (x : A) (P : B -> Prop) (u : A) (v : B) :=
-  (u <> x /\ f u v) \/ (u = x /\ P v).
-
-Inductive AccI {A : Type} (B : A -> Prop) (R : A -> A -> Prop) : A -> Prop :=
-| AccI_base : forall a, B a -> AccI B R a
-| AccI_intro : forall a, (forall b, R b a -> AccI B R b) -> AccI B R a.
-
-Lemma updatep_wf2 :
-  forall (A : Type) (R : A -> A -> Prop) u (P : A -> Prop),
-    (forall v, P v -> AccI (fun v => plus R u v) (flip (updatep R u P)) v) -> well_founded (flip R) -> well_founded (flip (updatep R u P)).
-Proof.
-  intros A R u P H Hwf v.
-  induction (Acc_plus _ _ _ (Hwf v)). constructor.
-  intros v [[Huv HR] | [-> HP]].
-  - apply H1, plus_1, HR.
-  - specialize (H _ HP). clear HP. induction H.
-    + apply H1, flip_plus_iff, H.
-    + constructor. apply H2.
-Qed.
-
-Lemma updatep_wf_none :
-  forall (A : Type) (R : A -> A -> Prop) u (P : A -> Prop),
-    ~ P u -> (forall v, ~ R v u) -> well_founded (flip R) -> well_founded (flip (updatep R u P)).
-Proof.
-  intros A R u P HP Hu Hwf.
-  assert (Hwf1 : forall v, v <> u -> Acc (flip (updatep R u P)) v).
-  - intros v Hv. induction (Hwf v). constructor.
-    intros v [[Huv HR] | [-> HPv]].
-    + apply H0; [assumption|]. intros ->; eapply Hu, HR.
-    + tauto.
-  - intros v. constructor; intros w [[Hvw HR2] | [-> HPw]].
-    + apply Hwf1. intros ->; eapply Hu, HR2.
-    + apply Hwf1. intros ->; apply HP, HPw.
-Qed.
-
-Lemma Acc_ext :
-  forall (A : Type) (R1 R2 : A -> A -> Prop) x, (forall u v, R2 u v -> R1 u v) -> Acc R1 x -> Acc R2 x.
-Proof.
-  intros A R1 R2 x H Hwf; induction Hwf; constructor.
-  intros y HR; apply H1, H, HR.
-Qed.
-
-Lemma AccI_ext :
-  forall (A : Type) (B : A -> Prop) (R1 R2 : A -> A -> Prop) x, (forall u v, R2 u v -> R1 u v) -> AccI B R1 x -> AccI B R2 x.
-Proof.
-  intros A B R1 R2 x H Hwf; induction Hwf.
-  - apply AccI_base; assumption.
-  - apply AccI_intro; intros; apply H1, H, H2.
-Qed.
-
-Lemma well_founded_ext :
-  forall (A : Type) (R1 R2 : A -> A -> Prop), (forall u v, R2 u v -> R1 u v) -> well_founded R1 -> well_founded R2.
-Proof.
-  intros A R1 R2 H Hwf x; eapply Acc_ext; [eassumption|apply Hwf].
-Qed.
-
 
 
 Lemma points_to_updatep_rthread :
@@ -1736,13 +1526,6 @@ Proof.
     destruct nth_error; intuition congruence.
 Qed.
 
-
-
-Lemma update_length :
-  forall {A : Type} (l : list A) k x, length (update l k x) = length l.
-Proof.
-  induction l; intros [|k] x; simpl in *; congruence.
-Qed.
 
 Definition update_rthread st rid rt :=
   {|
@@ -1809,13 +1592,6 @@ Fixpoint makendeeps (st : state) (bs : list (nat * term)) (e : env) :=
     let st3v := makelazy (fst st2xs) t (map (fun x => Neutral (x, Kid, None)) (snd st2xs) ++ e) in
     let st4vl := makendeeps (fst st3v) bs e in
     (fst st4vl, (snd st2xs, snd st3v) :: snd st4vl)
-  end.
-
-Fixpoint index {A : Type} (eq_dec : forall (x y : A), {x = y} + {x <> y}) (l : list A) (x : A) :=
-  match l with
-  | nil => None
-  | y :: l =>
-    if eq_dec x y then Some 0 else match index eq_dec l x with None => None | Some n => Some (S n) end
   end.
 
 Definition step_r (st : state) (rid : rthreadptr) : state :=
@@ -2044,18 +1820,6 @@ Fixpoint lift_dvars_hctx vars k h :=
   | h_switch h m => h_switch (lift_dvars_hctx vars k h) (map (fun pt => (fst pt, lift_dvars vars (fst pt + k) (snd pt))) m)
   end.
 
-Lemma read_env_0 :
-  forall t e, read_env (t :: e) 0 = t.
-Proof.
-  intros; reflexivity.
-Qed.
-
-Lemma read_env_S :
-  forall t e n, read_env (t :: e) (S n) = read_env e n.
-Proof.
-  intros; reflexivity.
-Qed.
-
 Definition no_delete st1 st2 := forall rid, nth_error st2.(st_rthreads) rid = None -> nth_error st1.(st_rthreads) rid = None.
 
 Lemma no_delete_refl :
@@ -2073,63 +1837,6 @@ Proof.
     + specialize (H (length (st_rthreads st2))). simpl in H.
       rewrite !nth_error_None in H. lia.
   - intros Hlen rid H; simpl in *; rewrite nth_error_None in *; lia.
-Qed.
-
-Lemma nth_error_app_Some :
-  forall (A : Type) (l1 l2 : list A) k x, nth_error l1 k = Some x -> nth_error (l1 ++ l2) k = Some x.
-Proof.
-  induction l1; intros l2 [|k] x; simpl in *; intros; try congruence.
-  apply IHl1; assumption.
-Qed.
-
-Lemma Forall2_impl_In_left_transparent :
-  forall (A B : Type) (P Q : A -> B -> Prop) L1 L2,
-    (forall x y, In x L1 -> P x y -> Q x y) -> Forall2 P L1 L2 -> Forall2 Q L1 L2.
-Proof.
-  intros A B P Q L1 L2 H Hforall. induction Hforall.
-  - constructor.
-  - econstructor.
-    + apply H; [left; reflexivity|assumption].
-    + apply IHHforall.
-      intros; eapply H; [right|]; eassumption.
-Defined.
-
-Lemma Forall2_In_left_transparent :
-  forall (A B : Type) (P : A -> B -> Prop) (Q : Prop) (L1 : list A) (L2 : list B) (x : A) (H : forall y, P x y -> Q), Forall2 P L1 L2 -> x ∈ L1 -> Q.
-Proof.
-  intros A B P Q L1 L2 x HQ H Hx; induction H.
-  - simpl in Hx; tauto.
-  - destruct Hx as [-> | Hx]; [eapply HQ; eassumption|apply (IHForall2 Hx)].
-Defined.
-
-Lemma Forall2_Exists_left_transparent :
-  forall (A B : Type) (P : A -> B -> Prop) (Q : A -> Prop) (R : Prop) (L1 : list A) (L2 : list B) (H : forall x y, P x y -> Q x -> R), Forall2 P L1 L2 -> Exists Q L1 -> R.
-Proof.
-  intros A B P Q R L1 L2 H HP HQ; induction HP.
-  - inversion HQ.
-  - inversion HQ; subst; [eapply H; eassumption|].
-    apply IHHP, H2.
-Defined.
-
-Lemma Forall3_Exists_2_transparent :
-  forall (A B C : Type) (P : A -> B -> C -> Prop) (Q : B -> Prop) (R : Prop) L1 L2 L3 (H : forall x y z, P x y z -> Q y -> R), Forall3 P L1 L2 L3 -> Exists Q L2 -> R.
-Proof.
-  intros A B C P Q R L1 L2 L3 H HP HQ; induction HP.
-  - inversion HQ.
-  - inversion HQ; subst; [eapply H; eassumption|].
-    apply IHHP, H2.
-Defined.
-
-Lemma Forall3_impl_In :
-  forall (A B C : Type) (P Q : A -> B -> C -> Prop) L1 L2 L3,
-    (forall x y z, In x L1 -> In y L2 -> In z L3 -> P x y z -> Q x y z) -> Forall3 P L1 L2 L3 -> Forall3 Q L1 L2 L3.
-Proof.
-  intros A B C P Q L1 L2 L3 H Hforall. induction Hforall.
-  - constructor.
-  - econstructor.
-    + apply H; try (left; reflexivity). assumption.
-    + apply IHHforall.
-      intros; eapply H; try right; assumption.
 Qed.
 
 
@@ -2350,13 +2057,6 @@ Proof.
   - eapply read_cont_points; eassumption.
 Qed.
 
-Lemma star_preserve :
-  forall {A : Type} (R : A -> A -> Prop) (P : A -> Prop), (forall x y, R x y -> P x -> P y) -> forall x y, P x -> star R x y -> P y.
-Proof.
-  intros A R P H x y Hx Hxy. induction Hxy.
-  - assumption.
-  - eapply IHHxy, H, Hx. apply H0.
-Qed.
 
 (*
 Lemma read_cont_points_to :
@@ -2406,26 +2106,6 @@ Proof.
 Qed.
  *)
 
-Lemma Acc_cycle :
-  forall (A : Type) (R : A -> A -> Prop) x, plus R x x -> Acc (flip R) x -> False.
-Proof.
-  intros A R x Hplus Hacc. induction Hacc.
-  inversion Hplus; subst.
-  - eapply H0; eassumption.
-  - eapply H0; [eassumption|].
-    eapply plus_compose_star_right; [eassumption|].
-    apply star_1; assumption.
-Qed.
-
-Lemma update_case :
-  forall {A : Type} (l : list A) k1 k2 x, (k1 = k2 /\ nth_error (update l k1 x) k2 = Some x) \/ (nth_error (update l k1 x) k2 = nth_error l k2).
-Proof.
-  intros A l k1 k2 x.
-  destruct (Nat.eq_dec k1 k2).
-  + subst. rewrite nth_error_update2.
-    destruct nth_error; tauto.
-  + rewrite nth_error_update3 by assumption. tauto.
-Qed.
 
 
 
@@ -2604,72 +2284,6 @@ Lemma read_cont_same :
 Proof.
   intros st1 st2 defs varmap c h Hst12. apply (proj2 (proj2 (read_same_aux st1 st2 defs Hst12))).
 Qed.
-
-
-(*
-Lemma read_cont_same :
-  forall st1 st2 c h,
-    read_cont st1 c h ->
-    (forall a t, read_addr st1 a t -> cont_points_to c a -> read_addr st2 a t) ->
-    read_cont st2 c h.
-Proof.
-  intros st1 st2 c h Hread H; induction Hread.
-  - constructor.
-  - econstructor.
-    + apply H; [assumption|]. apply kapp_points_to_1.
-    + apply IHHread. intros; apply H, kapp_points_to_2; assumption.
-  - econstructor.
-    + eapply Forall2_impl_In_left_transparent; [|eassumption].
-      intros; apply H; [assumption|]. apply kswitch_points_to_1. assumption.
-    + apply IHHread. intros; apply H, kswitch_points_to_2; assumption.
-Defined.
-
-Lemma read_addr_same :
-  forall st1 st2 a t, read_addr st1 a t -> unchanged_from st1 st2 a -> read_addr st2 a t.
-Proof.
-  intros st1 st2 a t H Hchanged.
-  assert (Hacc := read_addr_Acc _ _ _ H).
-  revert t H. induction Hacc; intros t Hread.
-  assert (Hrec : forall y, points st1 x y -> forall t, read_addr st1 y t -> read_addr st2 y t).
-  { intros; apply H0; [|eapply unchanged_from_points|]; eassumption. }
-  inversion Hread; subst.
-  - eapply read_thread_val.
-    + rewrite (unchanged_from_same _ _ _ Hchanged) in H1. eassumption.
-    + apply Hrec; [|assumption].
-      simpl; rewrite H1. left; constructor.
-    + eapply read_cont_same; [eassumption|].
-      intros; apply Hrec; [|assumption].
-      simpl; rewrite H1. right; assumption.
-  - eapply read_thread_term.
-    + rewrite (unchanged_from_same _ _ _ Hchanged) in H1. eassumption.
-    + eapply Forall2_impl_In_left_transparent; [|eassumption].
-      intros vp t Hvp; apply Hrec.
-      simpl; rewrite H1. left; constructor; assumption.
-    + eapply read_cont_same; [eassumption|].
-      intros; apply Hrec; [|assumption].
-      simpl; rewrite H1. right; assumption.
-  - eapply read_val_thread.
-    + rewrite (unchanged_from_same _ _ _ Hchanged) in H1. eassumption.
-    + apply Hrec; [|assumption].
-      simpl; rewrite H1. constructor.
-  - eapply read_val_clos.
-    + rewrite (unchanged_from_same _ _ _ Hchanged) in H1. eassumption.
-    + eapply Forall2_impl_In_left_transparent; [|eassumption].
-      intros; apply Hrec; [|assumption].
-      simpl; rewrite H1. constructor; assumption.
-    + eapply Hrec; [|eassumption].
-      simpl; rewrite H1. apply clos_points_to_2.
-    + assumption.
-  - eapply read_val_neutral.
-    + rewrite (unchanged_from_same _ _ _ Hchanged) in H1. eassumption.
-    + eapply read_cont_same; [eassumption|].
-      intros; apply Hrec; [|assumption].
-      simpl; rewrite H1. constructor; assumption.
-Qed.
- *)
-
-(*
-*)
 Lemma unchanged_from_trans :
   forall st1 st2 st3 a, unchanged_from st1 st2 a -> unchanged_from st2 st3 a -> unchanged_from st1 st3 a.
 Proof.
@@ -2693,455 +2307,6 @@ Proof.
   - unfold points, points_to in *. rewrite <- (unchanged_from_same _ _ _ H12). assumption.
 Qed.
 
-Lemma nth_error_extend :
-  forall {A : Type} (l : list A) x, nth_error (l ++ x :: nil) (length l) = Some x.
-Proof.
-  intros A l x. rewrite nth_error_app2 by lia.
-  destruct (length l - length l) eqn:Hll; [reflexivity|lia].
-Qed.
-
-(*
-Lemma unchanged_from_makelazy :
-  forall st t e a t2,
-    read_thread st a t2 ->
-    unchanged_from st (fst (makelazy st t e)) a.
-Proof.
-  intros st t e a t2 Hread a2 Ha2. unfold makelazy; simpl.
-  eapply read_thread_points_to_star in Ha2; [|eassumption].
-  destruct Ha2 as (t3 & Ha2).
-  inversion Ha2; simpl; subst; erewrite nth_error_app_Some; eassumption.
-Qed.
-
-Definition stable_partial st1 st2 st3 a :=
-  no_delete st1 st2 /\ no_delete st2 st3 /\
-  forall a2,
-    (get_addr st2 a2 = get_addr st1 a2 \/
-     ((get_addr st1 a2 = None \/ star (points st1) a a2) /\
-      forall a3, points st2 a2 a3 -> star (points st1) a a3 \/ get_addr st1 a3 = None)) /\
-    (get_addr st3 a2 = get_addr st2 a2 \/
-     ((get_addr st1 a2 = None \/ star (points st1) a a2) /\
-      forall a3, points st3 a2 a3 -> star (points st1) a a3 \/ get_addr st1 a3 = None)).
-
-Definition stable st1 st2 a := stable_partial st1 st1 st2 a.
-
-(*
-Definition stable st1 st2 a :=
-  no_delete st1 st2 /\
-  forall a2,
-    (get_addr st2 a2 = get_addr st1 a2 \/
-     ((get_addr st1 a2 = None \/ star (points_to st1.(st_rthreads) st1.(st_vals)) a a2) /\
-      forall a3, points st2 a2 a3 ->
-            get_addr st1 a3 = None \/ star (points_to st1.(st_rthreads) st1.(st_vals)) a a3)).
- *)
-
-(*
-Lemma stable_partial_refl :
-  forall st1 st2 a, no_delete st1 st2 -> stable_partial st1 st2 st2 a.
-Proof.
-  intros st1 st2 a Hdel.
-  split; [apply Hdel|].
-  split; [apply no_delete_refl|].
-  intros a2. split; [|left; reflexivity].
-  left; reflexivity.
-Qed.
- *)
-
-Lemma stable_refl :
-  forall st a, stable st st a.
-Proof.
-  intros.
-  split; [apply no_delete_refl|].
-  split; [apply no_delete_refl|].
-  intros a2. split; left; reflexivity.
-Qed.
-
-
-Definition a_points_to (a : addr) (v : match a return Type with a_rthread _ => rthread | a_val _ => value end) :=
-  match a, v with a_rthread _, v => rthread_points_to v | a_val _, v => val_points_to v end.
-
-Lemma get_addr_points :
-  forall st1 st2 a1 a2, get_addr st1 a1 = get_addr st2 a1 -> points st1 a1 a2 <-> points st2 a1 a2.
-Proof.
-  intros st1 st2 [rid|vp] a2 H; simpl in *; rewrite H; reflexivity.
-Qed.
-
-Lemma get_addr_points2 :
-  forall st a1 a2, points st a1 a2 <-> match get_addr st a1 with None => False | Some v => a_points_to a1 v a2 end.
-Proof.
-  intros st [rid|vp] a2; simpl; reflexivity.
-Qed.
-
-
-Lemma stable_partial_path :
-  forall st1 st2 st3 a1 a2,
-    stable_partial st1 st2 st3 a1 ->
-    star (points st3) a1 a2 ->
-    star (points st1) a1 a2 \/ get_addr st1 a2 = None.
-Proof.
-  intros st1 st2 st3 a1 a2 (Hdel1 & Hdel2 & Hstable) Hstar.
-  apply star_flip in Hstar. induction Hstar.
-  - left. apply star_refl.
-  - specialize (IHHstar Hstable).
-    destruct (Hstable y) as [[Hy1 | [Hy1a Hy1b]] [Hy2 | [Hy2a Hy2b]]].
-    + eapply get_addr_points in H; [|symmetry; eassumption].
-      destruct IHHstar;
-        [|eapply get_addr_points in H; [|symmetry; eassumption]; destruct y; simpl in *; rewrite H0 in H; tauto].
-      left. eapply star_compose; [eassumption|apply star_1].
-      eapply get_addr_points; [symmetry|]; eassumption.
-    + apply Hy2b. assumption.
-    + apply Hy1b. eapply get_addr_points; [symmetry|]; eassumption.
-    + apply Hy2b. assumption.
-Qed.
-
-(*
-Lemma stable_path :
-  forall st1 st2 a1 a2,
-    stable st1 st2 a1 ->
-    star (points_to st2.(st_rthreads) st2.(st_vals)) a1 a2 ->
-    get_addr st1 a2 = None \/ star (points_to st1.(st_rthreads) st1.(st_vals)) a1 a2.
-Proof.
-  intros st1 st2 a1 a2 Hstable Hstar.
-  apply star_flip in Hstar. induction Hstar.
-  - right. apply star_refl.
-  - specialize (IHHstar Hstable).
-    destruct (Hstable y) as [HyNone [Hy | [Hy1 Hy2]]].
-    + right. eapply get_addr_points_to in H; [|symmetry; eassumption].
-      destruct IHHstar; [|eapply star_compose; [eassumption|apply star_1; eassumption]].
-      destruct y; simpl in *; rewrite H0 in H; tauto.
-    + apply Hy2. assumption.
-Qed.
- *)
-(*
-Lemma stable_path_ext :
-  forall st1 st2 a1 a2,
-    stable st1 st2 a1 ->
-    get_addr st2 a2 = None \/ star (points_to st2.(st_rthreads) st2.(st_vals)) a1 a2 ->
-    get_addr st1 a2 = None \/ star (points_to st1.(st_rthreads) st1.(st_vals)) a1 a2.
-Proof.
-  intros st1 st2 a1 a2 Hstable [H | H].
-  - left. apply Hstable. assumption.
-  - eapply stable_path; eassumption.
-Qed.
- *)
-
-Lemma stable_partial_path_ext :
-  forall st1 st2 st3 a1 a2,
-    stable_partial st1 st2 st3 a1 ->
-    star (points st3) a1 a2 \/ get_addr st3 a2 = None ->
-    star (points st1) a1 a2 \/ get_addr st1 a2 = None.
-Proof.
-  intros st1 st2 st3 a1 a2 Hstable [H | H].
-  - eapply stable_partial_path in H; eassumption.
-  - right; apply Hstable, Hstable; assumption.
-Qed.
-
-Definition stable_partial_weak st1 st2 st3 a :=
-  no_delete st2 st3 /\
-  forall a2,
-    (get_addr st3 a2 = get_addr st2 a2 \/
-     ((get_addr st1 a2 = None \/ star (points st1) a a2) /\
-      forall a3, points st3 a2 a3 -> star (points st1) a a3 \/ get_addr st1 a3 = None)).
-
-Lemma stable_partial_trans :
-  forall st1 st2 st3 st4 a, stable_partial st1 st2 st3 a -> stable_partial_weak st1 st3 st4 a -> stable_partial st1 st2 st4 a.
-Proof.
-  intros st1 st2 st3 st4 a (H1a & H1b & H1c) (H2a & H2b).
-  split; [apply H1a|].
-  split; [intros a2 Ha2; apply H1b, H2a; assumption|].
-  intros a2. split; [apply H1c|].
-  destruct (H2b a2) as [H2b1 | H2b2].
-  - destruct (H1c a2) as [H1c1 [H1c2a | [H1c2b1 H1c2b2]]].
-    + left. congruence.
-    + right. split; [assumption|].
-      intros a3 Ha3; apply H1c2b2.
-      eapply get_addr_points; [symmetry|]; eassumption.
-  - right. assumption.
-Qed.
-
-Lemma stable_partial_trans_flipped :
-  forall st1 st2 st3 st4 a, stable_partial_weak st1 st3 st4 a -> stable_partial st1 st2 st3 a -> stable_partial st1 st2 st4 a.
-Proof.
-  intros; eapply stable_partial_trans; eassumption.
-Qed.
-
-
-(*
-Lemma stable_trans :
-  forall st1 st2 st3 a, stable st1 st2 a -> stable st2 st3 a -> stable st1 st3 a.
-Proof.
-  intros st1 st2 st3 a H1 H2 a2.
-  split; [intros; apply H1, H2; assumption|].
-  destruct (H2 a2) as [Ha2Noneb [Ha2b | [Ha2b1 Ha2b2]]].
-  - destruct (H1 a2) as [Ha2Nonea [Ha2a | [Ha2a1 Ha2a2]]].
-    + left. congruence.
-    + right. split; [assumption|].
-      intros a3 Ha3; apply Ha2a2.
-      eapply get_addr_points_to; [|eassumption].
-      symmetry; assumption.
-  - destruct (H1 a2) as [Ha2Nonea [Ha2a | [Ha2a1 Ha2a2]]].
-    + right. eapply stable_path_ext in Ha2b1; [|eassumption].
-      split; [assumption|].
-      intros; eapply stable_path_ext; [eassumption|apply Ha2b2; assumption].
-    + right. split; [assumption|].
-      intros a3 Ha3. eapply Ha2b2, stable_path_ext in Ha3; eassumption.
-Qed.
- *)
-
-Lemma stable_partial_stable :
-  forall st1 st2 st3 a, stable_partial st1 st2 st3 a -> stable st1 st3 a.
-Proof.
-  intros st1 st2 st3 a (H1 & H2 & H3).
-  split; [apply no_delete_refl|].
-  split; [intros a2 Ha2; apply H1, H2; assumption|].
-  intros a2.
-  split; [left; reflexivity|].
-  destruct (H3 a2) as [H3a [H3b1 | [H3b2a H3b2b]]].
-  - destruct H3a as [H3a1 | [H3a2a H3a2b]].
-    + left; congruence.
-    + right. split; [assumption|].
-      intros a3 Ha3; apply H3a2b.
-      eapply get_addr_points; [symmetry|]; eassumption.
-  - right. split; assumption.
-Qed.
-
-Lemma stable_partial_stable_trans :
-  forall st1 st2 st3 st4 a,
-    stable_partial st1 st2 st3 a -> stable st3 st4 a -> stable_partial st1 st2 st4 a.
-Proof.
-  intros st1 st2 st3 st4 a H123 H34.
-  inversion H123 as (H1 & H2 & H3).
-  inversion H34 as (H4 & H5 & H6).
-  eapply stable_partial_trans; [split; [|split]; eassumption|].
-  split; [assumption|].
-  intros a2. destruct (H6 a2) as [H6a [H6b1 | [H6b2a H6b2b]]].
-  - left; assumption.
-  - right. eapply or_comm, stable_partial_path_ext, or_comm in H6b2a; [|eassumption].
-    split; [assumption|].
-    intros a3 Ha3. eapply stable_partial_path_ext; [eassumption|].
-    apply H6b2b; assumption.
-Qed.
-
-(*
-Lemma stable_stable_partial :
-  forall st1 st2 st3 a, no_delete st3 st1 -> stable st1 st2 a -> stable_partial st3 st1 st2 a.
-Proof.
-  intros st1 st2 st3 a H (_ & H1 & H2).
-  split; [apply H|].
-  split; [apply H1|].
-  intros a2.
-  destruct (H2 a2) as [Ha2 | [Ha2a Ha2b]].
-  - left. assumption.
-  - right. split.
-    + destruct Ha2a as [Ha2a | Ha2a]; [left; apply H; assumption|].
-    destruct Ha2a.
-    + 
-    split; [|assumption].
-    destruct Ha2a; [|right; assumption].
-    left; apply H; assumption.
-Qed.
- *)
-
-(*
-Lemma stable_trans :
-  forall st1 st2 st3 a, no_delete st1 st2 -> stable st1 st2 a -> stable st2 st3 a -> stable st1 st3 a.
-Proof.
-  intros. eapply stable_partial_trans; [eassumption|].
-  apply stable_stable_partial; assumption.
-Qed.
- *)
-
-Lemma get_update_addr_eq :
-  forall st a v1 v2, get_addr st a = Some v1 -> get_addr (update_addr st a v2) a = Some v2.
-Proof.
-  intros. destruct a; eapply nth_error_update; eassumption.
-Qed.
-
-Lemma get_update_addr_eq2 :
-  forall st a v, get_addr (update_addr st a v) a = match get_addr st a with None => None | Some _ => Some v end.
-Proof.
-  intros. destruct a; eapply nth_error_update2; eassumption.
-Qed.
-
-Lemma get_update_addr_eq3 :
-  forall st a1 a2 v, a1 <> a2 -> get_addr (update_addr st a2 v) a1 = get_addr st a1.
-Proof.
-  intros. destruct a1, a2; simpl in *; try reflexivity; eapply nth_error_update3; congruence.
-Qed.
-
-Lemma addr_eq_dec :
-  forall (a1 a2 : addr), { a1 = a2 } + { a1 <> a2 }.
-Proof.
-  intros [x|x] [y|y]; try (right; congruence);
-    destruct (Nat.eq_dec x y); constructor; congruence.
-Qed.
-
-Lemma stable_update :
-  forall st1 st2 a1 a2 v,
-    get_addr st1 a2 = None \/ star (points st1) a1 a2 ->
-    (forall a3, a_points_to a2 v a3 -> star (points st1) a1 a3 \/ get_addr st1 a3 = None) ->
-    stable_partial_weak st1 st2 (update_addr st2 a2 v) a1.
-Proof.
-  intros st1 st2 a1 a2 v H1 H2.
-  split.
-  - intros a3 Ha3; destruct (addr_eq_dec a3 a2).
-    + subst. rewrite get_update_addr_eq2 in Ha3. destruct (get_addr st2 a2); congruence.
-    + rewrite get_update_addr_eq3 in Ha3; assumption.
-  - intros a3. destruct (addr_eq_dec a3 a2).
-    + subst. right. split; [assumption|].
-      intros a3 Ha3.
-      rewrite get_addr_points2, get_update_addr_eq2 in Ha3.
-        destruct (get_addr st2 a2); [|tauto].
-        apply H2; assumption.
-    + left. rewrite get_update_addr_eq3; [reflexivity|assumption].
-Qed.
-*)
-Lemma nth_error_extend_case :
-  forall {A : Type} l (x : A) n,
-    nth_error (l ++ x :: nil) n = nth_error l n \/ (n = length l /\ nth_error (l ++ x :: nil) n = Some x).
-Proof.
-  intros A l x n.
-  destruct (le_lt_dec (length l) n).
-  - rewrite nth_error_app2 by assumption.
-    destruct (n - length l) eqn:Hn; simpl; [right; split; [lia|reflexivity]|].
-    left. destruct n0; symmetry; apply nth_error_None; assumption.
-  - left. rewrite nth_error_app1; tauto.
-Qed.
-(*
-Lemma stable_addval :
-  forall st1 st2 a v,
-    length (st1.(st_vals)) <= length (st2.(st_vals)) ->
-    (forall a2, val_points_to v a2 -> star (points st1) a a2 \/ get_addr st1 a2 = None) ->
-    stable_partial_weak st1 st2 (fst (addval st2 v)) a.
-Proof.
-  intros st1 st2 a v Hlen H.
-  split.
-  - intros a2 Ha2.
-    destruct a2; simpl in *; [assumption|].
-    rewrite nth_error_None in *. rewrite app_length in Ha2. lia.
-  - intros a2. destruct a2 as [rid|vp]; simpl in *; [left; reflexivity|].
-    destruct (nth_error_extend_case (st_vals st2) v vp) as [-> | [-> ->]].
-    + left. reflexivity.
-    + right. split; [|assumption].
-      left. rewrite nth_error_None. lia.
-Qed.
-
-Lemma stable_makelazy :
-  forall st1 st2 a t e,
-    length (st1.(st_rthreads)) <= length (st2.(st_rthreads)) ->
-    length (st1.(st_vals)) <= length (st2.(st_vals)) ->
-    (forall a2, env_points_to e a2 -> star (points st1) a a2 \/ get_addr st1 a2 = None) ->
-    stable_partial_weak st1 st2 (fst (makelazy st2 t e)) a.
-Proof.
-  intros st1 st2 a t e Hlen1 Hlen2 H.
-  split.
-  - intros a2 Ha2.
-    destruct a2; simpl in *; rewrite nth_error_None in *; rewrite app_length in Ha2; lia.
-  - intros [rid|vp]; simpl in *.
-    + destruct (nth_error_extend_case (st_rthreads st2) {| rt_code := Term t e; rt_cont := Kid |} rid) as [-> | [-> ->]].
-      * left. reflexivity.
-      * right. split; [left; rewrite nth_error_None; lia|].
-        intros a2 [Ha2 | Ha2]; inversion Ha2; subst.
-        apply H. assumption.
-    + destruct (nth_error_extend_case (st_vals st2) (Thread (length (st_rthreads st2))) vp) as [-> | [-> ->]].
-      * left. reflexivity.
-      * right. split; [left; rewrite nth_error_None; lia|].
-        intros a2 Ha2; inversion Ha2; subst.
-        right. simpl. rewrite nth_error_None. lia.
-Qed.
-
-
-Lemma step_r_stable :
-  forall st rid, stable st (step_r st rid) (a_rthread rid).
-Proof.
-  intros st rid. unfold step_r.
-  destruct nth_error as [[code cont]|] eqn:Hrid; [|apply stable_refl].
-  destruct code as [t e|vp].
-  - destruct t; cbv beta delta [rt_code rt_cont] iota.
-    + destruct (nth_error e n) as [vp|] eqn:He; [|apply stable_refl].
-      eapply stable_partial_trans; [apply stable_refl|].
-      apply stable_update; [right; apply star_refl|].
-      intros a3 [Ha3 | Ha3].
-      * inversion Ha3; subst. left. apply star_1.
-        simpl. rewrite Hrid. left. constructor.
-        eapply nth_error_In; eassumption.
-      * left. apply star_1. simpl. rewrite Hrid. right. assumption.
-    + apply stable_refl.
-    + destruct cont.
-      * eapply stable_partial_trans_flipped.
-        {
-          apply stable_update; [right; apply star_refl|].
-          intros a3 [Ha3 | Ha3]; inversion Ha3; subst.
-          simpl. rewrite nth_error_None, !app_length; lia.
-        }
-        eapply stable_partial_trans_flipped.
-        {
-          apply stable_addval; [simpl; rewrite !app_length; lia|].
-          intros a2 Ha2. inversion Ha2; subst.
-          -- left. apply star_1. simpl. rewrite Hrid. left. constructor. assumption.
-          -- right. simpl. rewrite nth_error_None, app_length. lia.
-        }
-        eapply stable_partial_trans_flipped.
-        {
-          apply stable_makelazy; [simpl; lia|simpl; rewrite app_length; lia|].
-          intros [rid2|vp2]; [intros [] | intros [H | H]]; simpl in *.
-          -- subst. right. rewrite nth_error_None; lia.
-          -- left. apply star_1. simpl. rewrite Hrid. left. constructor. assumption.
-        }
-        eapply stable_partial_trans_flipped; [|apply stable_refl].
-        apply stable_addval; [lia|].
-        intros a2 Ha2; inversion Ha2; subst. inversion H0.
-      * eapply stable_partial_trans_flipped; [|apply stable_refl].
-        apply stable_update; [right; apply star_refl|].
-        intros a3 [Ha3 | Ha3]; left; apply star_1.
-        -- inversion Ha3; subst.
-           destruct a3; simpl in *; [tauto|]. rewrite Hrid.
-           destruct H2 as [H2 | H2]; [subst; right; constructor|].
-           left. constructor. assumption.
-        -- simpl. rewrite Hrid. right. constructor. assumption.
-      * apply stable_refl.
-    + eapply stable_partial_trans_flipped.
-      {
-        apply stable_update; [right; apply star_refl|].
-        intros a3 [Ha3 | Ha3].
-        * inversion Ha3; subst. left. apply star_1. simpl. rewrite Hrid. left. constructor. assumption.
-        * inversion Ha3; subst; [right; simpl; rewrite nth_error_None; lia|].
-          left. apply star_1. simpl. rewrite Hrid. right. assumption.
-      }
-      eapply stable_partial_trans_flipped; [|apply stable_refl].
-      apply stable_makelazy; [lia|lia|].
-      intros a3 Ha3; left; apply star_1. simpl. rewrite Hrid. left. constructor. assumption.
-    + admit.
-    + admit.
-  - cbv beta delta [rt_code rt_cont] iota.
-    destruct (nth_error st.(st_vals) vp) as [v|] eqn:Hvp; [|apply stable_refl].
-    destruct v.
-    + destruct is_finished as [v|] eqn:Hfinished; [|apply stable_refl].
-      eapply stable_partial_trans_flipped; [|apply stable_refl].
-      apply stable_update; [right; apply star_refl|].
-      intros a3 [Ha3 | Ha3]; [|left; apply star_1; simpl; rewrite Hrid; right; assumption].
-      inversion Ha3; subst. unfold is_finished in Hfinished.
-      destruct (nth_error (st_rthreads st) r) as [[code1 cont1]|]eqn:Hr; [|congruence].
-      simpl in Hfinished.
-      destruct code1 as [? ?|vp2]; [congruence|].
-      destruct cont1; try congruence. injection Hfinished as Hfinished. subst.
-      left.
-      econstructor; [simpl; rewrite Hrid; left; constructor|].
-      econstructor; [simpl; rewrite Hvp; constructor|].
-      apply star_1. simpl. rewrite Hr. left. constructor.
-    + admit.
-    + destruct cont.
-      * admit.
-      * eapply stable_partial_trans_flipped; [|apply stable_refl].
-        apply stable_update; [right; apply star_refl|].
-        intros a3 [Ha3 | Ha3]; [|left; apply star_1; simpl; rewrite Hrid; right; constructor; assumption].
-        inversion Ha3; subst. destruct a3; simpl in *; [tauto|].
-        destruct H2 as [H2 | H2]; [left; apply star_1; simpl; rewrite Hrid; subst; right; constructor|].
-        left. econstructor; simpl; [rewrite Hrid; left; constructor|].
-        apply star_1. simpl. rewrite Hvp. apply clos_points_to_1. assumption.
-      * apply stable_refl.
-    + admit.
-Admitted.
-*)
 
 Definition only_extended st1 st2 :=
   forall rid rt, nth_error (st_rthreads st1) rid = Some rt -> nth_error (st_rthreads st2) rid = Some rt.
@@ -3289,28 +2454,6 @@ Proof.
     destruct Ha as (t3 & varmap2 & Ha). inversion Ha; subst; congruence.
 Qed.
 
-(*
-
-Lemma unchanged_from_cycle :
-  forall st defs a1 v a2 t, plus (points st) a1 a2 -> read_thread st defs a1 t -> unchanged_from st (update_rthread st a1 v) a2.
-Proof.
-  intros st defs rid v rid2 t Hplus Hread rid3 Ha3. unfold update_rthread in *; simpl in *.
-  destruct (update_case st.(st_rthreads) rid rid3 v); [|congruence].
-  destruct H; subst. exfalso.
-  eapply Acc_cycle; [eapply plus_compose_star_right; eassumption|].
-  eapply read_thread_Acc; eassumption.
-Qed.
-
-Lemma unchanged_from_plus_cycle :
-  forall st defs a1 v a2 t, star (points st) a1 a2 -> read_thread st defs a1 t -> unchanged_from_plus st (update_rthread st a1 v) a2.
-Proof.
-  intros st defs a1 v a2 t Hstar Hread. eapply every_reachable_plus_iff. intros a3 Hpoints.
-  eapply unchanged_from_cycle; [|eassumption].
-  eapply plus_compose_star_left; [eassumption|].
-  apply plus_1; assumption.
-Qed.
-*)
-
 Lemma unchanged_from_plus_update :
   forall st defs varmap a v t, read_thread st defs varmap a t -> unchanged_from_plus st (update_rthread st a v) a.
 Proof.
@@ -3318,23 +2461,6 @@ Proof.
   apply only_changed_update.
 Qed.
 
-
-Lemma and_left :
-  forall (A B : Prop), A -> (A -> B) -> A /\ B.
-Proof.
-  intros A B HA HB; split; [apply HA|apply HB, HA].
-Qed.
-
-Lemma and_right :
-  forall (A B : Prop), (B -> A) -> B -> A /\ B.
-Proof.
-  intros A B HA HB; split; [apply HA, HB|apply HB].
-Qed.
-
-Ltac and_left := apply and_left.
-Ltac and_right := apply and_right.
-Tactic Notation "and_left" "as" simple_intropattern(p) := and_left; [|intros p].
-Tactic Notation "and_right" "as" simple_intropattern(p) := and_right; [intros p|].
 
 Definition same_read_plus st1 st2 defs rid :=
   every_reachable_plus st1 rid (fun a => forall varmap t, read_thread st1 defs varmap a t -> read_thread st2 defs varmap a t).
@@ -3428,18 +2554,6 @@ Proof.
   intros; apply plus_1, H3; assumption.
 Qed.
 
-(*
-Lemma read_addr_same_Forall2 :
-  forall st1 st2 e el,
-    Forall2 (fun vp t => read_addr st1 (a_val vp) t) e el ->
-    (forall vp, In vp e -> unchanged_from st1 st2 (a_val vp)) ->
-    Forall2 (fun vp t => read_addr st2 (a_val vp) t) e el.
-Proof.
-  intros st1 st2 e el Hall Hchange.
-  eapply Forall2_impl_In_left_transparent; [|eassumption].
-  intros; eapply read_addr_same; [apply H0|apply Hchange; assumption].
-Qed.
- *)
 Lemma same_read_plus_val_Forall2 :
   forall st1 st2 defs varmap e el rid,
     st_freename st1 <= st_freename st2 ->
@@ -3484,9 +2598,6 @@ Proof.
   eapply same_read_unchanged, unchanged_from_plus_update; try eassumption.
   simpl. lia.
 Qed.
-
-Ltac dedup x :=
-  refine ((fun (x : _) => _) _).
 
 Lemma only_extended_makendeeps :
   forall st bs e, only_extended st (fst (makendeeps st bs e)).
@@ -3539,20 +2650,8 @@ Proof.
 Qed.
 
 
-
-
-
-
-
-
 Definition defs_ok (defs : list term) st :=
   length defs <= st.(st_freename).
-
-Definition nth_error_None_rw :
-  forall {A : Type} (l : list A) (n : nat), length l <= n -> nth_error l n = None.
-Proof.
-  intros. apply nth_error_None. assumption.
-Qed.
 
 Fixpoint init_at (k : nat) (t : term) :=
   match t with
@@ -3585,31 +2684,6 @@ Inductive dvar_below : nat -> term -> Prop :=
 | dvar_below_constr : forall k tag l, Forall (dvar_below k) l -> dvar_below k (constr tag l)
 | dvar_below_switch : forall k t m, dvar_below k t -> Forall (fun pt => dvar_below k (snd pt)) m -> dvar_below k (switch t m).
 
-Lemma liftn_subst_1 :
-  forall us, (forall n, liftn_subst 1 us n = lift_subst us n).
-Proof.
-  intros us n. unfold liftn_subst, lift_subst.
-  destruct n as [|n]; simpl in *; [reflexivity|].
-  rewrite Nat.sub_0_r. reflexivity.
-Qed.
-
-Lemma liftn_subst_add :
-  forall us p q, (forall n, liftn_subst p (liftn_subst q us) n = liftn_subst (p + q) us n).
-Proof.
-  intros us p q n. unfold liftn_subst.
-  repeat destruct le_lt_dec; try lia; try rewrite !ren_ren; simpl; f_equal.
-  - apply renv_ext; intros m; rewrite renv_comp_correct, !plus_ren_correct. lia.
-  - f_equal. lia.
-  - rewrite plus_ren_correct. lia.
-Qed.
-
-Lemma liftn_subst_0 :
-  forall us, (forall n, liftn_subst 0 us n = us n).
-Proof.
-  intros us n. unfold liftn_subst. destruct le_lt_dec; [|lia].
-  erewrite Nat.sub_0_r, ren_term_is_subst, subst_ext, subst_id; [reflexivity|].
-  intros; reflexivity.
-Qed.
 
 Lemma init_at_correct_aux :
   forall k p t, closed_at t p -> dvar_below k t -> t = subst (liftn_subst p (read_env (map dvar (seq 0 k)))) (init_at p t).
@@ -3689,11 +2763,6 @@ Definition init_term (defs : list term) (t : term) :=
   let (st, vs) := init_all {| st_rthreads := nil ; st_freename := length defs |} nil defs in
   makelazy st (init_at 0 t) vs.
 
-Lemma nth_error_select :
-  forall (A : Type) (l1 l2 : list A) (x : A), nth_error (l1 ++ x :: l2) (length l1) = Some x.
-Proof.
-  intros; induction l1; simpl in *; [reflexivity|assumption].
-Qed.
 
 Lemma init_all_correct :
   forall st st2 defs1 defs2 l l2,
@@ -3816,24 +2885,6 @@ Proof.
   intros t3 t4 [Ht34 | Ht34]; [left | right]; apply beta_fill; assumption.
 Qed.
 
-Lemma read_env_app :
-  forall e1 e2 n, read_env (e1 ++ e2) n = subst (read_env e1) (liftn_subst (length e1) (read_env e2) n).
-Proof.
-  intros e1 e2 n. unfold read_env, liftn_subst.
-  destruct le_lt_dec.
-  - rewrite nth_error_app2 by assumption.
-    destruct nth_error eqn:Hn.
-    + rewrite ren_term_is_subst, subst_subst.
-      erewrite subst_ext; [symmetry; apply subst_id|].
-      intros m. unfold comp; simpl. rewrite plus_ren_correct.
-      rewrite nth_error_None_rw by lia. f_equal. lia.
-    + simpl. rewrite plus_ren_correct.
-      rewrite nth_error_None_rw by lia. f_equal. rewrite app_length; lia.
-  - rewrite nth_error_app1 by assumption. simpl.
-    destruct nth_error eqn:Hnth; [reflexivity|].
-    apply nth_error_None in Hnth. lia.
-Qed.
-
 Lemma read_val_only_extended :
   forall st st2 defs varmap v t, st_freename st <= st_freename st2 -> only_extended st st2 -> read_val st defs varmap v t -> read_val st2 defs varmap v t.
 Proof.
@@ -3949,14 +3000,6 @@ Proof.
   apply H1 in H3. rewrite H3; assumption.
 Qed.
 
-Lemma Forall_Exists :
-  forall (A : Type) (P : A -> Prop) (Q : A -> Prop) (R : Prop) (L : list A),
-    (forall x, P x -> Q x -> R) -> Forall P L -> Exists Q L -> R.
-Proof.
-  intros A P Q R L H1 H2; induction H2; intros H3; inversion H3; subst.
-  - eapply H1; eassumption.
-  - apply IHForall; assumption.
-Qed.
 
 Lemma only_changed_read_thread_ind :
   forall st st2 defs varmap varmap2 rid rid2 t t2,
@@ -4051,28 +3094,7 @@ Proof.
     + simpl. assumption.
 Qed.
 
-Lemma Forall2_select121 :
-  forall (A B : Type) (P : A -> B -> A -> Prop) (L1 : list A) (L2 : list B), Forall2 (fun x y => P x y x) L1 L2 -> Forall3 P L1 L2 L1.
-Proof.
-  intros A B P L1 L2 H; induction H; constructor; assumption.
-Qed.
 
-Lemma Forall2_select12combine :
-  forall (A B : Type) (P : A -> B -> A * B -> Prop) (L1 : list A) (L2 : list B), Forall2 (fun x y => P x y (x, y)) L1 L2 -> Forall3 P L1 L2 (combine L1 L2).
-Proof.
-  intros A B P L1 L2 H; induction H; constructor; assumption.
-Qed.
-
-Lemma Forall3_map3 :
-  forall (A B C D : Type) (P : A -> B -> D -> Prop) (f : C -> D) (L1 : list A) (L2 : list B) (L3 : list C), Forall3 P L1 L2 (map f L3) <-> Forall3 (fun x y z => P x y (f z)) L1 L2 L3.
-Proof.
-  intros A B C D P f L1 L2 L3; split; intros H.
-  - remember (map f L3) as L4. revert L3 HeqL4.
-    induction H; intros; destruct L3; subst; simpl in *; try congruence; constructor.
-    + injection HeqL4 as HeqL4; subst. assumption.
-    + injection HeqL4 as HeqL4; subst. apply IHForall3. reflexivity.
-  - induction H; constructor; assumption.
-Qed.
 
 Lemma makendeeps_freename :
   forall st bs e, st_freename st <= st_freename (fst (makendeeps st bs e)).
@@ -4082,54 +3104,7 @@ Proof.
   - etransitivity; [|apply IHbs]. simpl. lia.
 Qed.
 
-Lemma seq_shiftn :
-  forall n len a, map (fun k => k + n) (seq a len) = seq (a + n) len.
-Proof.
-  intros n; induction len; intros a; simpl in *; f_equal.
-  apply IHlen.
-Qed.
 
-Lemma seq_is_shiftn :
-  forall a len, seq a len = map (fun k => k + a) (seq 0 len).
-Proof.
-  intros a len; rewrite seq_shiftn; reflexivity.
-Qed.
-
-Lemma index_notin_None :
-  forall A eq_dec (l : list A) (x : A), x \notin l -> index eq_dec l x = None.
-Proof.
-  intros A eq_dec l x H; induction l.
-  - reflexivity.
-  - simpl in *. destruct eq_dec; [intuition congruence|].
-    rewrite IHl; tauto.
-Qed.
-
-Lemma index_app :
-  forall A eq_dec (l1 l2 : list A) x,
-    index eq_dec (l1 ++ l2) x =
-    match index eq_dec l1 x with
-    | Some n => Some n
-    | None => option_map (fun n => length l1 + n) (index eq_dec l2 x)
-    end.
-Proof.
-  intros A eq_dec l1 l2 x; induction l1; simpl in *.
-  - destruct index; reflexivity.
-  - destruct eq_dec; [reflexivity|].
-    rewrite IHl1. destruct (index eq_dec l1 x); [reflexivity|].
-    destruct (index eq_dec l2 x); reflexivity.
-Qed.
-
-Lemma index_seq :
-  forall eq_dec a len x,
-    a <= x < a + len ->
-    index eq_dec (seq a len) x = Some (x - a).
-Proof.
-  intros eq_dec a len x Hx. revert a Hx; induction len; intros a Hx.
-  - lia.
-  - simpl index. destruct eq_dec.
-    + subst. f_equal. lia.
-    + rewrite IHlen; [|lia]. f_equal. lia.
-Qed.
 
 Fixpoint subst_hctx us h :=
   match h with
@@ -4153,9 +3128,6 @@ Proof.
   intros us k t Ht. erewrite subst_closed_at_ext, subst_id; [reflexivity|eassumption|].
   intros n Hn. unfold liftn_subst. destruct le_lt_dec; [lia|reflexivity].
 Qed.
-
-Definition option_default {A : Type} (o : option A) (d : A) :=
-  match o with Some x => x | None => d end.
 
 Definition remap varmap1 varmap2 n :=
   match nth_error varmap1 n with
@@ -4184,22 +3156,6 @@ Proof.
   simpl; apply is_remap_ok_cons. apply IHvarmap1. assumption.
 Qed.
 
-Lemma index_in_Some :
-  forall A eq_dec (l : list A) (x : A), x \in l -> exists k, index eq_dec l x = Some k.
-Proof.
-  intros A eq_dec l x H; induction l.
-  - simpl in *; tauto.
-  - simpl. destruct eq_dec; [exists 0; reflexivity|].
-    destruct IHl as (k & Hk).
-    + destruct H; [symmetry in H|]; tauto.
-    + exists (S k). rewrite Hk; reflexivity.
-Qed.
-
-Lemma index_in_not_None :
-  forall A eq_dec (l : list A) (x : A), x \in l -> index eq_dec l x <> None.
-Proof.
-  intros A eq_dec l x H. destruct (index_in_Some A eq_dec l x H) as (k & Hk). congruence.
-Qed.
 
 
 Lemma remap_cons_S :
@@ -4228,28 +3184,6 @@ Proof.
   simpl. f_equal. f_equal. lia.
 Qed.
 
-
-Lemma nth_error_index :
-  forall A eq_dec (x : A) l n, index eq_dec l x = Some n -> nth_error l n = Some x.
-Proof.
-  intros A eq_dec x. induction l; intros [|n]; simpl in *; try congruence; destruct eq_dec; simpl in *; try congruence.
-  - destruct index; congruence.
-  - destruct index; [|congruence]. intros; apply IHl; congruence.
-Qed.
-
-
-Lemma index_nth_error :
-  forall (A : Type) eq_dec (vars : list A) k x, NoDup vars -> nth_error vars k = Some x -> index eq_dec vars x = Some k.
-Proof.
-  intros A eq_dec vars k x H1 H2. revert k H2; induction vars as [|y vars]; intros k H2; simpl in *.
-  - destruct k; simpl in *; congruence.
-  - destruct k; simpl in *.
-    + injection H2 as H2; subst. destruct eq_dec; [|tauto]. reflexivity.
-    + destruct eq_dec; [subst|].
-      * inversion H1; subst. exfalso. apply H3. eapply nth_error_In; eassumption.
-      * erewrite IHvars; [reflexivity| |eassumption].
-        inversion H1; subst; assumption.
-Qed.
 
 Lemma remap_app_1 :
   forall varmap1 varmap2 varmap3 n, n < length varmap1 -> NoDup varmap1 -> remap (varmap1 ++ varmap2) (varmap1 ++ varmap3) n = n.
@@ -4302,40 +3236,12 @@ Proof.
   intros t3 t4 [H1 | H1]; destruct H1; constructor; constructor; ((apply beta_subst1; assumption) || (apply iota_subst_left; assumption)).
 Qed.
 
-Lemma subst_closed_at_id :
-  forall us t k, closed_at t k -> (forall n, n < k -> us n = var n) -> subst us t = t.
-Proof.
-  intros us t k H1 H2. erewrite subst_closed_at_ext; [apply subst_id|eassumption|eassumption].
-Qed.
-
 Lemma subst_hctx_compose :
   forall us h1 h2, subst_hctx us (compose_hctx h1 h2) = compose_hctx (subst_hctx us h1) (subst_hctx us h2).
 Proof.
   intros us h1 h2; induction h1; simpl in *; f_equal; assumption.
 Qed.
 
-Lemma Forall3_combine23_3 :
-  forall (A B C : Type) (P : A -> B -> B * C -> Prop) l1 l2 l3, Forall3 (fun x y z => P x y (y, z)) l1 l2 l3 -> Forall3 P l1 l2 (combine l2 l3).
-Proof.
-  intros A B C P l1 l2 l3 H; induction H; simpl in *; constructor; assumption.
-Qed.
-
-Lemma Forall3_select1 :
-  forall (A B C : Type) (P : A -> Prop) l1 (l2 : list B) (l3 : list C), Forall3 (fun x y z => P x) l1 l2 l3 -> Forall P l1.
-Proof.
-  intros A B C P l1 l2 l3 H; induction H; simpl in *; constructor; assumption.
-Qed.
-
-Lemma liftn_subst_comp :
-  forall p us1 us2 n, comp (subst (liftn_subst p us1)) (liftn_subst p us2) n = liftn_subst p (comp (subst us1) us2) n.
-Proof.
-  intros p us1 us2 n. unfold comp, liftn_subst.
-  destruct le_lt_dec.
-  - rewrite ren_subst, subst_ren. apply subst_ext.
-    intros m. unfold comp; simpl. rewrite plus_ren_correct. destruct le_lt_dec; [|lia].
-    f_equal. f_equal. lia.
-  - simpl. destruct le_lt_dec; [lia|]. reflexivity.
-Qed.
 
 Lemma read_extend_varmap_aux :
   forall st defs,
@@ -4477,101 +3383,6 @@ Proof.
     specialize (H2 _ Hx2); specialize (H1 _ Hx). lia.
 Qed.
 
-Lemma closed_at_ren :
-  forall t ren k1 k2, closed_at t k1 -> (forall n, n < k1 -> renv ren n < k2) -> closed_at (ren_term ren t) k2.
-Proof.
-  induction t using term_ind2; intros ren k1 k2 Ht Hren; inversion Ht; subst; simpl.
-  - constructor. apply Hren. assumption.
-  - constructor.
-  - constructor. eapply IHt; [eassumption|].
-    intros [|n]; rewrite lift_renv; [lia|]. intros; specialize (Hren n); lia.
-  - constructor; [eapply IHt1|eapply IHt2]; eassumption.
-  - constructor. rewrite <- Forall_forall in *.
-    rewrite Forall_map. eapply Forall_impl; [|rewrite <- Forall_and; split; [apply H|apply H3]].
-    intros t [IH Ht2]; eapply IH; eassumption.
-  - constructor; [eapply IHt; eassumption|].
-    intros p t2 Hpt2; rewrite in_map_iff in Hpt2; destruct Hpt2 as [[p3 t3] [Hpt2 Hpt3]]; simpl in *.
-    injection Hpt2 as Hpt2; subst. rewrite Forall_forall in H. specialize (H _ Hpt3); simpl in H.
-    eapply H; [apply H4; eassumption|].
-    intros n Hn. destruct (le_lt_dec p n).
-    + rewrite liftn_renv_large by assumption. specialize (Hren (n - p)); lia.
-    + rewrite liftn_renv_small by assumption; lia.
-Qed.
-
-Lemma closed_at_plus_ren :
-  forall t p k, closed_at t k -> closed_at (ren_term (plus_ren p) t) (p + k).
-Proof.
-  intros t p k H. eapply closed_at_ren; [eassumption|].
-  intros n Hn; rewrite plus_ren_correct; lia.
-Qed.
-
-Lemma closed_at_subst_read_env_lift :
-  forall t k p el, Forall (fun t => closed_at t k) el -> closed_at t (p + length el + k) -> closed_at (subst (liftn_subst p (read_env el)) t) (p + k).
-Proof.
-  intros t k p el Hel Ht; revert p Ht; induction t using term_ind2; intros p Ht; inversion Ht; subst; simpl.
-  - unfold read_env, liftn_subst. destruct le_lt_dec.
-    + destruct nth_error eqn:Hnth.
-      * apply closed_at_plus_ren. rewrite Forall_forall in Hel. eapply Hel, nth_error_In, Hnth.
-      * simpl. constructor. rewrite plus_ren_correct. rewrite nth_error_None in Hnth. lia.
-    + constructor. lia.
-  - constructor.
-  - constructor. erewrite subst_ext; [|intros n; rewrite <- liftn_subst_1; apply liftn_subst_add].
-    apply IHt. assumption.
-  - constructor; [apply IHt1|apply IHt2]; assumption.
-  - constructor. rewrite <- Forall_forall in *.
-    rewrite Forall_map. eapply Forall_impl; [|rewrite <- Forall_and; split; [apply H|apply H3]].
-    intros t [IH Ht2]; eapply IH; eassumption.
-  - constructor; [apply IHt; assumption|].
-    intros p2 t2 Hpt2; rewrite in_map_iff in Hpt2; destruct Hpt2 as [[p3 t3] [Hpt2 Hpt3]]; simpl in *.
-    injection Hpt2 as Hpt2; subst. rewrite Forall_forall in H. specialize (H _ Hpt3); simpl in H.
-    rewrite plus_assoc.
-    erewrite subst_ext; [|apply liftn_subst_add].
-    eapply H. specialize (H4 _ _ Hpt3). rewrite !plus_assoc in H4. assumption.
-Qed.
-
-Lemma closed_at_subst_read_env :
-  forall t k el, Forall (fun t => closed_at t k) el -> closed_at t (length el + k) -> closed_at (subst (read_env el) t) k.
-Proof.
-  intros t k el H1 H2. assert (H := closed_at_subst_read_env_lift t k 0 el H1 H2).
-  erewrite subst_ext in H; [eassumption|].
-  intros n. apply liftn_subst_0.
-Qed.
-
-Lemma closed_at_mono :
-  forall t n m, n <= m -> closed_at t n -> closed_at t m.
-Proof.
-  intros t n m Hnm H; revert m Hnm. induction H; intros n2 Hn; constructor.
-  - lia.
-  - apply IHclosed_at1. assumption.
-  - apply IHclosed_at2. assumption.
-  - apply IHclosed_at. lia.
-  - intros t Ht; apply H0; assumption.
-  - apply IHclosed_at. assumption.
-  - intros; eapply H1; [eassumption|lia].
-Qed.
-
-Lemma Forall2_select1 :
-  forall (A B : Type) (P : A -> Prop) (l1 : list A) (l2 : list B), Forall2 (fun a b => P a) l1 l2 -> Forall P l1.
-Proof.
-  intros A B P l1 l2 H; induction H; constructor; assumption.
-Qed.
-
-Lemma Forall2_select2 :
-  forall (A B : Type) (P : B -> Prop) (l1 : list A) (l2 : list B), Forall2 (fun a b => P b) l1 l2 -> Forall P l2.
-Proof.
-  intros A B P l1 l2 H; induction H; constructor; assumption.
-Qed.
-
-Lemma index_length :
-  forall A eq_dec (x : A) l n, index eq_dec l x = Some n -> n < length l.
-Proof.
-  induction l; intros n Hn; simpl in *.
-  - congruence.
-  - destruct eq_dec; [injection Hn as Hn; lia|].
-    destruct index eqn:Hidx; [|congruence].
-    specialize (IHl n1 eq_refl). injection Hn as Hn; lia.
-Qed.
-
 Lemma read_closed_at_aux :
   forall st defs,
     (forall varmap a t, read_thread st defs varmap a t -> closed_at t (length varmap)) /\
@@ -4647,55 +3458,6 @@ Proof.
   erewrite subst_closed_at_ext; [eassumption|apply read_closed_at_val in Hread2; eassumption|].
   intros n Hn; simpl. unfold ren, remap_subst. f_equal.
   rewrite plus_ren_correct. erewrite prefix_varmap_remap; try eassumption. reflexivity.
-Qed.
-
-(*
-Lemma read_extend_varmap_val :
-  forall st defs varmap varmap2 v t, read_val st defs varmap v t -> is_remap_ok (st_freename st) varmap varmap2 -> read_val st defs varmap2 v (subst (remap_subst varmap varmap2) t).
-Proof.
-  intros st defs varmap varmap2 v t H. apply (proj1 (proj2 (read_extend_varmap_aux st defs))); assumption.
-Qed.
-
-Lemma read_extend_varmap_cont :
-  forall st defs varmap varmap2 c h, read_cont st defs varmap c h -> is_remap_ok (st_freename st) varmap varmap2 -> read_cont st defs varmap2 c (subst_hctx (remap_subst varmap varmap2) h).
-Proof.
-  intros st defs varmap varmap2 c h H. apply (proj2 (proj2 (read_extend_varmap_aux st defs))); assumption.
-Qed.
-*)
-
-(*
-Lemma liftn_subst_is_ren :
-  forall p us t, subst (liftn_subst p us) t = subst (ren (plus_ren p)) (subst us t).
-Proof.
-  intros p us t. rewrite subst_subst.
-  eapply subst_closed_at_ext. admit. intros n Hn.
-  unfold liftn_subst, comp, ren; simpl.
-  destruct le_lt_dec.
-  - simpl. admit.
-  - 
- *)
-
-Lemma seq_nth_error :
-  forall len a n, n < len -> nth_error (seq a len) n = Some (a + n).
-Proof.
-  induction len; intros a [|n] Hn; simpl in *; try lia.
-  - f_equal; lia.
-  - rewrite IHlen; [f_equal|]; lia.
-Qed.
-
-Lemma liftn_subst_read_env :
-  forall t p e, closed_at t (p + length e) -> subst (liftn_subst p (read_env e)) t = subst (read_env (map var (seq 0 p) ++ map (subst (ren (plus_ren p))) e)) t.
-Proof.
-  intros t p e Ht. eapply subst_closed_at_ext; [eassumption|]. intros n Hn.
-  unfold liftn_subst, read_env.
-  destruct le_lt_dec.
-  - rewrite nth_error_app2; [|rewrite map_length, seq_length; assumption].
-    rewrite map_length, seq_length, nth_error_map.
-    destruct nth_error eqn:Hnth.
-    + rewrite ren_term_is_subst. reflexivity.
-    + simpl. rewrite nth_error_None in Hnth. lia.
-  - rewrite nth_error_app1 by (rewrite map_length, seq_length; assumption). rewrite nth_error_map.
-    rewrite seq_nth_error by assumption. reflexivity.
 Qed.
 
 
@@ -4912,18 +3674,6 @@ Proof.
   - constructor.
 Qed.
 
-Lemma Forall2_and_Forall_left :
-  forall (A B : Type) (P : A -> B -> Prop) (Q : A -> Prop) (L1 : list A) (L2 : list B), Forall2 P L1 L2 -> Forall Q L1 -> Forall2 (fun x y => P x y /\ Q x) L1 L2.
-Proof.
-  intros A B P Q L1 L2 H1; induction H1; intros H2; inversion H2; subst; constructor; tauto.
-Qed.
-
-Lemma Forall2_and_Forall_right :
-  forall (A B : Type) (P : A -> B -> Prop) (Q : B -> Prop) (L1 : list A) (L2 : list B), Forall2 P L1 L2 -> Forall Q L2 -> Forall2 (fun x y => P x y /\ Q y) L1 L2.
-Proof.
-  intros A B P Q L1 L2 H1; induction H1; intros H2; inversion H2; subst; constructor; tauto.
-Qed.
-
 Lemma makendeeps_dvar_below :
   forall l st e,
     Forall (fun vdeep => Forall (fun x => st_freename st <= x) (fst vdeep)) (snd (makendeeps st l e)).
@@ -4951,76 +3701,6 @@ Proof.
   intros l; induction l as [|[p t2] l]; intros st e; simpl in *; constructor; simpl.
   - apply seq_NoDup.
   - apply IHl.
-Qed.
-
-(*
-Lemma read_dvar_below_aux :
-  forall st defs,
-    (forall varmap a t, read_thread varmap st defs a t -> dvar_below (st_freename st) t) /\
-    (forall varmap v t, read_val varmap st defs v t -> dvar_below (st_freename st) t) /\
-    (forall varmap c h, read_cont varmap st defs c h -> (forall t, dvar_below (st_freename st) t -> dvar_below (st_freename st) (fill_hctx h t))).
-Proof.
-  intros st defs; eapply read_ind.
-  - intros rid v c t h H1 H2 H3 H4 H5.
-    apply H5, H4.
-  - intros rid e el c t h H1 H2 H3 H4 Hdv H5.
-    apply H5.
-    apply dvar_below_subst; [|apply dvar_below_no_dvar; assumption].
-    eapply dvar_below_read_env, Forall2_select2. eassumption.
-  - intros rid t H1 H2.
-    assumption.
-  - intros t e el n f tdeep H1 H2 H3 H4 H5 H6 H7.
-    apply dvar_below_subst; [|constructor; apply dvar_below_no_dvar; assumption].
-    eapply dvar_below_read_env, Forall2_select2. eassumption.
-  - intros tag e el H1 H2.
-    constructor. apply Forall2_select2 in H2. assumption.
-  - intros x c h uf tuf H1 H2 H3 H4 H5.
-    apply H4. constructor. assumption.
-  - intros; simpl; assumption.
-  - intros v c t h H1 H2 H3 H4.
-    intros t2 Ht2. rewrite fill_compose. apply H4.
-    simpl. constructor; assumption.
-  - intros bs e bds tdeeps c el h H1 H2 H3 H4 H5 H6.
-    intros t2 Ht2. rewrite fill_compose. apply H5.
-    simpl. constructor; [assumption|].
-    apply Forall2_select2 in H4.
-    eapply Forall3_impl, Forall3_select12, Forall2_select1 in H3; [|intros ? ? ? (? & ? & ? & ? & Hdv); exact Hdv].
-    rewrite Forall_map. eapply Forall_impl; [|eassumption].
-    intros [p t3] Hpt3. simpl in *.
-    apply dvar_below_subst; [|apply dvar_below_no_dvar; assumption].
-    eapply dvar_below_liftn_subst, dvar_below_read_env.
-    assumption.
-Qed.
-
-Lemma read_dvar_below_thread :
-  forall st defs rid t, read_thread st defs rid t -> dvar_below (st_freename st) t.
-Proof.
-  intros st defs.
-  apply (proj1 (read_dvar_below_aux st defs)).
-Qed.
-
-Lemma read_dvar_below_val :
-  forall st defs v t, read_val st defs v t -> dvar_below (st_freename st) t.
-Proof.
-  intros st defs.
-  apply (proj1 (proj2 (read_dvar_below_aux st defs))).
-Qed.
-
-Lemma read_dvar_below_cont :
-  forall st defs c h, read_cont st defs c h -> forall t, dvar_below (st_freename st) t -> dvar_below (st_freename st) (fill_hctx h t).
-Proof.
-  intros st defs.
-  apply (proj2 (proj2 (read_dvar_below_aux st defs))).
-Qed.
- *)
-
-
-
-Lemma nth_error_update_None :
-  forall (A : Type) l k1 k2 (x : A), nth_error l k1 = None -> nth_error (update l k2 x) k1 = None.
-Proof.
-  intros A l; induction l; intros k1 k2 x H; destruct k1; destruct k2; simpl in *; try congruence.
-  apply IHl. assumption.
 Qed.
 
 Lemma makenlazy_new_threads :
@@ -5069,16 +3749,6 @@ Lemma varmap_ok_cons :
   forall freename varmap x, varmap_ok freename varmap -> x < freename -> x \notin varmap -> varmap_ok freename (x :: varmap).
 Proof.
   intros freename varmap x [H1 H2] H3 H4; split; constructor; assumption.
-Qed.
-
-Lemma NoDup_app :
-  forall (A : Type) (l1 l2 : list  A), NoDup l1 -> NoDup l2 -> Forall (fun x => x \notin l2) l1 -> NoDup (l1 ++ l2).
-Proof.
-  induction l1; intros l2 Hnd1 Hnd2 Hdisj; inversion Hnd1; subst; inversion Hdisj; subst; simpl in *.
-  - assumption.
-  - constructor.
-    + rewrite in_app_iff; tauto.
-    + apply IHl1; assumption.
 Qed.
 
 Lemma varmap_ok_app :
@@ -5516,26 +4186,6 @@ Proof.
     apply Forall2_length in H. rewrite H. constructor.
 Qed.
 
-Lemma Forall4_and :
-  forall A B C D (P Q : A -> B -> C -> D -> Prop) l1 l2 l3 l4, Forall4 P l1 l2 l3 l4 -> Forall4 Q l1 l2 l3 l4 -> Forall4 (fun a b c d => P a b c d /\ Q a b c d) l1 l2 l3 l4.
-Proof.
-  intros A B C D P Q l1 l2 l3 l4 H1 H2; induction H1; simpl in *; inversion H2; subst; constructor; tauto.
-Qed.
-
-Lemma Forall4_unselect123 :
-  forall A B C D (P : A -> B -> C -> Prop) (R : A -> B -> C -> D -> Prop) (l1 : list A) (l2 : list B) (l3 : list C) (l4 : list D), Forall3 P l1 l2 l3 -> Forall4 R l1 l2 l3 l4 -> Forall4 (fun a b c _ => P a b c) l1 l2 l3 l4.
-Proof.
-  intros A B C D P R l1 l2 l3 l4 H1 H2; induction H2; simpl in *; inversion H1; subst; constructor; tauto.
-Qed.
-
-Lemma Forall2_eq :
-  forall (A : Type) (l1 l2 : list A), Forall2 eq l1 l2 -> l1 = l2.
-Proof.
-  intros A l1 l2 H; induction H.
-  - reflexivity.
-  - congruence.
-Qed.
-
 Lemma read_inj_aux :
   forall st defs, (forall varmap a t, read_thread st defs varmap a t -> forall t2, read_thread st defs varmap a t2 -> t = t2) /\
              (forall varmap v t, read_val st defs varmap v t -> forall t2, read_val st defs varmap v t2 -> t = t2) /\
@@ -5827,10 +4477,6 @@ Proof.
   refine (proj1 (proj2 (stable_beta_hnf_aux3 st defs rid _ _)) _ _ _ Hread Hvarmap); assumption.
 Qed.
 
-Inductive reflect (P : Prop) : bool -> Prop :=
-| reflect_true : P -> reflect P true
-| reflect_false : ~ P -> reflect P false.
-
 Inductive read_cthread st defs : cthread -> bool -> Prop :=
 | read_cthread_done : forall b, read_cthread st defs (cthread_done b) b
 | read_cthread_and_true :
@@ -5914,12 +4560,6 @@ Lemma lift_dvars_cons :
     lift_dvars (x :: vars) k t = lift_dvars vars (S k) (lift_dvars (x :: nil) k t).
 Proof.
   intros; apply lift_dvars_app with (vars1 := x :: nil).
-Qed.
-
-Lemma reflect_iff :
-  forall P Q b, P <-> Q -> reflect P b <-> reflect Q b.
-Proof.
-  intros P Q H; split; intros H1; inversion H1; subst; constructor; tauto.
 Qed.
 
 Lemma betaiota_abs_red :
@@ -6215,35 +4855,6 @@ Proof.
   - simpl. f_equal. assumption.
 Qed.
 
-Lemma lift_liftn_1 :
-  forall r, lift r = liftn 1 r.
-Proof.
-  intros r. apply renv_ext. intros [|n].
-  - rewrite lift_renv, liftn_renv_small; lia.
-  - rewrite lift_renv, liftn_renv_large by lia.
-    simpl; f_equal. f_equal. lia.
-Qed.
-
-Lemma liftn_liftn :
-  forall r k1 k2, liftn k1 (liftn k2 r) = liftn (k1 + k2) r.
-Proof.
-  intros r k1 k2. apply renv_ext. intros n.
-  destruct (le_lt_dec k1 n).
-  - rewrite liftn_renv_large by assumption.
-    destruct (le_lt_dec k2 (n - k1)).
-    + rewrite !liftn_renv_large by lia.
-      replace (n - (k1 + k2)) with (n - k1 - k2) by lia. lia.
-    + rewrite !liftn_renv_small; lia.
-  - rewrite !liftn_renv_small; lia.
-Qed.
-
-Lemma liftn_0 :
-  forall r, liftn 0 r = r.
-Proof.
-  intros. apply renv_ext. intros n.
-  rewrite liftn_renv_large by lia. simpl. f_equal. lia.
-Qed.
-
 Lemma lift_dvars_ren_aux :
   forall vars k1 k2 k3 t, ren_term (liftn k1 (plus_ren k3)) (lift_dvars vars (k1 + k2) t) =
                 lift_dvars vars (k3 + k1 + k2) (ren_term (liftn k1 (plus_ren k3)) t).
@@ -6275,23 +4886,6 @@ Proof.
   rewrite H. f_equal. lia.
 Qed.
 
-Lemma liftn_subst_1_subst :
-  forall us t, subst (liftn_subst 1 us) t = subst (lift_subst us) t.
-Proof.
-  intros us t. apply subst_ext, liftn_subst_1.
-Qed.
-
-Lemma liftn_subst_add_subst :
-  forall us t k1 k2, subst (liftn_subst k1 (liftn_subst k2 us)) t = subst (liftn_subst (k1 + k2) us) t.
-Proof.
-  intros; apply subst_ext, liftn_subst_add.
-Qed.
-
-Lemma liftn_subst_0_subst :
-  forall us t, subst (liftn_subst 0 us) t = subst us t.
-Proof.
-  intros us t. apply subst_ext, liftn_subst_0.
-Qed.
 
 Lemma lift_dvars_read_env_aux :
   forall vars k p l t, lift_dvars vars (p + k) (subst (liftn_subst p (read_env l)) t) = subst (liftn_subst p (read_env (map (lift_dvars vars k) l))) (lift_dvars vars (p + length l + k) t).
@@ -6325,14 +4919,6 @@ Lemma lift_dvars_read_env :
 Proof.
   intros vars k l t. assert (H := lift_dvars_read_env_aux vars k 0 l t).
   rewrite !liftn_subst_0_subst in H. assumption.
-Qed.
-
-Lemma subst1_read_env :
-  forall t1 t2, subst1 t1 t2 = subst (read_env (t1 :: nil)) t2.
-Proof.
-  intros t1 t2. apply subst_ext. intros [|n].
-  - reflexivity.
-  - unfold read_env. simpl. destruct n; simpl; f_equal; lia.
 Qed.
 
 Lemma beta_lift_dvars :
@@ -6462,18 +5048,6 @@ Proof.
   intros t3 t4 [Ht34 | Ht34]; constructor; right; assumption.
 Qed.
 
-Lemma read_env_app_subst :
-  forall t e1 e2, subst (read_env (e1 ++ e2)) t = subst (read_env e1) (subst (liftn_subst (length e1) (read_env e2)) t).
-Proof.
-  intros t e1 e2. rewrite subst_subst.
-  eapply subst_ext. apply read_env_app.
-Qed.
-
-Lemma read_env_app_subst1 :
-  forall t e t2, subst (read_env (t2 :: e)) t = subst1 t2 (subst (lift_subst (read_env e)) t).
-Proof.
-  intros t e t2. rewrite subst1_read_env, <- liftn_subst_1_subst, <- read_env_app_subst. reflexivity.
-Qed.
 
 Lemma lift_dvars_subst :
   forall vars k t, NoDup vars -> closed_at t (k + length vars) -> Forall (fun x => dvar_free x t) vars -> lift_dvars vars k (subst (liftn_subst k (read_env (map dvar vars))) t) = t.
@@ -6543,15 +5117,6 @@ Lemma cthread_andn_wf :
 Proof.
   intros freename defs l H; induction H; simpl in *; constructor; assumption.
 Qed.
-
-(*
-Lemma cmp_cont_cthread_wf :
-  forall defs c1 c2 varmap1 varmap2,
-    Forall (fun v => length defs <= v) varmap1 ->
-    Forall (fun v => length defs <= v) varmap2 ->
-    length varmap1 = length varmap2 ->
-    cthread_wf defs (cmp_cont_cthread c1 c2 varmap1 varmap2).
-*)
 
 Lemma is_finished_read_thread :
   forall st rid v defs varmap t, is_finished st rid = Some v -> read_thread st defs varmap rid t -> read_val st defs varmap v t.
@@ -6685,86 +5250,6 @@ Proof.
   intros st defs. induction l; split; intros H; simpl in *; inversion H; subst; constructor; tauto.
 Qed.
 
-Lemma Forall2_from_combine :
-  forall (A B : Type) (P : A * B -> Prop) l1 l2, length l1 = length l2 -> Forall P (combine l1 l2) -> Forall2 (fun x y => P (x, y)) l1 l2.
-Proof.
-  intros A B P; induction l1; intros l2; destruct l2; intros H1 Hforall; simpl in *; try congruence.
-  - constructor.
-  - inversion Hforall; subst. constructor; [assumption|].
-    apply IHl1; [congruence|assumption].
-Qed.
-
-Lemma Forall_square :
-  forall (A B C D : Type) (P : A -> B -> Prop) (Q : C -> D -> Prop) (R : A -> C -> Prop) l1 l2 l3 l4,
-    Forall2 P l1 l2 -> Forall2 Q l3 l4 -> Forall2 R l1 l3 -> Forall2 (fun b d => exists a c, P a b /\ Q c d /\ R a c) l2 l4.
-Proof.
-  intros A B C D P Q R; induction l1; intros l2 l3 l4 H1 H2 H3; inversion H1; subst; inversion H3; subst; inversion H2; subst;
-    constructor.
-  - eexists. eexists. split; [eassumption|]. split; eassumption.
-  - eapply IHl1; eassumption.
-Qed.
-
-Lemma Exists_neg_Forall2 :
-  forall (A B : Type) (P : A -> B -> Prop) l1 l2, Exists (fun xy => ~ P (fst xy) (snd xy)) (combine l1 l2) -> ~ (Forall2 P l1 l2).
-Proof.
-  intros A B P; induction l1; intros l2 H1 H2; destruct l2; simpl in *; inversion H1; subst; inversion H2; subst; simpl in *.
-  - tauto.
-  - eapply IHl1; eassumption.
-Qed.
-
-Lemma Exists_square :
-  forall (A B C D : Type) (P : A -> B -> Prop) (Q : C -> D -> Prop) (R : A * C -> Prop) l1 l2 l3 l4,
-    Forall2 P l1 l2 -> Forall2 Q l3 l4 -> Exists R (combine l1 l3) -> Exists (fun bd => exists a c, P a (fst bd) /\ Q c (snd bd) /\ R (a, c)) (combine l2 l4).
-Proof.
-  intros A B C D P Q R; induction l1; intros l2 l3 l4 H1 H2 H3; inversion H1; subst; simpl in *; inversion H2; subst; simpl in *; inversion H3; subst.
-  - apply Exists_cons_hd. eexists. eexists. split; [eassumption|]. split; eassumption.
-  - apply Exists_cons_tl. eapply IHl1; eassumption.
-Qed.
-
-(*
-Inductive hctx_convertible_i defs : hctx -> hctx -> Prop :=
-| hctx_convertible_i_hole : hctx_convertible_i defs h_hole h_hole
-| hctx_converitble_i_app :
-    forall h1 h2 t1 t2, hctx_convertible defs h1 h2 -> convertible (betaiota defs) t1 t2 ->
-                   hctx_convertible_i defs (h_app h1 t1) (h_app h2 t2)
-| hctx_converitble_i_switch :
-    forall h1 h2 m1 m2,
-      hctx_convertible defs h1 h2 ->
-      Forall2 (fun '(p1, t1) '(p2, t2) => p1 = p2 /\ convertible (betaiota defs) t1 t2) m1 m2 ->
-      hctx_convertible_i defs (h_switch h1 m1) (h_switch h2 m2).
-
-Lemma hctx_convertible_i1 :
-  forall defs h1 h2, hctx_convertible_i defs h1 h2 -> hctx_convertible defs h1 h2.
-Proof.
-  intros defs h1 h2 H. inversion H; subst.
-  - exists h_hole. split; apply star_refl.
-  - destruct H0 as (h4 & H2 & H3).
-    eapply convertible_confluent_common_reduce in H1; [|apply beta_iota_confluent].
-    destruct H1 as (t4 & H4 & H5).
-    exists (h_app h4 t4). split; eapply star_compose.
-    + eapply star_map_impl; [|eassumption]. intros x y Hxy t; simpl.
-      destruct Hxy; constructor; constructor; assumption.
-    + eapply star_map_impl with (f := fun h => h_app h _); [|eassumption].
-      intros x y Hxy t; simpl. destruct (Hxy t); constructor; constructor; assumption.
-    + eapply star_map_impl; [|eassumption]. intros x y Hxy t; simpl.
-      destruct Hxy; constructor; constructor; assumption.
-    + eapply star_map_impl with (f := fun h => h_app h _); [|eassumption].
-      intros x y Hxy t; simpl. destruct (Hxy t); constructor; constructor; assumption.
-  - destruct H0 as (h4 & H2 & H3).
-    admit.
-Admitted.
-
-Lemma hctx_convertible_i2 :
-  forall defs h1 h2, hctx_convertible defs h1 h2 -> hctx_convertible_i defs h1 h2.
-Proof.
-  intros defs h1 h2 H.
-  assert (H2 := convertible_neutral_iff defs h1 h2 (var 0) (var 0) I I).
-  assert (Hconv : convertible (betaiota defs) (fill_hctx h1 (var 0)) (fill_hctx h2 (var 0))) by tauto.
-  destruct h1; destruct h2; subst.
-  - constructor.
-  - exfalso. simpl in Hconv. 
-  apply <- H2 in H.
-*)
 
 Lemma hctx_red_hole :
   forall defs h, hctx_red defs h_hole h -> h = h_hole.
@@ -6954,12 +5439,6 @@ Proof.
   - constructor; assumption.
 Qed.
 
-
-Lemma Forall_combine_from_Forall2 :
-  forall (A B : Type) (P : A * B -> Prop) l1 l2, Forall2 (fun a b => P (a, b)) l1 l2 -> Forall P (combine l1 l2).
-Proof.
-  intros A B P l1 l2 H; induction H; constructor; assumption.
-Qed.
 
 Lemma cmp_cont_cthread_correct_None :
   forall st defs c1 c2 varmap1 varmap2 h1 h2,
@@ -7556,3 +6035,5 @@ Proof.
   - eapply init_conv_correct with (t1 := t1) (t2 := t2); try eassumption.
     destruct init_conv; reflexivity.
 Qed.
+
+Print Assumptions all_correct.

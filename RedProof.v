@@ -12,6 +12,7 @@ Require Import Red.
 Require Import Costar.
 Require Import Pretty.
 Require Import Inductive.
+Require Import Rewrite.
 
 Fixpoint read_nfval v :=
   match v with

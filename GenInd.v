@@ -590,7 +590,8 @@ Ltac2 gen_ind_principle (cl : constr list) :=
       mkfix (List.map (fun c => rec_pos (Constr.type c)) cl) (fresh_n_goal n @Hrec) (List.map2 forall_principle cl pl)
             (map5 (fun c (ind, _, _) => fun p cstrs lhyps hrecs =>
         intro_hyp (Fresh.in_goal @x) c (fun xx =>
-          let branches := List.map2 (fun cstr hcstr => force_prop_t (fun () => rebuild_lam (constrind1 (Constr.type cstr) cstr hcstr cl pl hrecs [] []))) cstrs lhyps in log (rebuild_lam (eta_expand c p));
+          let branches := List.map2 (fun cstr hcstr => force_prop_t (fun () => rebuild_lam (constrind1 (Constr.type cstr) cstr hcstr cl pl hrecs [] []))) cstrs lhyps in
+          (* log (rebuild_lam (eta_expand c p)); *)
           force_prop_t (fun () => Constr.Unsafe.make
             (Constr.Unsafe.Case
                (Constr.Unsafe.case ind)

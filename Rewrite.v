@@ -102,6 +102,14 @@ Proof.
   split; intros Hxy; eapply star_impl; try eassumption; intros; apply H; assumption.
 Qed.
 
+Lemma star_preserve :
+  forall {A : Type} (R : A -> A -> Prop) (P : A -> Prop), (forall x y, R x y -> P x -> P y) -> forall x y, P x -> star R x y -> P y.
+Proof.
+  intros A R P H x y Hx Hxy. induction Hxy.
+  - assumption.
+  - eapply IHHxy, H, Hx. apply H0.
+Qed.
+
 Lemma flip_star :
   forall (A : Type) (R : A -> A -> Prop) x y, star (flip R) x y -> star R y x.
 Proof.
@@ -503,3 +511,109 @@ Proof.
   intros A R1 R2 L1 L2 H1 H2. eapply step_one_impl_transparent; [|eassumption].
   intros; split; [assumption|apply H1; assumption].
 Defined.
+
+
+Lemma star_list :
+  forall (A B : Type) (RA : A -> A -> Prop) (RB : B -> B -> Prop) (f : list A -> B) l1 l2,
+    (forall l1 l2 x y, RA x y -> RB (f (l1 ++ x :: l2)) (f (l1 ++ y :: l2))) -> Forall2 (star RA) l1 l2 -> star RB (f l1) (f l2).
+Proof.
+  intros A B RA RB f l1 l2 Himpl Hl.
+  enough (H : forall l, star RB (f (l ++ l1)) (f (l ++ l2))); [exact (H nil)|].
+  induction Hl as [|x y l1 l2 Hxy Hl IH].
+  - intros. constructor.
+  - intros l. eapply star_compose.
+    + specialize (IH (l ++ x :: nil)). rewrite <- !app_assoc in IH. apply IH.
+    + eapply star_map_impl with (f := fun t => f (l ++ t :: l2)); [|eassumption].
+      intros; apply Himpl; assumption.
+Qed.
+
+
+Lemma Acc_star_down :
+  forall (A : Type) (R : A -> A -> Prop) x y, Acc R x -> star R y x -> Acc R y.
+Proof.
+  intros A R x y H1 H2. induction H2.
+  - assumption.
+  - apply IHstar in H1. inversion H1.
+    apply H0. assumption.
+Qed.
+
+
+Lemma Acc_plus :
+  forall (A : Type) (R : A -> A -> Prop) x, Acc R x -> Acc (plus R) x.
+Proof.
+  intros A R x H. induction H.
+  constructor. intros y Hy.
+  apply flip_plus_iff in Hy.
+  inversion Hy; subst.
+  - apply H0. assumption.
+  - eapply Acc_star_down; [eapply H0; eassumption|].
+    apply star_1, flip_plus_iff; eassumption.
+Qed.
+
+
+Definition updatep {A B : Type} (f : A -> B -> Prop) (x : A) (P : B -> Prop) (u : A) (v : B) :=
+  (u <> x /\ f u v) \/ (u = x /\ P v).
+
+Inductive AccI {A : Type} (B : A -> Prop) (R : A -> A -> Prop) : A -> Prop :=
+| AccI_base : forall a, B a -> AccI B R a
+| AccI_intro : forall a, (forall b, R b a -> AccI B R b) -> AccI B R a.
+
+Lemma updatep_wf2 :
+  forall (A : Type) (R : A -> A -> Prop) u (P : A -> Prop),
+    (forall v, P v -> AccI (fun v => plus R u v) (flip (updatep R u P)) v) -> well_founded (flip R) -> well_founded (flip (updatep R u P)).
+Proof.
+  intros A R u P H Hwf v.
+  induction (Acc_plus _ _ _ (Hwf v)). constructor.
+  intros v [[Huv HR] | [-> HP]].
+  - apply H1, plus_1, HR.
+  - specialize (H _ HP). clear HP. induction H.
+    + apply H1, flip_plus_iff, H.
+    + constructor. apply H2.
+Qed.
+
+Lemma updatep_wf_none :
+  forall (A : Type) (R : A -> A -> Prop) u (P : A -> Prop),
+    ~ P u -> (forall v, ~ R v u) -> well_founded (flip R) -> well_founded (flip (updatep R u P)).
+Proof.
+  intros A R u P HP Hu Hwf.
+  assert (Hwf1 : forall v, v <> u -> Acc (flip (updatep R u P)) v).
+  - intros v Hv. induction (Hwf v). constructor.
+    intros v [[Huv HR] | [-> HPv]].
+    + apply H0; [assumption|]. intros ->; eapply Hu, HR.
+    + tauto.
+  - intros v. constructor; intros w [[Hvw HR2] | [-> HPw]].
+    + apply Hwf1. intros ->; eapply Hu, HR2.
+    + apply Hwf1. intros ->; apply HP, HPw.
+Qed.
+
+Lemma Acc_ext :
+  forall (A : Type) (R1 R2 : A -> A -> Prop) x, (forall u v, R2 u v -> R1 u v) -> Acc R1 x -> Acc R2 x.
+Proof.
+  intros A R1 R2 x H Hwf; induction Hwf; constructor.
+  intros y HR; apply H1, H, HR.
+Qed.
+
+Lemma AccI_ext :
+  forall (A : Type) (B : A -> Prop) (R1 R2 : A -> A -> Prop) x, (forall u v, R2 u v -> R1 u v) -> AccI B R1 x -> AccI B R2 x.
+Proof.
+  intros A B R1 R2 x H Hwf; induction Hwf.
+  - apply AccI_base; assumption.
+  - apply AccI_intro; intros; apply H1, H, H2.
+Qed.
+
+Lemma well_founded_ext :
+  forall (A : Type) (R1 R2 : A -> A -> Prop), (forall u v, R2 u v -> R1 u v) -> well_founded R1 -> well_founded R2.
+Proof.
+  intros A R1 R2 H Hwf x; eapply Acc_ext; [eassumption|apply Hwf].
+Qed.
+
+Lemma Acc_cycle :
+  forall (A : Type) (R : A -> A -> Prop) x, plus R x x -> Acc (flip R) x -> False.
+Proof.
+  intros A R x Hplus Hacc. induction Hacc.
+  inversion Hplus; subst.
+  - eapply H0; eassumption.
+  - eapply H0; [eassumption|].
+    eapply plus_compose_star_right; [eassumption|].
+    apply star_1; assumption.
+Qed.

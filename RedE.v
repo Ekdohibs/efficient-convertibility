@@ -580,17 +580,17 @@ Proof.
   inversion H; unexistT; subst; unexistT; subst; try discriminate;
     repeat (match goal with [ H : _ /\ (forall (p : _ = shallow), _) |- _ ] => let Hred := fresh "Hred" in let Hrec := fresh "Hrec" in destruct H as [Hred Hrec]; specialize (Hrec eq_refl); simpl in Hrec end).
   - constructor. econstructor; [assumption|]. apply Hrec. reflexivity.
-  - injection Hv as Hv; subst. constructor; constructor.
+  - injection H6 as H6; subst. constructor; constructor.
   - constructor; econstructor; [eassumption|]. apply Hrec. reflexivity.
   - constructor; econstructor; [apply Hred0 | apply Hrec]. reflexivity.
   - constructor; econstructor; [apply H6 | apply Hrec]. reflexivity.
   - constructor; econstructor; [eassumption|eassumption|].
     apply Hrec. reflexivity.
-  - injection Hv as Hv; subst. constructor; econstructor.
+  - injection H6 as H6; subst. constructor; econstructor.
   - constructor; econstructor; [apply Hred0 | apply Hrec]. reflexivity.
   - constructor; econstructor; [eassumption|]. apply Hrec. reflexivity.
   - constructor; econstructor. apply Hrec. reflexivity.
-  - injection Hv as Hv; subst. constructor; econstructor.
+  - injection H6 as H6; subst. constructor; econstructor.
   - constructor; econstructor; try eassumption; [apply H8 | apply Hrec]. reflexivity.
   - constructor; econstructor. apply Hrec. reflexivity.
   - apply out_abort_div in H6. congruence.
@@ -812,7 +812,7 @@ Proof.
     repeat (match goal with [ H : _ /\ (forall (p : _ = deep), _) |- _ ] => let Hred := fresh "Hred" in let Hrec := fresh "Hrec" in destruct H as [Hred Hrec]; specialize (Hrec eq_refl); simpl in Hrec end); simpl in *.
   - constructor; econstructor; [eassumption|].
     eapply Hrec; reflexivity.
-  - injection Hv as; subst. constructor; econstructor.
+  - injection H6 as; subst. constructor; econstructor.
   - constructor; econstructor; [eassumption|].
     eapply Hrec; reflexivity.
   - inversion Hred; unexistT; subst. inversion H11; unexistT; subst.
@@ -821,13 +821,13 @@ Proof.
   - constructor; econstructor; [apply Hred0 | eapply Hrec]; reflexivity.
   - constructor; econstructor; try eassumption.
     eapply Hrec; reflexivity.
-  - injection Hv as; subst. constructor; econstructor.
+  - injection H6 as; subst. constructor; econstructor.
   - apply redE_deep_constr1 in Hred as [v2 Hred]. congruence.
   - constructor; econstructor; [apply H6 | eapply Hrec]; reflexivity.
   - constructor; econstructor; [eassumption|].
     eapply Hrec; reflexivity.
   - constructor; econstructor. eapply Hrec; reflexivity.
-  - injection Hv as; subst. constructor; econstructor.
+  - injection H6 as; subst. constructor; econstructor.
   - constructor; econstructor; try eassumption.
     eapply Hrec; reflexivity.
   - constructor; econstructor. eapply Hrec; reflexivity.
