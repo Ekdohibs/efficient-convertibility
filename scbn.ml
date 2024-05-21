@@ -49,12 +49,16 @@ and env = value ref SMap.t
 
 let fresh = let r = ref 0 in fun prefix -> incr r; prefix ^ string_of_int !r
 
+(*
 let betacnt = ref 0
 let evalcnt = ref 0
 let findcnt = ref 0
+*)
 
 exception Timeout
+(*
 let evalcnt_max = ref max_int
+*)
 
 let makelazy t e =
   match t with
@@ -62,15 +66,15 @@ let makelazy t e =
   | _ -> ref (Lazy (t, e))
 
 let rec eval t e deep_flag =
-  incr evalcnt;
-  if !evalcnt > !evalcnt_max then raise Timeout;
+(*  incr evalcnt;
+  if !evalcnt > !evalcnt_max then raise Timeout; *)
   match t with
   | App (t1, t2) ->
     begin match eval t1 e false with
       | Lazy _ | Blackhole -> assert false
       | Block _ -> assert false (* Typing error *)
       | Clos (x, t0, e0, _) ->
-        incr betacnt;
+(*        incr betacnt; *)
         eval t0 (SMap.add x (makelazy t2 e) e0) deep_flag
       | StructFix (args, t0, e0, vals, 1, body) as v ->
         let arg = eval t2 e false in
@@ -78,7 +82,7 @@ let rec eval t e deep_flag =
           | Lazy _ | Blackhole -> assert false
           | Clos _ -> assert false (* Typing error *)
           | Block _ ->
-            betacnt := !betacnt + List.length args;
+(*            betacnt := !betacnt + List.length args; *)
             let vals =
               ref (StructFix (args, t0, e0, [], List.length args - 1, body)) ::
               List.rev (ref arg :: (List.map fst vals)) in
@@ -116,7 +120,7 @@ let rec eval t e deep_flag =
     in
     Clos (x, t, e, ref z)
   | Var x ->
-    incr findcnt;
+(*    incr findcnt; *)
     let u = SMap.find x e in
     force deep_flag u; !u
   | Constr (tag, l) ->
@@ -130,7 +134,7 @@ let rec eval t e deep_flag =
       | Clos _ -> assert false (* Typing error *)
       | Block (tag, args, b) ->
         let (vars, t1) = List.nth l tag in
-        assert (List.length vars = List.length args);
+(*        assert (List.length vars = List.length args); *)
         let ne = ref e in
         List.iter2 (fun x v -> ne := SMap.add x v !ne) vars args;
         eval t1 !ne deep_flag
@@ -170,7 +174,7 @@ and deepen v =
       b := true
     end
   | StructFix (args, t0, e0, vals, i, body) ->
-    assert (i >= 1);
+(*    assert (i >= 1); *)
     List.iter (fun (v, b) -> if not !b then begin force true v; b := true end) vals;
     if !body = None then begin
       let nvars = List.map (fun name -> fresh ("_" ^ name ^ "_")) args in
@@ -186,13 +190,13 @@ and force deep_flag v =
   | _ -> if deep_flag then deepen !v
 
 let rec eval_cbv t e deep_flag =
-  incr evalcnt;
+(*  incr evalcnt; *)
   match t with
   | App (t1, t2) ->
     begin match eval t1 e false with
       | Lazy _ -> assert false
       | Clos (x, t0, e0, _) ->
-        incr betacnt;
+(*        incr betacnt; *)
         eval t0 (SMap.add x (ref (eval t2 e deep_flag)) e0) deep_flag
       | v -> StructApp (v, eval t2 e true)
     end
@@ -206,7 +210,7 @@ let rec eval_cbv t e deep_flag =
     in
     Clos (x, t, e, ref z)
   | Var x ->
-    incr findcnt;
+(*    incr findcnt; *)
     let u = SMap.find x e in
     begin match !u with
       | Lazy (t1, e1) -> assert false
@@ -222,6 +226,7 @@ let app f x = App (f, x)
 let app2 f x y = app (app f x) y
 let app3 f x y z = app (app2 f x y) z
 let app4 f x y z w = app (app3 f x y z) w
+let app5 f x y z w t = app (app4 f x y z w) t
 
 let protect level1 print level2 ff v =
   if level1 > level2 then
@@ -280,15 +285,15 @@ and print_env ff e =
 let print v = Format.printf "%a@." (print_value 3) v
 
 let run ?(free=[]) ?(deep=true) t =
-  betacnt := 0; evalcnt := 0; findcnt := 0;
+(*  betacnt := 0; evalcnt := 0; findcnt := 0; *)
   let r = eval t (List.fold_left (fun m x -> SMap.add x (ref (Freevar x)) m) SMap.empty free) deep in
-  Format.printf "Beta: %d, Find: %d, Total: %d, Size: %d, Beta*size: %d@." !betacnt !findcnt !evalcnt (size1 t) (!betacnt * size1 t);
+(*  Format.printf "Beta: %d, Find: %d, Total: %d, Size: %d, Beta*size: %d@." !betacnt !findcnt !evalcnt (size1 t) (!betacnt * size1 t); *)
   r
 
 let run_cbv ?(free=[]) ?(deep=true) t =
-  betacnt := 0; evalcnt := 0; findcnt := 0;
+(*  betacnt := 0; evalcnt := 0; findcnt := 0; *)
   let r = eval_cbv t (List.fold_left (fun m x -> SMap.add x (ref (Freevar x)) m) SMap.empty free) deep in
-  Format.printf "Beta: %d, Find: %d, Total: %d, Size: %d, Beta*size: %d@." !betacnt !findcnt !evalcnt (size1 t) (!betacnt * size1 t);
+(*  Format.printf "Beta: %d, Find: %d, Total: %d, Size: %d, Beta*size: %d@." !betacnt !findcnt !evalcnt (size1 t) (!betacnt * size1 t); *)
   r
 
 let run_and_print ?free ?deep t =
@@ -335,9 +340,22 @@ let church_pred =
   let n, f, x, g, h, u = fresh "n", fresh "f", fresh "x", fresh "g", fresh "h", fresh "u" in
   Lam (n, Lam (f, Lam (x, app3 (Var n) (Lam (g, Lam (h, app (Var h) (app (Var g) (Var f))))) (Lam (u, Var x)) (Lam (u, Var u)))))
 
+(*
 let church_fact =
   let nxt = Lam ("p", app (Var "p") (Lam ("a", Lam ("b", Lam ("z", app2 (Var "z") (app church_succ (Var "a")) (app2 church_mul (Var "a") (Var "b"))))))) in
   Lam ("n", app3 (Var "n") nxt (Lam ("u", app2 (Var "u") (church 1) (church 1))) (Lam ("c", Lam ("d", Var "d"))))
+*)
+
+let church_fact =
+  let nxt =
+    Lam ("p", Lam ("z",
+      app (Var "p") (Lam ("a", Lam ("b",
+        app2 (Var "z")
+          (Lam ("f", Lam ("x", app2 (Var "a") (Var "f") (app (Var "f") (Var "x")))))
+          (Lam ("f", Lam ("x", app2 (Var "a") (app (Var "b") (Var "f")) (Var "x")))))))))
+  in
+  Lam ("n", app5 (Var "n") nxt (Lam ("z", Var "z")) (Lam ("c", Lam ("d", Var "d"))) (Lam ("f", Lam ("x", app (Var "f") (Var "x")))) (Lam ("f", Lam ("x", app (Var "f") (Var "x")))))
+
 
 let church_is_even =
   Lam ("n", app2 (Var "n") (Lam ("b", Lam ("x", Lam ("y", app2 (Var "b") (Var "y") (Var "x"))))) (Lam ("x", Lam ("y", Var "x"))))
@@ -357,6 +375,9 @@ let peano_mul pa =
 let peano_fact pm =
   Fix (["fact"; "n"], Switch (Var "n", [([], peano 1); (["n1"], app2 pm (Var "n") (app (Var "fact") (Var "n1")))]))
 
+let peano_is_even =
+  Fix (["is_even"; "n"], Switch (Var "n", [([], Constr (1, [])); (["n1"], Switch (Var "n1", [([], Constr (0, [])); (["n2"], app (Var "is_even") (Var "n2"))]))]))
+
 let boom = Lam ("x", Var "x")
 
 let nth =
@@ -375,6 +396,62 @@ let rec db_encode t e =
   | Lam (x, t) -> Constr (1, [db_encode t (x :: e)])
   | App (t1, t2) -> Constr (2, [db_encode t1 e; db_encode t2 e])
   | _ -> assert false
+
+let[@inline never] running_time f =
+  Gc.full_major ();
+  let start = Unix.gettimeofday () in
+  match f () with
+  | r -> let stop = Unix.gettimeofday () in Format.eprintf "Took %fs@." (stop -. start); r
+  | exception e -> let stop = Unix.gettimeofday () in Format.eprintf "Took %fs@." (stop -. start); raise e
+
+let rec pp_term_at level ff t =
+  let show lvl =
+    if level >= lvl then begin
+      Format.fprintf ff
+    end else begin
+      Format.fprintf ff "("; Format.kfprintf (fun ff -> Format.fprintf ff ")") ff
+    end
+  in
+  match t with
+  | Var x -> show 0 "%s" x
+  | Lam (x, t) -> show 2 "λ%s. %a" x (pp_term_at 2) t
+  | App (t1, t2) -> show 1 "%a %a" (pp_term_at 1) t1 (pp_term_at 0) t2
+  | Constr (n, []) -> show 0 "#%d" n
+  | Constr (n, l) ->
+    show 1 "#%d %a" n
+      (Format.pp_print_list ~pp_sep:(fun ff () -> Format.fprintf ff " ") (pp_term_at 0)) l
+  | Switch (t, l) ->
+    show 2 "match %a with%t" (pp_term_at 2) t
+      (fun ff ->
+         List.iteri (fun i (v, t) ->
+             Format.fprintf ff " | #%d" i;
+             List.iter (Format.fprintf ff " %s") v;
+             Format.fprintf ff " -> %a" (pp_term_at 2) t) l)
+  | Fix (l, t) ->
+    let f, l = List.hd l, List.tl l in
+    show 2 "fix %s %a := %a end" f
+      (Format.pp_print_list ~pp_sep:(fun ff () -> Format.fprintf ff " ") Format.pp_print_string) l
+      (pp_term_at 2) t
+
+let pp_term = pp_term_at 2
+
+let test_red ?(name = "") t =
+  Format.eprintf "====== %s@." name;
+  Format.eprintf "t = %a@." pp_term t;
+  let r = running_time (fun () -> eval t SMap.empty true) in
+  (* print r; *)
+  ()
+
+let () = test_red ~name:"test1p" (app (peano_fact (peano_mul peano_add)) (peano 9))
+let () = test_red ~name:"test2p" (app peano_is_even (app (peano_fact (peano_mul peano_add)) (peano 9)))
+let () = test_red ~name:"test3p" (app2 (peano_mul peano_add) (peano 256) (peano 64))
+let () = test_red ~name:"test4p" (Lam ("x", Lam ("y", app2 (peano_mul peano_add) (app2 peano_add (peano 128) (Var "x")) (app2 peano_add (peano 128) (Var "y")))))
+
+let () = test_red ~name:"test1c" (app church_fact (church 9))
+let () = test_red ~name:"test2c" (app church_is_even (app church_fact (church 9)))
+let () = test_red ~name:"test3c" (app2 church_mul (church 256) (church 64))
+let () = test_red ~name:"test4c" (Lam ("x", Lam ("y", app2 church_mul (app2 church_add (church 128) (Var "x")) (app2 church_add (church 128) (Var "y")))))
+
 
 (*
 let () = run_and_print (app church_succ (church 4))
@@ -469,6 +546,7 @@ let rec compile1 ff (df, t) =
 let compile ff t =
   Format.fprintf ff "let result = %a let () = Format.printf \"%%a@@.\" print result" compile1 (Deep, t)
 
+(*
 let () = Format.printf "%s@." compile1_prelude
 let c t = Format.printf "%a@." compile t
 let cn t = Format.printf "let result = %a" compile1 (Deep, t)
@@ -476,9 +554,11 @@ let () = c (app church_succ (church 4))
 let () = c (app2 church_pow (church 10) (church 2))
 let () = c (app church_is_even (app2 church_pow (church 10) (church 7)))
 let () = cn (app2 church_pow (church 10) (church 5))
+*)
+
 (* let () = ignore (run (app2 church_pow (church 10) (church 4))) *)
 
-
+(*
 let () = Random.init 42
 let rec randterm n l =
   if n = 0 then
@@ -616,9 +696,7 @@ let () =
   for i = 1 to 10000 do
     run_diverging i (randterm 11 []);
   done
-
-
-
+*)
 
 (*
 let () = run_and_print (app church_succ (church 4))
@@ -650,6 +728,7 @@ let () = ignore (run (Lam ("x", Lam ("y", app2 church_mul (app2 church_add (chur
 (* let () = ignore (run (app church_fact (church 9))) *)
 let () = ignore (run (app2 church_pow (church 10) (church 7)))
 *)
+
 
 (* let () = ignore (run (app2 church_pow (church 10) (church 4))) *)
 (* let () = ignore (run (app2 church_mul (church 100) (church 300))) *)
