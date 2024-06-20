@@ -1,0 +1,51 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Module Pretty</title>
+<meta name="description" content="Documentation of Coq module Pretty" />
+<link href="coq2html.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body onload="hideAll('proofscript')">
+<h1 class="title">Module Pretty</h1>
+<div class="coq">
+<br/>
+<span class="kwd">Inductive</span> <span class="id"><a name="out">out</a></span> <span class="id">t</span> :=<br/>
+| <span class="id"><a name="out_ret">out_ret</a></span> : <span class="id">t</span> -&gt; <span class="id">out</span> <span class="id">t</span><br/>
+| <span class="id"><a name="out_div">out_div</a></span> : <span class="id">out</span> <span class="id">t</span>.<br/>
+<br/>
+<span class="kwd">Arguments</span> <span class="id"><a href="Pretty.html#out_ret">out_ret</a></span> {<span class="id">t</span>} <span class="id">_</span>.<br/>
+<span class="kwd">Arguments</span> <span class="id"><a href="Pretty.html#out_div">out_div</a></span> {<span class="id">t</span>}.<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="out_map">out_map</a></span> {<span class="id">A</span> <span class="id">B</span> : <span class="kwd">Type</span>} (<span class="id">f</span> : <span class="id">A</span> -&gt; <span class="id">B</span>) (<span class="id">o</span> : <span class="id"><a href="Pretty.html#out">out</a></span> <span class="id">A</span>) : <span class="id"><a href="Pretty.html#out">out</a></span> <span class="id">B</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">o</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="id"><a href="Pretty.html#out_ret">out_ret</a></span> <span class="id">x</span> =&gt; <span class="id"><a href="Pretty.html#out_ret">out_ret</a></span> (<span class="id">f</span> <span class="id">x</span>)<br/>
+&nbsp;&nbsp;| <span class="id"><a href="Pretty.html#out_div">out_div</a></span> =&gt; <span class="id"><a href="Pretty.html#out_div">out_div</a></span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="get_out_abort">get_out_abort</a></span> {<span class="id">t1</span> <span class="id">t2</span>} (<span class="id">o</span> : <span class="id"><a href="Pretty.html#out">out</a></span> <span class="id">t1</span>) : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#option">option</a></span> (<span class="id"><a href="Pretty.html#out">out</a></span> <span class="id">t2</span>) :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">o</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="id"><a href="Pretty.html#out_div">out_div</a></span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id"><a href="Pretty.html#out_div">out_div</a></span><br/>
+&nbsp;&nbsp;| <span class="id">_</span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="get_out_abort_div">get_out_abort_div</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">t1</span> <span class="id">t2</span> (<span class="id">o1</span> : <span class="id"><a href="Pretty.html#out">out</a></span> <span class="id">t1</span>) (<span class="id">o2</span> : <span class="id"><a href="Pretty.html#out">out</a></span> <span class="id">t2</span>), <span class="id"><a href="Pretty.html#get_out_abort">get_out_abort</a></span> <span class="id">o1</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">o2</span> -&gt; <span class="id">o2</span> = <span class="id"><a href="Pretty.html#out_div">out_div</a></span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>; <span class="id">destruct</span> <span class="id">o1</span>; <span class="id">simpl</span> <span class="kwd">in</span> *; <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Inductive</span> <span class="id"><a name="outM">outM</a></span> <span class="id">t</span> <span class="id">m</span> :=<br/>
+| <span class="id"><a name="outM_ret">outM_ret</a></span> : <span class="id">t</span> -&gt; <span class="id">m</span> -&gt; <span class="id">outM</span> <span class="id">t</span> <span class="id">m</span><br/>
+| <span class="id"><a name="outM_div">outM_div</a></span> : <span class="id">outM</span> <span class="id">t</span> <span class="id">m</span>.<br/>
+<br/>
+<span class="kwd">Arguments</span> <span class="id"><a href="Pretty.html#outM_ret">outM_ret</a></span> {<span class="id">t</span>} {<span class="id">m</span>} <span class="id">_</span> <span class="id">_</span>.<br/>
+<span class="kwd">Arguments</span> <span class="id"><a href="Pretty.html#outM_div">outM_div</a></span> {<span class="id">t</span>} {<span class="id">m</span>}.<br/>
+
+</div>
+<div class="footer"><hr/>Generated by <a href="https://github.com/xavierleroy/coq2html/">coq2html</a></div>
+</body>
+</html>

@@ -4,7 +4,7 @@ Require Import Freevar.
 Require Import Misc.
 Require Import Psatz.
 
-(* Terms *)
+(** Terms *)
 
 Inductive term :=
 | bvar : nat -> term
@@ -1047,7 +1047,7 @@ Proof.
   - apply IHxs. assumption.
 Qed.
 
-(* Multicontexts *)
+(** Multicontexts *)
 
 Definition multicontext := (freevar * term)%type.
 

@@ -1,0 +1,299 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Module Freevar</title>
+<meta name="description" content="Documentation of Coq module Freevar" />
+<link href="coq2html.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body onload="hideAll('proofscript')">
+<h1 class="title">Module Freevar</h1>
+<div class="coq">
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html">List</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Arith.Arith.html">Arith</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.micromega.Psatz.html">Psatz</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="Misc.html">Misc</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Setoids.Setoid.html">Setoid</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.Morphisms.html">Morphisms</a></span>.<br/>
+<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="freevar">freevar</a></span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span>.<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="freevar_eq_dec">freevar_eq_dec</a></span> : <span class="kwd">forall</span> (<span class="id">v1</span> <span class="id">v2</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>), { <span class="id">v1</span> = <span class="id">v2</span> } + { <span class="id">v1</span> &lt;&gt; <span class="id">v2</span> }.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">apply</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Arith.PeanoNat.html#Nat.eq_dec">Nat.eq_dec</a></span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="freevar_eq_dec_eq">freevar_eq_dec_eq</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">v1</span> <span class="id">v2</span> (<span class="id">P</span> : <span class="id">v1</span> = <span class="id">v2</span>), <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">v1</span> <span class="id">v2</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Specif.html#left">left</a></span> <span class="id">P</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">v1</span> <span class="id">v2</span> <span class="id">H</span>. <span class="id">subst</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; [|<span class="id">exfalso</span>; <span class="id">tauto</span>].<br/>
+&nbsp;&nbsp;<span class="id">f_equal</span>. <span class="id">erewrite</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Arith.Peano_dec.html#UIP_nat">UIP_nat</a></span>. <span class="id">reflexivity</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="freevar_eq_dec_eq_ifte">freevar_eq_dec_eq_ifte</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">ifso</span> <span class="id">ifelse</span> : <span class="id">A</span>) <span class="id">v1</span> <span class="id">v2</span>, <span class="id">v1</span> = <span class="id">v2</span> -&gt; (<span class="kwd">if</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">v1</span> <span class="id">v2</span> <span class="kwd">then</span> <span class="id">ifso</span> <span class="kwd">else</span> <span class="id">ifelse</span>) = <span class="id">ifso</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="freevar_eq_dec_neq_ifte">freevar_eq_dec_neq_ifte</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">ifso</span> <span class="id">ifelse</span> : <span class="id">A</span>) <span class="id">v1</span> <span class="id">v2</span>, <span class="id">v1</span> &lt;&gt; <span class="id">v2</span> -&gt; (<span class="kwd">if</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">v1</span> <span class="id">v2</span> <span class="kwd">then</span> <span class="id">ifso</span> <span class="kwd">else</span> <span class="id">ifelse</span>) = <span class="id">ifelse</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="fresh">fresh</a></span> : <span class="kwd">forall</span> (<span class="id">L</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span>), { <span class="id">x</span> | <span class="id">x</span> \<span class="id">notin</span> <span class="id">L</span> }.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">L</span>.<br/>
+&nbsp;&nbsp;<span class="id">assert</span> (<span class="id">H</span> : { <span class="id">x</span> | <span class="kwd">forall</span> <span class="id">y</span>, <span class="id">y</span> \<span class="kwd">in</span> <span class="id">L</span> -&gt; <span class="id">y</span> &lt; <span class="id">x</span> }).<br/>
+&nbsp;&nbsp;- <span class="id">induction</span> <span class="id">L</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="kwd">exists</span> 0. <span class="id">intros</span> <span class="id">y</span> [].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">destruct</span> <span class="id">IHL</span> <span class="kwd">as</span> [<span class="id">x</span> <span class="id">IH</span>].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">exists</span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Arith.PeanoNat.html#Nat.max">Nat.max</a></span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#S">S</a></span> <span class="id">a</span>) <span class="id">x</span>); <span class="id">unfold</span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> <span class="kwd">in</span> *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">intros</span> <span class="id">y</span> [<span class="id">Hy</span> | <span class="id">Hy</span>]; [|<span class="id">specialize</span> (<span class="id">IH</span> <span class="id">y</span> <span class="id">Hy</span>)]; <span class="id">lia</span>.<br/>
+&nbsp;&nbsp;- <span class="id">destruct</span> <span class="id">H</span> <span class="kwd">as</span> [<span class="id">x</span> <span class="id">Hx</span>]; <span class="kwd">exists</span> <span class="id">x</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">intros</span> <span class="id">H</span>; <span class="id">apply</span> <span class="id">Hx</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">lia</span>.<br/>
+Qed.</details>
+<span class="id">Global</span> <span class="kwd">Opaque</span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span>.<br/>
+<br/>
+<span class="kwd">Notation</span> "'<span class="kwd">forall</span>' <span class="id">x</span> '∉' <span class="id">L</span> , <span class="id">P</span>" := (<span class="kwd">forall</span> (<span class="id">x</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>), ~ <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#In">In</a></span> <span class="id">x</span> <span class="id">L</span> -&gt; <span class="id">P</span>) (<span class="kwd">at</span> <span class="id">level</span> 200, <span class="id">x</span> <span class="id">ident</span>, <span class="id">only</span> <span class="id">printing</span>).<br/>
+<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pick</span>" <span class="id">ident</span>(<span class="id">x</span>) "\<span class="id">notin</span>" <span class="id">uconstr</span>(<span class="id">L</span>) "<span class="kwd">as</span>" <span class="id">ident</span>(<span class="id">H</span>) := <span class="id">refine</span> (<span class="kwd">match</span> (<span class="id"><a href="Freevar.html#fresh">fresh</a></span> <span class="id">L</span>) <span class="kwd">with</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Specif.html#exist">exist</a></span> <span class="id">_</span> <span class="id">x</span> <span class="id">H</span> =&gt; <span class="id">_</span> <span class="kwd">end</span>).<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pick</span>" <span class="id">ident</span>(<span class="id">x</span>) "\<span class="id">notin</span>" <span class="id">uconstr</span>(<span class="id">L</span>) := (<span class="kwd">let</span> <span class="id">H</span> := <span class="id">fresh</span> "<span class="id">H</span>" <span class="kwd">in</span> <span class="id">pick</span> <span class="id">x</span> \<span class="id">notin</span> <span class="id">L</span> <span class="kwd">as</span> <span class="id">H</span>).<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pick</span>" <span class="id">ident</span>(<span class="id">x</span>) "∉" <span class="id">uconstr</span>(<span class="id">L</span>) "<span class="kwd">as</span>" <span class="id">ident</span>(<span class="id">H</span>) := (<span class="id">pick</span> <span class="id">x</span> \<span class="id">notin</span> <span class="id">L</span> <span class="kwd">as</span> <span class="id">H</span>).<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pick</span>" <span class="id">ident</span>(<span class="id">x</span>) "∉" <span class="id">uconstr</span>(<span class="id">L</span>) := (<span class="kwd">let</span> <span class="id">H</span> := <span class="id">fresh</span> "<span class="id">H</span>" <span class="kwd">in</span> <span class="id">pick</span> <span class="id">x</span> \<span class="id">notin</span> <span class="id">L</span> <span class="kwd">as</span> <span class="id">H</span>).<br/>
+<br/>
+<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="list_remove">list_remove</a></span> <span class="id">x</span> <span class="id">L</span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter">filter</a></span> (<span class="kwd">fun</span> <span class="id">y</span> =&gt; <span class="kwd">if</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">x</span> <span class="id">y</span> <span class="kwd">then</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#false">false</a></span> <span class="kwd">else</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span>) <span class="id">L</span>.<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="list_remove_correct">list_remove_correct</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">x</span> <span class="id">y</span> <span class="id">L</span>, <span class="id">y</span> \<span class="kwd">in</span> <span class="id"><a href="Freevar.html#list_remove">list_remove</a></span> <span class="id">x</span> <span class="id">L</span> &lt;-&gt; <span class="id">y</span> \<span class="kwd">in</span> <span class="id">L</span> /\ <span class="id">x</span> &lt;&gt; <span class="id">y</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">x</span> <span class="id">y</span> <span class="id">L</span>.<br/>
+&nbsp;&nbsp;<span class="id">unfold</span> <span class="id"><a href="Freevar.html#list_remove">list_remove</a></span>. <span class="id">rewrite</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter_In">filter_In</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">intuition</span> <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="list_remove_app">list_remove_app</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">x</span> <span class="id">L1</span> <span class="id">L2</span>, <span class="id"><a href="Freevar.html#list_remove">list_remove</a></span> <span class="id">x</span> (<span class="id">L1</span> ++ <span class="id">L2</span>) = <span class="id"><a href="Freevar.html#list_remove">list_remove</a></span> <span class="id">x</span> <span class="id">L1</span> ++ <span class="id"><a href="Freevar.html#list_remove">list_remove</a></span> <span class="id">x</span> <span class="id">L2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">unfold</span> <span class="id"><a href="Freevar.html#list_remove">list_remove</a></span>. <span class="id">induction</span> <span class="id">L1</span>.<br/>
+&nbsp;&nbsp;- <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">simpl</span>; <span class="id">rewrite</span> <span class="id">IHL1</span>; <span class="id">reflexivity</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="list_diff">list_diff</a></span> (<span class="id">L1</span> <span class="id">L2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) := <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter">filter</a></span> (<span class="kwd">fun</span> <span class="id">x</span> =&gt; <span class="kwd">if</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#in_dec">in_dec</a></span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">x</span> <span class="id">L2</span> <span class="kwd">then</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#false">false</a></span> <span class="kwd">else</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span>) <span class="id">L1</span>.<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="list_diff_In_iff">list_diff_In_iff</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">x</span>, <span class="id">x</span> \<span class="kwd">in</span> <span class="id"><a href="Freevar.html#list_diff">list_diff</a></span> <span class="id">L1</span> <span class="id">L2</span> &lt;-&gt; <span class="id">x</span> \<span class="kwd">in</span> <span class="id">L1</span> /\ <span class="id">x</span> \<span class="id">notin</span> <span class="id">L2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">x</span>. <span class="id">unfold</span> <span class="id"><a href="Freevar.html#list_diff">list_diff</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter_In">filter_In</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#in_dec">in_dec</a></span>; <span class="id">intuition</span> <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="list_diff_inc_Proper">list_diff_inc_Proper</a></span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.Morphisms.html#Proper">Proper</a></span> (<span class="id"><a href="Misc.html#list_inc">list_inc</a></span> ++&gt; <span class="id"><a href="Misc.html#list_inc">list_inc</a></span> --&gt; <span class="id"><a href="Misc.html#list_inc">list_inc</a></span>) <span class="id"><a href="Freevar.html#list_diff">list_diff</a></span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">H12</span> <span class="id">L3</span> <span class="id">L4</span> <span class="id">H34</span> <span class="id">x</span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> !<span class="id"><a href="Freevar.html#list_diff_In_iff">list_diff_In_iff</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id">H12</span>. <span class="id">rewrite</span> <span class="id">H34</span>.<br/>
+&nbsp;&nbsp;<span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="list_diff_same_Proper">list_diff_same_Proper</a></span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.Morphisms.html#Proper">Proper</a></span> (<span class="id"><a href="Misc.html#list_same">list_same</a></span> ==&gt; <span class="id"><a href="Misc.html#list_same">list_same</a></span> ==&gt; <span class="id"><a href="Misc.html#list_same">list_same</a></span>) <span class="id"><a href="Freevar.html#list_diff">list_diff</a></span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">H12</span> <span class="id">L3</span> <span class="id">L4</span> <span class="id">H34</span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id"><a href="Misc.html#list_same_inc_iff">list_same_inc_iff</a></span> <span class="kwd">in</span> *.<br/>
+&nbsp;&nbsp;<span class="id">split</span>; <span class="id">apply</span> <span class="id"><a href="Freevar.html#list_diff_inc_Proper">list_diff_inc_Proper</a></span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="list_inter">list_inter</a></span> <span class="id">L1</span> <span class="id">L2</span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter">filter</a></span> (<span class="kwd">fun</span> <span class="id">y</span> =&gt; <span class="kwd">if</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#in_dec">in_dec</a></span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">y</span> <span class="id">L1</span> <span class="kwd">then</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span> <span class="kwd">else</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#false">false</a></span>) <span class="id">L2</span>.<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="list_inter_correct">list_inter_correct</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">x</span>, <span class="id">x</span> \<span class="kwd">in</span> <span class="id"><a href="Freevar.html#list_inter">list_inter</a></span> <span class="id">L1</span> <span class="id">L2</span> &lt;-&gt; <span class="id">x</span> \<span class="kwd">in</span> <span class="id">L1</span> /\ <span class="id">x</span> \<span class="kwd">in</span> <span class="id">L2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">x</span>. <span class="id">unfold</span> <span class="id"><a href="Freevar.html#list_inter">list_inter</a></span>. <span class="id">rewrite</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter_In">filter_In</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#in_dec">in_dec</a></span>; <span class="id">try</span> <span class="id">tauto</span>. <span class="id">assert</span> (~ (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#false">false</a></span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span>)) <span class="kwd">by</span> <span class="id">discriminate</span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="list_inter_subl1">list_inter_subl1</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">L1</span> <span class="id">L2</span>, <span class="id"><a href="Freevar.html#list_inter">list_inter</a></span> <span class="id">L1</span> <span class="id">L2</span> \<span class="id">subseteq</span> <span class="id">L1</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">x</span>; <span class="id">rewrite</span> <span class="id"><a href="Freevar.html#list_inter_correct">list_inter_correct</a></span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="list_inter_subl2">list_inter_subl2</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">L1</span> <span class="id">L2</span>, <span class="id"><a href="Freevar.html#list_inter">list_inter</a></span> <span class="id">L1</span> <span class="id">L2</span> \<span class="id">subseteq</span> <span class="id">L2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">x</span>; <span class="id">rewrite</span> <span class="id"><a href="Freevar.html#list_inter_correct">list_inter_correct</a></span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="list_inter_subr">list_inter_subr</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">L3</span>, <span class="id">L1</span> \<span class="id">subseteq</span> <span class="id"><a href="Freevar.html#list_inter">list_inter</a></span> <span class="id">L2</span> <span class="id">L3</span> &lt;-&gt; <span class="id">L1</span> \<span class="id">subseteq</span> <span class="id">L2</span> /\ <span class="id">L1</span> \<span class="id">subseteq</span> <span class="id">L3</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">L3</span>; <span class="id">split</span>.<br/>
+&nbsp;&nbsp;- <span class="id">intros</span> <span class="id">H</span>; <span class="id">split</span>; <span class="id">intros</span> <span class="id">x</span>; <span class="id">specialize</span> (<span class="id">H</span> <span class="id">x</span>); <span class="id">rewrite</span> <span class="id"><a href="Freevar.html#list_inter_correct">list_inter_correct</a></span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">tauto</span>.<br/>
+&nbsp;&nbsp;- <span class="id">intros</span> [<span class="id">H1</span> <span class="id">H2</span>] <span class="id">x</span>; <span class="id">specialize</span> (<span class="id">H1</span> <span class="id">x</span>); <span class="id">specialize</span> (<span class="id">H2</span> <span class="id">x</span>); <span class="id">rewrite</span> <span class="id"><a href="Freevar.html#list_inter_correct">list_inter_correct</a></span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<br/>
+<span class="kwd">Inductive</span> <span class="id"><a name="distinct">distinct</a></span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
+| <span class="id"><a name="distinct_nil">distinct_nil</a></span> : <span class="kwd">forall</span> <span class="id">L</span>, <span class="id">distinct</span> <span class="id">L</span> 0 <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span><br/>
+| <span class="id"><a name="distinct_cons">distinct_cons</a></span> : <span class="kwd">forall</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">x</span> <span class="id">n</span>, <span class="id">x</span> \<span class="id">notin</span> <span class="id">L1</span> -&gt; <span class="id">distinct</span> (<span class="id">x</span> :: <span class="id">L1</span>) <span class="id">n</span> <span class="id">L2</span> -&gt; <span class="id">distinct</span> <span class="id">L1</span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#S">S</a></span> <span class="id">n</span>) (<span class="id">x</span> :: <span class="id">L2</span>).<br/>
+<br/>
+<span class="kwd">Fixpoint</span> <span class="id"><a name="fresh_list">fresh_list</a></span> <span class="id">L</span> <span class="id">n</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">n</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#O">O</a></span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span><br/>
+&nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#S">S</a></span> <span class="id">n</span> =&gt; <span class="kwd">let</span> <span class="id">x</span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Specif.html#proj1_sig">proj1_sig</a></span> (<span class="id"><a href="Freevar.html#fresh">fresh</a></span> <span class="id">L</span>) <span class="kwd">in</span> <span class="id">x</span> :: <span class="id">fresh_list</span> (<span class="id">x</span> :: <span class="id">L</span>) <span class="id">n</span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="fresh_list_distinct">fresh_list_distinct</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">n</span> <span class="id">L</span>, <span class="id"><a href="Freevar.html#distinct">distinct</a></span> <span class="id">L</span> <span class="id">n</span> (<span class="id"><a href="Freevar.html#fresh_list">fresh_list</a></span> <span class="id">L</span> <span class="id">n</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">induction</span> <span class="id">n</span> <span class="kwd">as</span> [|<span class="id">n</span>]; <span class="id">intros</span> <span class="id">L</span>; <span class="id">simpl</span>.<br/>
+&nbsp;&nbsp;- <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;- <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">destruct</span> <span class="id"><a href="Freevar.html#fresh">fresh</a></span>. <span class="id">simpl</span>. <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">apply</span> <span class="id">IHn</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="distinct_distinct">distinct_distinct</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">n</span> <span class="id">x</span> <span class="id">L1</span> <span class="id">L2</span>, <span class="id"><a href="Freevar.html#distinct">distinct</a></span> <span class="id">L1</span> <span class="id">n</span> <span class="id">L2</span> -&gt; <span class="id">x</span> \<span class="kwd">in</span> <span class="id">L1</span> -&gt; <span class="id">x</span> \<span class="kwd">in</span> <span class="id">L2</span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#False">False</a></span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">n</span> <span class="id">x</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">H</span>. <span class="id">induction</span> <span class="id">H</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">tauto</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">intros</span> <span class="id">H1</span> [-&gt; | <span class="id">H2</span>]; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="distinct_incl">distinct_incl</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">n</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">L</span>, <span class="id">L2</span> \<span class="id">subseteq</span> <span class="id">L1</span> -&gt; <span class="id"><a href="Freevar.html#distinct">distinct</a></span> <span class="id">L1</span> <span class="id">n</span> <span class="id">L</span> -&gt; <span class="id"><a href="Freevar.html#distinct">distinct</a></span> <span class="id">L2</span> <span class="id">n</span> <span class="id">L</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">n</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">L</span> <span class="id">Hinc</span> <span class="id">H</span>. <span class="id">revert</span> <span class="id">L2</span> <span class="id">Hinc</span>. <span class="id">induction</span> <span class="id">H</span>; <span class="id">intros</span> <span class="id">L3</span> <span class="id">Hinc</span>.<br/>
+&nbsp;&nbsp;- <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;- <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">rewrite</span> <span class="id">Hinc</span>. <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">apply</span> <span class="id">IHdistinct</span>. <span class="id">rewrite</span> <span class="id">Hinc</span>. <span class="id">prove_list_inc</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="distinct_length">distinct_length</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">n</span> <span class="id">L1</span> <span class="id">L2</span>, <span class="id"><a href="Freevar.html#distinct">distinct</a></span> <span class="id">L1</span> <span class="id">n</span> <span class="id">L2</span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#length">length</a></span> <span class="id">L2</span> = <span class="id">n</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">n</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">H</span>. <span class="id">induction</span> <span class="id">H</span>.<br/>
+&nbsp;&nbsp;- <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">f_equal</span>. <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="notin_app_iff">notin_app_iff</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">x</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) <span class="id">L1</span> <span class="id">L2</span>, <span class="id">x</span> \<span class="id">notin</span> <span class="id">L1</span> ++ <span class="id">L2</span> &lt;-&gt; <span class="id">x</span> \<span class="id">notin</span> <span class="id">L1</span> /\ <span class="id">x</span> \<span class="id">notin</span> <span class="id">L2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">rewrite</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#in_app_iff">in_app_iff</a></span>. <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="notin_app_l">notin_app_l</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">x</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) <span class="id">L1</span> <span class="id">L2</span>, <span class="id">x</span> \<span class="id">notin</span> <span class="id">L1</span> ++ <span class="id">L2</span> -&gt; <span class="id">x</span> \<span class="id">notin</span> <span class="id">L1</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">rewrite</span> <span class="id"><a href="Freevar.html#notin_app_iff">notin_app_iff</a></span> <span class="kwd">in</span> *. <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="notin_app_r">notin_app_r</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">x</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) <span class="id">L1</span> <span class="id">L2</span>, <span class="id">x</span> \<span class="id">notin</span> <span class="id">L1</span> ++ <span class="id">L2</span> -&gt; <span class="id">x</span> \<span class="id">notin</span> <span class="id">L2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">rewrite</span> <span class="id"><a href="Freevar.html#notin_app_iff">notin_app_iff</a></span> <span class="kwd">in</span> *. <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="notin_cons1">notin_cons1</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">x</span> <span class="id">y</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) <span class="id">L</span>, <span class="id">x</span> \<span class="id">notin</span> <span class="id">y</span> :: <span class="id">L</span> -&gt; <span class="id">x</span> &lt;&gt; <span class="id">y</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> ? ? ? ? -&gt;. <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="notin_cons2">notin_cons2</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">x</span> <span class="id">y</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) <span class="id">L</span>, <span class="id">x</span> \<span class="id">notin</span> <span class="id">y</span> :: <span class="id">L</span> -&gt; <span class="id">y</span> &lt;&gt; <span class="id">x</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> ? ? ? ? -&gt;. <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="notin_one">notin_one</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">x</span> <span class="id">y</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>), <span class="id">y</span> &lt;&gt; <span class="id">x</span> -&gt; <span class="id">x</span> \<span class="id">notin</span> (<span class="id">y</span> :: <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">simpl</span>. <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="qed_opaque_helper">qed_opaque_helper</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} (<span class="id">x</span> : <span class="id">A</span>) : { <span class="id">y</span> | <span class="id">y</span> = <span class="id">x</span> }.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">x</span>. <span class="id">reflexivity</span>.<br/>
+Qed.</details>
+<span class="kwd">Definition</span> <span class="id"><a name="qed_opaque">qed_opaque</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} (<span class="id">x</span> : <span class="id">A</span>) : <span class="id">A</span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Specif.html#proj1_sig">proj1_sig</a></span> (<span class="id"><a href="Freevar.html#qed_opaque_helper">qed_opaque_helper</a></span> <span class="id">x</span>).<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="qed_opaque_eq">qed_opaque_eq</a></span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">x</span> : <span class="id">A</span>) : <span class="id"><a href="Freevar.html#qed_opaque">qed_opaque</a></span> <span class="id">x</span> = <span class="id">x</span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Specif.html#proj2_sig">proj2_sig</a></span> (<span class="id"><a href="Freevar.html#qed_opaque_helper">qed_opaque_helper</a></span> <span class="id">x</span>).<br/>
+<span class="id">Global</span> <span class="kwd">Opaque</span> <span class="id"><a href="Freevar.html#qed_opaque">qed_opaque</a></span> <span class="id"><a href="Freevar.html#qed_opaque_eq">qed_opaque_eq</a></span>.<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="Bound">Bound</a></span> (<span class="id">L</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> := <span class="id"><a href="Freevar.html#qed_opaque">qed_opaque</a></span> <span class="id">L</span>.<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="Bound_eq">Bound_eq</a></span> (<span class="id">L</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) : <span class="id"><a href="Freevar.html#Bound">Bound</a></span> <span class="id">L</span> = <span class="id">L</span> := <span class="id"><a href="Freevar.html#qed_opaque_eq">qed_opaque_eq</a></span> <span class="id">_</span> <span class="id">L</span>.<br/>
+<span class="id">Global</span> <span class="kwd">Opaque</span> <span class="id"><a href="Freevar.html#Bound">Bound</a></span>.<br/>
+<br/>
+<span class="kwd">Ltac</span> <span class="id">bound</span> := (<span class="kwd">let</span> <span class="id">L</span> := <span class="id">fresh</span> "<span class="id">L</span>" <span class="kwd">in</span> <span class="id">evar</span> (<span class="id">L</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span>); <span class="kwd">let</span> <span class="id">r</span> := <span class="id">constr</span>:(<span class="id"><a href="Freevar.html#Bound">Bound</a></span> <span class="id">L</span>) <span class="kwd">in</span> <span class="id">subst</span> <span class="id">L</span>; <span class="id">exact</span> <span class="id">r</span>).<br/>
+<br/>
+<span class="kwd">Ltac</span> <span class="id">use_fresh_aux</span> <span class="id">x</span> <span class="id">L</span> <span class="id">HxL</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">let</span> <span class="id">L</span> := (<span class="id">eval</span> <span class="id">hnf</span> <span class="kwd">in</span> <span class="id">L</span>) <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="id">lazymatch</span> <span class="id">L</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| ?<span class="id">L1</span> ++ ?<span class="id">L2</span> =&gt; <span class="id">use_fresh_aux</span> <span class="id">x</span> <span class="id">L2</span> (<span class="id"><a href="Freevar.html#notin_app_r">notin_app_r</a></span> <span class="id">x</span> <span class="id">L1</span> <span class="id">L2</span> <span class="id">HxL</span>)<br/>
+&nbsp;&nbsp;| ?<span class="id">y</span> :: ?<span class="id">L2</span> =&gt; <span class="id">use_fresh_aux</span> <span class="id">x</span> <span class="id">L2</span> (<span class="id"><a href="Freevar.html#notin_app_r">notin_app_r</a></span> <span class="id">x</span> (<span class="id">y</span> :: <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span>) <span class="id">L2</span> <span class="id">HxL</span>)<br/>
+&nbsp;&nbsp;| <span class="id">_</span> =&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ |- <span class="id">x</span> \<span class="id">notin</span> ?<span class="id">L2</span> ] =&gt; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_app_l">notin_app_l</a></span> <span class="id">_</span> <span class="id">L2</span> <span class="id">_</span> <span class="id">HxL</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ |- <span class="id">x</span> \<span class="kwd">in</span> ?<span class="id">L2</span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#False">False</a></span> ] =&gt; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_app_l">notin_app_l</a></span> <span class="id">_</span> <span class="id">L2</span> <span class="id">_</span> <span class="id">HxL</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ |- <span class="id">x</span> &lt;&gt; ?<span class="id">y</span> ] =&gt; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_cons1">notin_cons1</a></span> <span class="id">_</span> <span class="id">y</span> <span class="id">_</span> <span class="id">HxL</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ |- ?<span class="id">y</span> &lt;&gt; <span class="id">x</span> ] =&gt; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_cons2">notin_cons2</a></span> <span class="id">_</span> <span class="id">y</span> <span class="id">_</span> <span class="id">HxL</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ |- ?<span class="id">y</span> \<span class="id">notin</span> (<span class="id">x</span> :: <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span>) ] =&gt; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_one">notin_one</a></span> <span class="id">_</span> <span class="id">_</span> (<span class="id"><a href="Freevar.html#notin_cons1">notin_cons1</a></span> <span class="id">_</span> <span class="id">y</span> <span class="id">_</span> <span class="id">HxL</span>))<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ <span class="id">H</span> : <span class="id">x</span> \<span class="kwd">in</span> ?<span class="id">L2</span> |- <span class="id">_</span> ] =&gt; <span class="id">exfalso</span>; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_app_l">notin_app_l</a></span> <span class="id">_</span> <span class="id">L2</span> <span class="id">_</span> <span class="id">HxL</span> <span class="id">H</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ <span class="id">H</span> : <span class="id">x</span> = ?<span class="id">y</span> |- <span class="id">_</span> ] =&gt; <span class="id">exfalso</span>; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_cons1">notin_cons1</a></span> <span class="id">_</span> <span class="id">y</span> <span class="id">_</span> <span class="id">HxL</span> <span class="id">H</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ <span class="id">H</span> : ?<span class="id">y</span> = <span class="id">x</span> |- <span class="id">_</span> ] =&gt; <span class="id">exfalso</span>; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_cons2">notin_cons2</a></span> <span class="id">_</span> <span class="id">y</span> <span class="id">_</span> <span class="id">HxL</span> <span class="id">H</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ <span class="id">H</span> : ?<span class="id">y</span> \<span class="kwd">in</span> (<span class="id">x</span> :: <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span>) |- <span class="id">_</span> ] =&gt; <span class="id">exfalso</span>; <span class="id">refine</span> (<span class="id"><a href="Freevar.html#notin_one">notin_one</a></span> <span class="id">_</span> <span class="id">_</span> (<span class="id"><a href="Freevar.html#notin_cons1">notin_cons1</a></span> <span class="id">_</span> <span class="id">y</span> <span class="id">_</span> <span class="id">HxL</span>) <span class="id">H</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">end</span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Ltac</span> <span class="id">use_fresh</span> <span class="id">x</span> :=<br/>
+&nbsp;&nbsp;<span class="id">lazymatch</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| [ <span class="id">H</span> : <span class="id">x</span> \<span class="id">notin</span> <span class="id"><a href="Freevar.html#Bound">Bound</a></span> ?<span class="id">L</span> |- <span class="id">_</span> ] =&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">use_fresh_aux</span> <span class="id">x</span> <span class="id">L</span> (@<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#eq_ind">eq_ind</a></span> <span class="id">_</span> <span class="id">_</span> (<span class="kwd">fun</span> <span class="id">L2</span> =&gt; <span class="id">x</span> \<span class="id">notin</span> <span class="id">L2</span>) <span class="id">H</span> <span class="id">_</span> (<span class="id"><a href="Freevar.html#Bound_eq">Bound_eq</a></span> <span class="id">L</span>));<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">lazymatch</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ |- <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> ] =&gt; <span class="id">shelve</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">end</span><br/>
+&nbsp;&nbsp;| [ <span class="id">H</span> : <span class="id">x</span> \<span class="kwd">in</span> <span class="id"><a href="Freevar.html#Bound">Bound</a></span> ?<span class="id">L</span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#False">False</a></span> |- <span class="id">_</span> ] =&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">use_fresh_aux</span> <span class="id">x</span> <span class="id">L</span> (@<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#eq_ind">eq_ind</a></span> <span class="id">_</span> <span class="id">_</span> (<span class="kwd">fun</span> <span class="id">L2</span> =&gt; <span class="id">x</span> \<span class="id">notin</span> <span class="id">L2</span>) <span class="id">H</span> <span class="id">_</span> (<span class="id"><a href="Freevar.html#Bound_eq">Bound_eq</a></span> <span class="id">L</span>));<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">lazymatch</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ |- <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> ] =&gt; <span class="id">shelve</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">end</span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Ltac</span> <span class="id">specialize_fresh</span> <span class="id">H</span> <span class="id">x</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">type</span> <span class="id">of</span> <span class="id">H</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="kwd">forall</span> <span class="id">y</span>, <span class="id">y</span> \<span class="id">notin</span> ?<span class="id">L</span> -&gt; <span class="id">_</span> =&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">let</span> <span class="id">H2</span> := <span class="id">fresh</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">assert</span> (<span class="id">H2</span> : <span class="id">x</span> \<span class="id">notin</span> <span class="id">L</span>) <span class="kwd">by</span> <span class="id">use_fresh</span> <span class="id">x</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">specialize</span> (<span class="id">H</span> <span class="id">x</span> <span class="id">H2</span>); <span class="id">clear</span> <span class="id">H2</span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pick</span>" "<span class="id">fresh</span>" <span class="id">ident</span>(<span class="id">x</span>) "<span class="kwd">as</span>" <span class="id">ident</span>(<span class="id">H</span>) := <span class="id">pick</span> <span class="id">x</span> \<span class="id">notin</span> (<span class="id"><a href="Freevar.html#Bound">Bound</a></span> <span class="id">_</span>) <span class="kwd">as</span> <span class="id">H</span>.<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pick</span>" "<span class="id">fresh</span>" <span class="id">ident</span>(<span class="id">x</span>) := <span class="id">pick</span> <span class="id">x</span> \<span class="id">notin</span> (<span class="id"><a href="Freevar.html#Bound">Bound</a></span> <span class="id">_</span>).<br/>
+<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pickn</span>" <span class="id">constr</span>(<span class="id">n</span>) "<span class="id">distinct</span>" <span class="id">ident</span>(<span class="id">xs</span>) "\<span class="id">notin</span>" <span class="id">uconstr</span>(<span class="id">L</span>) "<span class="kwd">as</span>" <span class="id">ident</span>(<span class="id">H</span>) :=<br/>
+&nbsp;&nbsp;<span class="id">refine</span> ((<span class="kwd">fun</span> <span class="id">xs</span> (<span class="id">H</span> : <span class="id"><a href="Freevar.html#distinct">distinct</a></span> <span class="id">L</span> <span class="id">n</span> <span class="id">xs</span>) =&gt; <span class="id">_</span>) (<span class="id"><a href="Freevar.html#fresh_list">fresh_list</a></span> <span class="id">L</span> <span class="id">n</span>) (<span class="id"><a href="Freevar.html#fresh_list_distinct">fresh_list_distinct</a></span> <span class="id">n</span> <span class="id">L</span>)).<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pickn</span>" <span class="id">constr</span>(<span class="id">n</span>) "<span class="id">distinct</span>" <span class="id">ident</span>(<span class="id">xs</span>) "\<span class="id">notin</span>" <span class="id">uconstr</span>(<span class="id">L</span>) :=<br/>
+&nbsp;&nbsp;(<span class="kwd">let</span> <span class="id">H</span> := <span class="id">fresh</span> "<span class="id">H</span>" <span class="kwd">in</span> <span class="id">pickn</span> <span class="id">n</span> <span class="id">distinct</span> <span class="id">xs</span> \<span class="id">notin</span> <span class="id">L</span> <span class="kwd">as</span> <span class="id">H</span>).<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pickn</span>" <span class="id">constr</span>(<span class="id">n</span>) "<span class="id">distinct</span>" <span class="id">ident</span>(<span class="id">xs</span>) "∉" <span class="id">uconstr</span>(<span class="id">L</span>) "<span class="kwd">as</span>" <span class="id">ident</span>(<span class="id">H</span>) :=<br/>
+&nbsp;&nbsp;(<span class="id">pickn</span> <span class="id">n</span> <span class="id">distinct</span> <span class="id">xs</span> \<span class="id">notin</span> <span class="id">L</span> <span class="kwd">as</span> <span class="id">H</span>).<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pickn</span>" <span class="id">constr</span>(<span class="id">n</span>) "<span class="id">distinct</span>" <span class="id">ident</span>(<span class="id">xs</span>) "∉" <span class="id">uconstr</span>(<span class="id">L</span>) :=<br/>
+&nbsp;&nbsp;(<span class="id">pickn</span> <span class="id">n</span> <span class="id">distinct</span> <span class="id">xs</span> \<span class="id">notin</span> <span class="id">L</span>).<br/>
+<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pickn</span>" <span class="id">constr</span>(<span class="id">n</span>) "<span class="id">distinct</span>" "<span class="id">fresh</span>" <span class="id">ident</span>(<span class="id">xs</span>) "<span class="kwd">as</span>" <span class="id">ident</span>(<span class="id">H</span>) :=<br/>
+&nbsp;&nbsp;<span class="id">pickn</span> <span class="id">n</span> <span class="id">distinct</span> <span class="id">xs</span> \<span class="id">notin</span> (<span class="id"><a href="Freevar.html#Bound">Bound</a></span> <span class="id">_</span>) <span class="kwd">as</span> <span class="id">H</span>.<br/>
+<span class="kwd">Tactic</span> <span class="kwd">Notation</span> "<span class="id">pickn</span>" <span class="id">constr</span>(<span class="id">n</span>) "<span class="id">distinct</span>" "<span class="id">fresh</span>" <span class="id">ident</span>(<span class="id">x</span>) :=<br/>
+&nbsp;&nbsp;<span class="id">pickn</span> <span class="id">n</span> <span class="id">distinct</span> <span class="id">xs</span> \<span class="id">notin</span> (<span class="id"><a href="Freevar.html#Bound">Bound</a></span> <span class="id">_</span>).<br/>
+
+</div>
+<div class="footer"><hr/>Generated by <a href="https://github.com/xavierleroy/coq2html/">coq2html</a></div>
+</body>
+</html>

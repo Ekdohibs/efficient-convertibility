@@ -14,7 +14,7 @@ Ltac autoinjSome :=
            [ H : Some ?x = Some ?y |- _ ] => apply Some_inj in H; subst
          end.
 
-(* List Notations *)
+(** List Notations *)
 
 Notation "x '\in' L" := (In x L) (at level 80, only parsing).
 Notation "x '\notin' L" := (~ In x L) (at level 80, only parsing).
@@ -242,7 +242,7 @@ Proof.
 Qed.
 
 
-(* Map for association lists *)
+(** Map for association lists *)
 
 Definition map_assq {A B C : Type} (f : A -> B -> C) (L : list (A * B)) := map (fun '(x, u) => (x, f x u)) L.
 
@@ -276,7 +276,7 @@ Proof.
   intros; unfold map_assq; apply map_ext; intros [? ?]; f_equal; auto.
 Qed.
 
-(* Theorems on Forall *)
+(** Theorems on Forall *)
 
 Lemma Forall_cons_iff :
   forall A (P : A -> Prop) a L, Forall P (a :: L) <-> P a /\ Forall P L.
@@ -937,7 +937,7 @@ Qed.
 
 
 
-(* Forall using quantifiers *)
+(** Forall using quantifiers *)
 Lemma forall_cons_iff :
   forall (A : Type) (P : A -> Prop) a L, (forall x, x \in (a :: L) -> P x) <-> P a /\ (forall x, x \in L -> P x).
 Proof.
@@ -963,7 +963,7 @@ Proof.
   intros. split; [firstorder|]. intros H [x y] ?; firstorder.
 Qed.
 
-(* List inclusion and equivalence *)
+(** List inclusion and equivalence *)
 
 Definition list_inc {A : Type} (L1 L2 : list A) := forall x, In x L1 -> In x L2.
 Definition list_same {A : Type} (L1 L2 : list A) := forall x, In x L1 <-> In x L2.
@@ -1089,7 +1089,7 @@ Proof.
   intros z1 z2 -> e1 e2 H12 x H. simpl in *. specialize (H12 x). tauto.
 Qed.
 
-(* List concatenation *)
+(** List concatenation *)
 Lemma concat_In :
   forall (A : Type) (L : list (list A)) x, In x (concat L) <-> exists l, In x l /\ In l L.
 Proof.
@@ -1122,7 +1122,7 @@ Qed.
 
 
 
-(* Induction on length of a list *)
+(** Induction on length of a list *)
 Lemma list_length_ind (A : Type) (P : list A -> Prop) (H0 : P nil) (HS : forall x L, (forall L2, length L = length L2 -> P L2) -> P (x :: L)) : forall L, P L.
 Proof.
   intros L. remember (length L) as n. revert L Heqn. induction n.
@@ -1134,7 +1134,7 @@ Proof.
     + simpl; intros H; injection H; intros; subst. apply HS. apply IHn.
 Qed.
 
-(* Smallest integer above all others in a list *)
+(** Smallest integer above all others in a list *)
 
 Fixpoint smallest_above l :=
   match l with
@@ -1191,7 +1191,7 @@ Proof.
 Qed.
 
 
-(* Ordered sublists of a list *)
+(** Ordered sublists of a list *)
 
 Inductive sublist_ordered {A : Type} : list A -> list A -> Prop :=
 | sublist_ordered_nil : sublist_ordered nil nil
@@ -1221,7 +1221,7 @@ Proof.
   - simpl. destruct (P a); constructor; assumption.
 Qed.
 
-(* List update *)
+(** List update *)
 
 Fixpoint update {A : Type} (l : list A) (k : nat) (x : A) : list A :=
   match l with

@@ -62,9 +62,9 @@ Definition get_abort {df t} (e : ext df) : option (out t) :=
 
 Inductive red_ (rec : forall df, ext df -> out (val df) -> Prop) : forall df, ext df -> out (val df) -> Prop :=
 | red_var : forall df n,
-    red_ rec df (ext_term (var n)) (out_ret (val_nf (nvar n))) (* Free variables reduce to themselves *)
+    red_ rec df (ext_term (var n)) (out_ret (val_nf (nvar n))) (**r Free variables reduce to themselves *)
 | red_abs_shallow : forall t,
-    red_ rec shallow (ext_term (abs t)) (out_ret (vals_abs t)) (* Do not look under abstractions *)
+    red_ rec shallow (ext_term (abs t)) (out_ret (vals_abs t)) (**r Do not look under abstractions *)
 | red_abs_deep : forall t o1 o2,
     rec deep (ext_term t) o1 ->
     rec deep (extd_abs o1) o2 ->

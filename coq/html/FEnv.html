@@ -1,0 +1,364 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Module FEnv</title>
+<meta name="description" content="Documentation of Coq module FEnv" />
+<link href="coq2html.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body onload="hideAll('proofscript')">
+<h1 class="title">Module FEnv</h1>
+<div class="coq">
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="Freevar.html">Freevar</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html">List</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Setoids.Setoid.html">Setoid</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.Morphisms.html">Morphisms</a></span>.<br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="Misc.html">Misc</a></span>.<br/>
+<br/>
+<span class="kwd">Fixpoint</span> <span class="id"><a name="env_find">env_find</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} (<span class="id">e</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) (<span class="id">x</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span>) :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">e</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span><br/>
+&nbsp;&nbsp;| (<span class="id">y</span>, <span class="id">r</span>) :: <span class="id">e</span> =&gt; <span class="kwd">if</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">x</span> <span class="id">y</span> <span class="kwd">then</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">r</span> <span class="kwd">else</span> <span class="id">env_find</span> <span class="id">e</span> <span class="id">x</span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="env_same">env_same</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} (<span class="id">e1</span> <span class="id">e2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) := <span class="kwd">forall</span> <span class="id">x</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">e1</span> <span class="id">x</span> = <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">e2</span> <span class="id">x</span>.<br/>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="env_same_Reflexive">env_same_Reflexive</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.RelationClasses.html#Reflexive">Reflexive</a></span> (@<span class="id"><a href="FEnv.html#env_same">env_same</a></span> <span class="id">A</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">firstorder</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="env_same_Transitive">env_same_Transitive</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.RelationClasses.html#Transitive">Transitive</a></span> (@<span class="id"><a href="FEnv.html#env_same">env_same</a></span> <span class="id">A</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">firstorder</span> <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="env_same_Symmetric">env_same_Symmetric</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.RelationClasses.html#Symmetric">Symmetric</a></span> (@<span class="id"><a href="FEnv.html#env_same">env_same</a></span> <span class="id">A</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">firstorder</span> <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="env_same_Equivalence">env_same_Equivalence</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.RelationClasses.html#Equivalence">Equivalence</a></span> (@<span class="id"><a href="FEnv.html#env_same">env_same</a></span> <span class="id">A</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">split</span>; <span class="id">auto</span> <span class="kwd">with</span> <span class="id">typeclass_instances</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Notation</span> "<span class="id">e1</span> '===' <span class="id">e2</span>" := (<span class="id"><a href="FEnv.html#env_same">env_same</a></span> <span class="id">e1</span> <span class="id">e2</span>) (<span class="kwd">at</span> <span class="id">level</span> 70).<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_find_app">env_find_app</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">env1</span> <span class="id">env2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="FEnv.html#env_find">env_find</a></span> (<span class="id">env1</span> ++ <span class="id">env2</span>) <span class="id">x</span> = <span class="kwd">match</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env1</span> <span class="id">x</span> <span class="kwd">with</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">t</span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">t</span> | <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> =&gt; <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env2</span> <span class="id">x</span> <span class="kwd">end</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">induction</span> <span class="id">env1</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">u</span>] <span class="id">env1</span>].<br/>
+&nbsp;&nbsp;- <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="env_same_app_Proper">env_same_app_Proper</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.Morphisms.html#Proper">Proper</a></span> (<span class="id"><a href="FEnv.html#env_same">env_same</a></span> ==&gt; <span class="id"><a href="FEnv.html#env_same">env_same</a></span> ==&gt; <span class="id"><a href="FEnv.html#env_same">env_same</a></span>) (@<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#app">app</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">e1</span> <span class="id">e2</span> <span class="id">H12</span> <span class="id">e3</span> <span class="id">e4</span> <span class="id">H34</span> <span class="id">x</span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> !<span class="id"><a href="FEnv.html#env_find_app">env_find_app</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id">H12</span>, <span class="id">H34</span>.<br/>
+&nbsp;&nbsp;<span class="id">reflexivity</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="env_same_cons_Proper">env_same_cons_Proper</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.Morphisms.html#Proper">Proper</a></span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#eq">eq</a></span> ==&gt; <span class="id"><a href="FEnv.html#env_same">env_same</a></span> ==&gt; <span class="id"><a href="FEnv.html#env_same">env_same</a></span>) (@<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#cons">cons</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">z1</span> <span class="id">z2</span> -&gt; <span class="id">e1</span> <span class="id">e2</span> <span class="id">H12</span> <span class="id">x</span>.<br/>
+&nbsp;&nbsp;<span class="id">apply</span> (<span class="id"><a href="FEnv.html#env_same_app_Proper">env_same_app_Proper</a></span> (<span class="id">z2</span> :: <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span>) (<span class="id">z2</span> :: <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span>)); [<span class="id">reflexivity</span> | <span class="id">assumption</span>].<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Fixpoint</span> <span class="id"><a name="update_env">update_env</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">v</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">env</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span> =&gt; (<span class="id">x</span>, <span class="id">v</span>) :: <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span><br/>
+&nbsp;&nbsp;| (<span class="id">y</span>, <span class="id">u</span>) :: <span class="id">env</span> =&gt; <span class="kwd">if</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">x</span> <span class="id">y</span> <span class="kwd">then</span> (<span class="id">x</span>, <span class="id">v</span>) :: <span class="id">env</span> <span class="kwd">else</span> (<span class="id">y</span>, <span class="id">u</span>) :: <span class="id">update_env</span> <span class="id">env</span> <span class="id">x</span> <span class="id">v</span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_find_map_assq">env_find_map_assq</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">B</span> <span class="id">C</span> : <span class="kwd">Type</span>) (<span class="id">f</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="id">B</span> -&gt; <span class="id">C</span>) (<span class="id">L</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">B</span>)) <span class="id">x</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> (<span class="id"><a href="Misc.html#map_assq">map_assq</a></span> <span class="id">f</span> <span class="id">L</span>) <span class="id">x</span> = <span class="kwd">match</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">L</span> <span class="id">x</span> <span class="kwd">with</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">u</span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> (<span class="id">f</span> <span class="id">x</span> <span class="id">u</span>) | <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> <span class="kwd">end</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">B</span> <span class="id">C</span> <span class="id">f</span> <span class="id">L</span> <span class="id">x</span>. <span class="id">induction</span> <span class="id">L</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">a</span>] <span class="id">L</span>].<br/>
+&nbsp;&nbsp;- <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">subst</span>. <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Inductive</span> <span class="id"><a name="unique_env">unique_env</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>) -&gt; <span class="kwd">Prop</span> :=<br/>
+| <span class="id"><a name="unique_env_nil">unique_env_nil</a></span> : <span class="id">unique_env</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span><br/>
+| <span class="id"><a name="unique_env_cons">unique_env_cons</a></span> : <span class="kwd">forall</span> <span class="id">x</span> <span class="id">t</span> <span class="id">env</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> -&gt; <span class="id">unique_env</span> <span class="id">env</span> -&gt; <span class="id">unique_env</span> ((<span class="id">x</span>, <span class="id">t</span>) :: <span class="id">env</span>).<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="unique_env_map_assq">unique_env_map_assq</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> <span class="id">B</span> : <span class="kwd">Type</span>) (<span class="id">f</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="id">A</span> -&gt; <span class="id">B</span>) <span class="id">env</span>, <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> (<span class="id"><a href="Misc.html#map_assq">map_assq</a></span> <span class="id">f</span> <span class="id">env</span>) &lt;-&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">B</span> <span class="id">f</span> <span class="id">env</span>. <span class="id">induction</span> <span class="id">env</span> <span class="kwd">as</span> [|[<span class="id">x</span> <span class="id">u</span>] <span class="id">env</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">split</span>; <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">split</span>; <span class="id">intros</span> <span class="id">H</span>; <span class="id">constructor</span>; <span class="id">inversion</span> <span class="id">H</span>; <span class="id">subst</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#env_find_map_assq">env_find_map_assq</a></span> <span class="kwd">in</span> <span class="id">H2</span>; <span class="id">destruct</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span>; <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">tauto</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#env_find_map_assq">env_find_map_assq</a></span>, <span class="id">H2</span>; <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="unique_env_inv">unique_env_inv</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">t</span>, <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> ((<span class="id">x</span>, <span class="id">t</span>) :: <span class="id">env</span>) -&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env</span> /\ <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">env</span> <span class="id">x</span> <span class="id">t</span> <span class="id">H</span>; <span class="id">inversion</span> <span class="id">H</span>; <span class="id">subst</span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="unique_env_inv_iff">unique_env_inv_iff</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">t</span>, <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> ((<span class="id">x</span>, <span class="id">t</span>) :: <span class="id">env</span>) &lt;-&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env</span> /\ <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">split</span>.<br/>
+&nbsp;&nbsp;- <span class="id">apply</span> <span class="id"><a href="FEnv.html#unique_env_inv">unique_env_inv</a></span>.<br/>
+&nbsp;&nbsp;- <span class="id">intros</span> [? ?]; <span class="id">constructor</span>; <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="unique_env_cons_mid_iff">unique_env_cons_mid_iff</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">env1</span> <span class="id">env2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">t</span>, <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> (<span class="id">env1</span> ++ (<span class="id">x</span>, <span class="id">t</span>) :: <span class="id">env2</span>) &lt;-&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> (<span class="id">env1</span> ++ <span class="id">env2</span>) /\ <span class="id"><a href="FEnv.html#env_find">env_find</a></span> (<span class="id">env1</span> ++ <span class="id">env2</span>) <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span>; <span class="id">induction</span> <span class="id">env1</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">u</span>] <span class="id">env1</span>]; <span class="id">intros</span> <span class="id">env2</span> <span class="id">x</span> <span class="id">t</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#unique_env_inv_iff">unique_env_inv_iff</a></span>. <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">rewrite</span> !<span class="id"><a href="FEnv.html#unique_env_inv_iff">unique_env_inv_iff</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id">IHenv1</span>, !<span class="id"><a href="FEnv.html#env_find_app">env_find_app</a></span>; <span class="id">simpl</span> <span class="kwd">in</span> *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">repeat</span> <span class="id">destruct</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span>; <span class="id">repeat</span> <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">intuition</span> <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="unique_env_cons_mid">unique_env_cons_mid</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">env1</span> <span class="id">env2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">t</span>, <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> (<span class="id">env1</span> ++ (<span class="id">x</span>, <span class="id">t</span>) :: <span class="id">env2</span>) -&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> (<span class="id">env1</span> ++ <span class="id">env2</span>) /\ <span class="id"><a href="FEnv.html#env_find">env_find</a></span> (<span class="id">env1</span> ++ <span class="id">env2</span>) <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">rewrite</span> &lt;- <span class="id"><a href="FEnv.html#unique_env_cons_mid_iff">unique_env_cons_mid_iff</a></span>. <span class="id">eassumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_cons_mid_eq">env_cons_mid_eq</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env1</span> <span class="id">env2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">u</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env1</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> -&gt; <span class="id">env1</span> ++ (<span class="id">x</span>, <span class="id">u</span>) :: <span class="id">env2</span> === (<span class="id">x</span>, <span class="id">u</span>) :: <span class="id">env1</span> ++ <span class="id">env2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">env1</span> <span class="id">env2</span> <span class="id">x</span> <span class="id">u</span> <span class="id">Hx</span> <span class="id">y</span>. <span class="id">simpl</span>. <span class="id">rewrite</span> !<span class="id"><a href="FEnv.html#env_find_app">env_find_app</a></span>; <span class="id">simpl</span>.<br/>
+&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;- <span class="id">subst</span>. <span class="id">rewrite</span> <span class="id">Hx</span>. <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">reflexivity</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_cons_mid_eq2">env_cons_mid_eq2</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env1</span> <span class="id">env2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">u</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> (<span class="id">env1</span> ++ <span class="id">env2</span>) <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> -&gt; <span class="id">env1</span> ++ (<span class="id">x</span>, <span class="id">u</span>) :: <span class="id">env2</span> === (<span class="id">x</span>, <span class="id">u</span>) :: <span class="id">env1</span> ++ <span class="id">env2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">apply</span> <span class="id"><a href="FEnv.html#env_cons_mid_eq">env_cons_mid_eq</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id"><a href="FEnv.html#env_find_app">env_find_app</a></span> <span class="kwd">in</span> <span class="id">H</span>. <span class="id">destruct</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_find_exists">env_find_exists</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">t</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">t</span> -&gt; <span class="kwd">exists</span> <span class="id">env1</span> <span class="id">env2</span>, <span class="id">env</span> = <span class="id">env1</span> ++ (<span class="id">x</span>, <span class="id">t</span>) :: <span class="id">env2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">induction</span> <span class="id">env</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">u</span>] <span class="id">env</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="kwd">exists</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span>. <span class="kwd">exists</span> <span class="id">env</span>. <span class="id">simpl</span>. <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">destruct</span> (<span class="id">IHenv</span> <span class="id">H</span>) <span class="kwd">as</span> (<span class="id">env1</span> &amp; <span class="id">env2</span> &amp; <span class="id">IH</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">exists</span> ((<span class="id">y</span>, <span class="id">u</span>) :: <span class="id">env1</span>). <span class="kwd">exists</span> <span class="id">env2</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id">IH</span>. <span class="id">reflexivity</span>.<br/>
+Qed.</details>
+<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_find_update_env">env_find_update_env</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">e</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">y</span> <span class="id">v</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> (<span class="id"><a href="FEnv.html#update_env">update_env</a></span> <span class="id">e</span> <span class="id">x</span> <span class="id">v</span>) <span class="id">y</span> = <span class="kwd">if</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">x</span> <span class="id">y</span> <span class="kwd">then</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">v</span> <span class="kwd">else</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">e</span> <span class="id">y</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">induction</span> <span class="id">e</span> <span class="kwd">as</span> [|[<span class="id">z</span> <span class="id">u</span>] <span class="id">e</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">repeat</span> (<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>); <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">repeat</span> (<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">simpl</span>); <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="update_env_same">update_env_same</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">e</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">v</span>, <span class="id"><a href="FEnv.html#update_env">update_env</a></span> <span class="id">e</span> <span class="id">x</span> <span class="id">v</span> === (<span class="id">x</span>, <span class="id">v</span>) :: <span class="id">e</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">e</span> <span class="id">x</span> <span class="id">v</span> <span class="id">y</span>. <span class="id">simpl</span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id"><a href="FEnv.html#env_find_update_env">env_find_update_env</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">repeat</span> <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="update_env_unique">update_env_unique</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">v</span>, <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env</span> -&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> (<span class="id"><a href="FEnv.html#update_env">update_env</a></span> <span class="id">env</span> <span class="id">x</span> <span class="id">v</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">induction</span> <span class="id">env</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">u</span>] <span class="id">env</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">constructor</span>; [<span class="id">reflexivity</span>|<span class="id">constructor</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">subst</span>. <span class="id">inversion</span> <span class="id">H</span>; <span class="id">constructor</span>; <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">inversion</span> <span class="id">H</span>; <span class="id">subst</span>. <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#env_find_update_env">env_find_update_env</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">auto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Fixpoint</span> <span class="id"><a name="uniquify_env">uniquify_env</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">env</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span><br/>
+&nbsp;&nbsp;| (<span class="id">y</span>, <span class="id">u</span>) :: <span class="id">env</span> =&gt; (<span class="id">y</span>, <span class="id">u</span>) :: <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter">filter</a></span> (<span class="kwd">fun</span> '(<span class="id">x</span>, <span class="id">v</span>) =&gt; <span class="kwd">if</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span> <span class="id">x</span> <span class="id">y</span> <span class="kwd">then</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#false">false</a></span> <span class="kwd">else</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span>) (<span class="id">uniquify_env</span> <span class="id">env</span>)<br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_find_filter_unique">env_find_filter_unique</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">P</span> <span class="id">x</span>, <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env</span> -&gt; <span class="id"><a href="FEnv.html#env_find">env_find</a></span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter">filter</a></span> <span class="id">P</span> <span class="id">env</span>) <span class="id">x</span> = <span class="kwd">match</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> <span class="kwd">with</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">u</span> =&gt; <span class="kwd">if</span> <span class="id">P</span> (<span class="id">x</span>, <span class="id">u</span>) <span class="kwd">then</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">u</span> <span class="kwd">else</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> | <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> <span class="kwd">end</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">env</span> <span class="id">P</span> <span class="id">x</span> <span class="id">Hunique</span>. <span class="id">induction</span> <span class="id">env</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">u</span>] <span class="id">env</span>].<br/>
+&nbsp;&nbsp;- <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">destruct</span> (<span class="id">P</span> (<span class="id">y</span>, <span class="id">u</span>)) <span class="id">eqn</span>:<span class="id">HP</span>; <span class="id">simpl</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">subst</span>. <span class="id">rewrite</span> <span class="id">HP</span>; <span class="id">simpl</span>. <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">apply</span> <span class="id">IHenv</span>. <span class="id">inversion</span> <span class="id">Hunique</span>; <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">subst</span>. <span class="id">rewrite</span> <span class="id">HP</span>; <span class="id">simpl</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">inversion</span> <span class="id">Hunique</span>; <span class="id">subst</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id">IHenv</span>, <span class="id">H1</span>; <span class="id">auto</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">apply</span> <span class="id">IHenv</span>. <span class="id">inversion</span> <span class="id">Hunique</span>; <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="unique_env_filter">unique_env_filter</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">P</span>, <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env</span> -&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#filter">filter</a></span> <span class="id">P</span> <span class="id">env</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">env</span> <span class="id">P</span> <span class="id">H</span>. <span class="id">induction</span> <span class="id">H</span>.<br/>
+&nbsp;&nbsp;- <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">destruct</span> (<span class="id">P</span> (<span class="id">x</span>, <span class="id">t</span>)).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#env_find_filter_unique">env_find_filter_unique</a></span> <span class="kwd">by</span> <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id">H</span>; <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="uniquify_env_unique">uniquify_env_unique</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)), <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> (<span class="id"><a href="FEnv.html#uniquify_env">uniquify_env</a></span> <span class="id">env</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">induction</span> <span class="id">env</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">u</span>] <span class="id">env</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">constructor</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#env_find_filter_unique">env_find_filter_unique</a></span> <span class="kwd">by</span> <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">destruct</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span>; <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">apply</span> <span class="id"><a href="FEnv.html#unique_env_filter">unique_env_filter</a></span>. <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="uniquify_env_same">uniquify_env_same</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)), <span class="id"><a href="FEnv.html#uniquify_env">uniquify_env</a></span> <span class="id">env</span> === <span class="id">env</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">induction</span> <span class="id">env</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">u</span>] <span class="id">env</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">intros</span> <span class="id">x</span>. <span class="id">simpl</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#env_find_filter_unique">env_find_filter_unique</a></span> <span class="kwd">by</span> (<span class="id">apply</span> <span class="id"><a href="FEnv.html#uniquify_env_unique">uniquify_env_unique</a></span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">rewrite</span> <span class="id">IHenv</span>. <span class="id">destruct</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span>; [|<span class="id">reflexivity</span>].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="sublist_ordered_env_find">sublist_ordered_env_find</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env1</span> <span class="id">env2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span>, <span class="id"><a href="Misc.html#sublist_ordered">sublist_ordered</a></span> <span class="id">env2</span> <span class="id">env1</span> -&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env1</span> -&gt; <span class="kwd">forall</span> <span class="id">t</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env2</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">t</span> -&gt; <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env1</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">t</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">env1</span> <span class="id">env2</span> <span class="id">x</span> <span class="id">H</span>. <span class="id">induction</span> <span class="id">H</span>; <span class="id">intros</span> <span class="id">Hunique</span> <span class="id">t</span> <span class="id">Hfind</span>.<br/>
+&nbsp;&nbsp;+ <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;+ <span class="id">destruct</span> <span class="id">x0</span> <span class="kwd">as</span> [<span class="id">y</span> <span class="id">u</span>]. <span class="id">simpl</span> <span class="kwd">in</span> *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; [<span class="id">assumption</span>|].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">apply</span> <span class="id">IHsublist_ordered</span>; [<span class="id">inversion</span> <span class="id">Hunique</span>|]; <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;+ <span class="id">destruct</span> <span class="id">x0</span> <span class="kwd">as</span> [<span class="id">y</span> <span class="id">u</span>]. <span class="id">simpl</span> <span class="kwd">in</span> *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">subst</span>. <span class="id">apply</span> <span class="id">IHsublist_ordered</span> <span class="kwd">in</span> <span class="id">Hfind</span>; <span class="id">inversion</span> <span class="id">Hunique</span>; <span class="id">subst</span>; <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">apply</span> <span class="id">IHsublist_ordered</span>; [<span class="id">inversion</span> <span class="id">Hunique</span>|]; <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="sublist_ordered_unique_env">sublist_ordered_unique_env</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env1</span> <span class="id">env2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)), <span class="id"><a href="Misc.html#sublist_ordered">sublist_ordered</a></span> <span class="id">env2</span> <span class="id">env1</span> -&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env1</span> -&gt; <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env2</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">env1</span> <span class="id">env2</span> <span class="id">H</span>. <span class="id">induction</span> <span class="id">H</span>.<br/>
+&nbsp;&nbsp;- <span class="id">intros</span>; <span class="id">assumption</span>.<br/>
+&nbsp;&nbsp;- <span class="id">destruct</span> <span class="id">x</span> <span class="kwd">as</span> [<span class="id">y</span> <span class="id">u</span>]. <span class="id">intros</span> <span class="id">Hunique</span>. <span class="id">inversion</span> <span class="id">Hunique</span>; <span class="id">subst</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">constructor</span>; [|<span class="id">tauto</span>].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> (<span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">L1</span> <span class="id">y</span>) <span class="id">eqn</span>:<span class="id">Hfind</span>; [|<span class="id">reflexivity</span>].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">eapply</span> <span class="id"><a href="FEnv.html#sublist_ordered_env_find">sublist_ordered_env_find</a></span> <span class="kwd">in</span> <span class="id">Hfind</span>; [|<span class="id">eassumption</span>|<span class="id">eassumption</span>]. <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;- <span class="id">intros</span> <span class="id">Hunique</span>. <span class="id">inversion</span> <span class="id">Hunique</span>. <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="map_assq_env_Proper">map_assq_env_Proper</a></span> {<span class="id">A</span> <span class="id">B</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.Morphisms.html#Proper">Proper</a></span> ((<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#eq">eq</a></span> ==&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#eq">eq</a></span> ==&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#eq">eq</a></span>) ==&gt; <span class="id"><a href="FEnv.html#env_same">env_same</a></span> ==&gt; <span class="id"><a href="FEnv.html#env_same">env_same</a></span>) (@<span class="id"><a href="Misc.html#map_assq">map_assq</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> <span class="id">A</span> <span class="id">B</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">f1</span> <span class="id">f2</span> <span class="id">Hf</span> <span class="id">e1</span> <span class="id">e2</span> <span class="id">He</span> <span class="id">x</span>.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> !<span class="id"><a href="FEnv.html#env_find_map_assq">env_find_map_assq</a></span>, <span class="id">He</span>. <span class="id">destruct</span> (<span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">e2</span> <span class="id">x</span>); [|<span class="id">reflexivity</span>].<br/>
+&nbsp;&nbsp;<span class="id">f_equal</span>. <span class="id">apply</span> <span class="id">Hf</span>; <span class="id">reflexivity</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_find_In2">env_find_In2</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> <span class="id">x</span> <span class="id">u</span> (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)), (<span class="id">x</span>, <span class="id">u</span>) \<span class="kwd">in</span> <span class="id">env</span> -&gt; <span class="kwd">exists</span> <span class="id">v</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">v</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">x</span> <span class="id">u</span> <span class="id">env</span> <span class="id">Hin</span>. <span class="id">induction</span> <span class="id">env</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">v</span>] <span class="id">env</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span> <span class="kwd">in</span> <span class="id">Hin</span>; <span class="id">tauto</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">subst</span>. <span class="kwd">exists</span> <span class="id">v</span>. <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">apply</span> <span class="id">IHenv</span>. <span class="id">simpl</span> <span class="kwd">in</span> <span class="id">Hin</span>. <span class="id">intuition</span> <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="uniquify_env_not_in">uniquify_env_not_in</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> <span class="id">x</span> <span class="id">u</span> (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)), <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> -&gt; <span class="id"><a href="FEnv.html#uniquify_env">uniquify_env</a></span> ((<span class="id">x</span>, <span class="id">u</span>) :: <span class="id">env</span>) = (<span class="id">x</span>, <span class="id">u</span>) :: <span class="id"><a href="FEnv.html#uniquify_env">uniquify_env</a></span> <span class="id">env</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">x</span> <span class="id">u</span> <span class="id">env</span> <span class="id">Hx</span>.<br/>
+&nbsp;&nbsp;<span class="id">simpl</span>. <span class="id">f_equal</span>. <span class="id">apply</span> <span class="id"><a href="Misc.html#Forall_filter_eq">Forall_filter_eq</a></span>. <span class="id">rewrite</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#Forall_forall">Forall_forall</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">intros</span> [<span class="id">y</span> <span class="id">v</span>] <span class="id">H</span>. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; [|<span class="id">congruence</span>]. <span class="id">subst</span>.<br/>
+&nbsp;&nbsp;<span class="id">exfalso</span>. <span class="id">apply</span> <span class="id"><a href="FEnv.html#env_find_In2">env_find_In2</a></span> <span class="kwd">in</span> <span class="id">H</span>. <span class="id">destruct</span> <span class="id">H</span> <span class="kwd">as</span> [<span class="id">w</span> <span class="id">H</span>]; <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#uniquify_env_same">uniquify_env_same</a></span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">congruence</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_find_In">env_find_In</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">u</span>, <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">u</span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#In">In</a></span> (<span class="id">x</span>, <span class="id">u</span>) <span class="id">env</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">induction</span> <span class="id">env</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">v</span>] <span class="id">env</span>].<br/>
+&nbsp;&nbsp;- <span class="id">intros</span>; <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;- <span class="id">intros</span>; <span class="id">simpl</span> <span class="kwd">in</span> *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">left</span>; <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">right</span>; <span class="id">apply</span> <span class="id">IHenv</span>. <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="update_env_app">update_env_app</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> (<span class="id">A</span> : <span class="kwd">Type</span>) (<span class="id">env1</span> <span class="id">env2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">u</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env1</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> -&gt; <span class="id"><a href="FEnv.html#update_env">update_env</a></span> (<span class="id">env1</span> ++ <span class="id">env2</span>) <span class="id">x</span> <span class="id">u</span> = <span class="id">env1</span> ++ <span class="id"><a href="FEnv.html#update_env">update_env</a></span> <span class="id">env2</span> <span class="id">x</span> <span class="id">u</span>.<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">A</span> <span class="id">env1</span> <span class="id">env2</span> <span class="id">x</span> <span class="id">u</span> <span class="id">Hx</span>. <span class="id">induction</span> <span class="id">env1</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">v</span>] <span class="id">env1</span>].<br/>
+&nbsp;&nbsp;- <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>; [<span class="id">congruence</span>|].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">f_equal</span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="env_move_to_front">env_move_to_front</a></span> <span class="id">A</span> (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">u</span> :<br/>
+&nbsp;&nbsp;<span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> <span class="id">env</span> -&gt; <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">env</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">u</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">env1</span> <span class="id">env2</span>, <span class="id">env</span> = <span class="id">env1</span> ++ (<span class="id">x</span>, <span class="id">u</span>) :: <span class="id">env2</span> /\ <span class="id">env</span> === (<span class="id">x</span>, <span class="id">u</span>) :: <span class="id">env1</span> ++ <span class="id">env2</span> /\ <span class="id"><a href="FEnv.html#unique_env">unique_env</a></span> ((<span class="id">x</span>, <span class="id">u</span>) :: <span class="id">env1</span> ++ <span class="id">env2</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">Hunique</span> <span class="id">Hfind</span>. <span class="id">apply</span> <span class="id"><a href="FEnv.html#env_find_exists">env_find_exists</a></span> <span class="kwd">in</span> <span class="id">Hfind</span>. <span class="id">destruct</span> <span class="id">Hfind</span> <span class="kwd">as</span> (<span class="id">env1</span> &amp; <span class="id">env2</span> &amp; <span class="id">H</span>). <span class="kwd">exists</span> <span class="id">env1</span>. <span class="kwd">exists</span> <span class="id">env2</span>.<br/>
+&nbsp;&nbsp;<span class="id">split</span>; [<span class="id">assumption</span>|].<br/>
+&nbsp;&nbsp;<span class="id">split</span>; <span class="id">subst</span>.<br/>
+&nbsp;&nbsp;- <span class="id">intros</span> <span class="id">y</span>. <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#unique_env_cons_mid_iff">unique_env_cons_mid_iff</a></span> <span class="kwd">in</span> <span class="id">Hunique</span>. <span class="id">simpl</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">rewrite</span> !<span class="id"><a href="FEnv.html#env_find_app">env_find_app</a></span> <span class="kwd">in</span> *. <span class="id">simpl</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">subst</span>. <span class="id">destruct</span> <span class="id"><a href="FEnv.html#env_find">env_find</a></span>, <span class="id">Hunique</span>; <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">reflexivity</span>.<br/>
+&nbsp;&nbsp;- <span class="id">rewrite</span> <span class="id"><a href="FEnv.html#unique_env_cons_mid_iff">unique_env_cons_mid_iff</a></span> <span class="kwd">in</span> <span class="id">Hunique</span>. <span class="id">constructor</span>; <span class="id">tauto</span>.<br/>
+Qed.</details>
+<br/>
+<span class="id">Global</span> <span class="kwd">Instance</span> <span class="id"><a name="update_env_Proper">update_env_Proper</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} : <span class="id"><a href="https://coq.inria.fr/library/Coq.Classes.Morphisms.html#Proper">Proper</a></span> (<span class="id"><a href="FEnv.html#env_same">env_same</a></span> ==&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#eq">eq</a></span> ==&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#eq">eq</a></span> ==&gt; <span class="id"><a href="FEnv.html#env_same">env_same</a></span>) (@<span class="id"><a href="FEnv.html#update_env">update_env</a></span> <span class="id">A</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">env1</span> <span class="id">env2</span> <span class="id">He</span> <span class="id">x1</span> <span class="id">x2</span> -&gt; <span class="id">u1</span> <span class="id">u2</span> -&gt;.<br/>
+&nbsp;&nbsp;<span class="id">rewrite</span> !<span class="id"><a href="FEnv.html#update_env_same">update_env_same</a></span>. <span class="id">rewrite</span> <span class="id">He</span>. <span class="id">reflexivity</span>.<br/>
+Qed.</details>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="Forall_env_find">Forall_env_find</a></span> :<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">A</span> (<span class="id">P</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span> -&gt; <span class="kwd">Prop</span>) <span class="id">L</span> <span class="id">x</span> <span class="id">t</span>, <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#Forall">Forall</a></span> <span class="id">P</span> <span class="id">L</span> -&gt; <span class="id"><a href="FEnv.html#env_find">env_find</a></span> <span class="id">L</span> <span class="id">x</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">t</span> -&gt; <span class="id">P</span> (<span class="id">x</span>, <span class="id">t</span>).<br/>
+<details><summary>Proof.</summary>
+&nbsp;&nbsp;<span class="id">intros</span>. <span class="id">induction</span> <span class="id">L</span> <span class="kwd">as</span> [|[<span class="id">y</span> <span class="id">u</span>] <span class="id">L</span>].<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">congruence</span>.<br/>
+&nbsp;&nbsp;- <span class="id">simpl</span> <span class="kwd">in</span> *. <span class="id">destruct</span> <span class="id"><a href="Freevar.html#freevar_eq_dec">freevar_eq_dec</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">injection</span> <span class="id">H0</span>. <span class="id">intros</span>; <span class="id">subst</span>. <span class="id">rewrite</span> <span class="id"><a href="Misc.html#Forall_cons_iff">Forall_cons_iff</a></span> <span class="kwd">in</span> <span class="id">H</span>. <span class="id">tauto</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">apply</span> <span class="id">IHL</span>; [<span class="id">rewrite</span> <span class="id"><a href="Misc.html#Forall_cons_iff">Forall_cons_iff</a></span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">tauto</span>|]. <span class="id">assumption</span>.<br/>
+Qed.</details>
+<br/>
+
+</div>
+<div class="footer"><hr/>Generated by <a href="https://github.com/xavierleroy/coq2html/">coq2html</a></div>
+</body>
+</html>

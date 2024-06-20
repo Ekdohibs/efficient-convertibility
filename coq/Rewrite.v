@@ -36,7 +36,7 @@ Proof.
 Qed.
 
 
-(* Reflexive closure *)
+(** Reflexive closure *)
 
 Definition reflc {A : Type} (R : A -> A -> Prop) x y := R x y \/ x = y.
 
@@ -48,7 +48,7 @@ Proof.
 Qed.
 
 
-(* Symmetric closure *)
+(** Symmetric closure *)
 Definition symc {A : Type} (R : A -> A -> Prop) := union R (flip R).
 
 Lemma symc_sym {A : Type} (R : A -> A -> Prop) :
@@ -58,7 +58,7 @@ Proof.
 Qed.
 
 
-(* Transitive reflexive closure *)
+(** Transitive reflexive closure *)
 
 Inductive star {A : Type} (R : A -> A -> Prop) : A -> A -> Prop :=
 | star_refl : forall x, star R x x
@@ -175,7 +175,7 @@ Proof.
       * assumption.
 Qed.
 
-(* Transitive closure *)
+(** Transitive closure *)
 
 Inductive plus {A : Type} (R : A -> A -> Prop) : A -> A -> Prop :=
 | plus_1 : forall x y, R x y -> plus R x y
@@ -259,7 +259,7 @@ Proof.
 Qed.
 
 
-(* Transitive symmetric reflexive closure *)
+(** Transitive symmetric reflexive closure *)
 
 Definition convertible {A : Type} (R : A -> A -> Prop) := star (symc R).
 
@@ -285,7 +285,7 @@ Qed.
 
 
 
-(* Confluence *)
+(** Confluence *)
 
 Definition commuting_diamond {A : Type} (R1 R2 : A -> A -> Prop) :=
   forall x y z, R1 x y -> R2 x z -> exists w, R2 y w /\ R1 z w.
@@ -458,7 +458,7 @@ Proof.
 Qed.
 
 
-(* Rewriting one element of a list *)
+(** Rewriting one element of a list *)
 
 Inductive step_one {A : Type} (R : A -> A -> Prop) : list A -> list A -> Prop :=
 | step_one_step : forall x y L, R x y -> step_one R (x :: L) (y :: L)
