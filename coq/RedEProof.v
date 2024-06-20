@@ -12,6 +12,8 @@ Require Import RedE.
 Require Import Pretty.
 Require Import Inductive.
 
+(** Proof that [redE] is compatible with [red]. *)
+
 Fixpoint index l x :=
   match l with
   | nil => 0

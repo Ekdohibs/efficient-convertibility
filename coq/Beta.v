@@ -10,6 +10,8 @@ Require Import STerm.
 Require Import Inductive.
 Require Import GenInd.
 
+(** Definition of beta-reduction. *)
+
 Inductive beta : term -> term -> Prop :=
 | beta_app1 : forall t1 t2 t3, beta t1 t2 -> beta (app t1 t3) (app t2 t3)
 | beta_app2 : forall t1 t2 t3, beta t1 t2 -> beta (app t3 t1) (app t3 t2)
@@ -111,7 +113,7 @@ Proof.
     apply star_beta_subst1, Hus.
 Qed.
 
-
+(** Parallel beta reduction, used for proving confluence. *)
 Inductive pbeta : term -> term -> Prop :=
 | pbeta_var : forall n, pbeta (var n) (var n)
 | pbeta_dvar : forall n, pbeta (dvar n) (dvar n)
@@ -409,6 +411,7 @@ Proof.
     apply pbeta_refl.
 Qed.
 
+(** Diamond property for parallel beta. *)
 Lemma pbeta_diamond : diamond pbeta.
 Proof.
   intros t1 t2 t3 H12. revert t3. induction H12 using pbeta_ind2; intros t5 H15; inversion H15; subst.
@@ -512,6 +515,7 @@ Proof.
     + eapply Forall3_select23, Forall3_impl, Hlt4; intros; simpl in *; tauto.
 Qed.
 
+(** Confluence for beta. *)
 Lemma beta_confluent :
   confluent beta.
 Proof.
@@ -519,6 +523,8 @@ Proof.
   apply between_star; [apply beta_pbeta|apply pbeta_star_beta].
 Qed.
 
+
+(** Unfolding of constants. For historical reasons, this is called [iota] in the development. *)
 Inductive iota defs : term -> term -> Prop :=
 | iota_unfold : forall k t, nth_error defs k = Some t -> closed_at t 0 -> iota defs (dvar k) t
 | iota_app1 : forall t1 t2 t3, iota defs t1 t2 -> iota defs (app t1 t3) (app t2 t3)
@@ -723,6 +729,7 @@ Proof.
       * rewrite select2_app_assoc. constructor; assumption.
 Qed.
 
+(** Confluence for [iota] and [beta] + [iota]. *)
 Lemma iota_confluent :
   forall defs, confluent (iota defs).
 Proof.
@@ -741,7 +748,7 @@ Qed.
 
 Definition betaiota defs := union (iota defs) beta.
 
-
+(* Heads, contexts, and context decomposition. *)
 Inductive is_head : term -> Prop :=
 | is_head_var : forall n, is_head (var n)
 | is_head_dvar : forall n, is_head (dvar n).
@@ -923,7 +930,7 @@ Proof.
       apply beta_hnf_ctx with (h := h_switch h_hole m); eassumption.
 Qed.
 
-
+(** Comparison of weak head-normal forms. *)
 Definition mk_merge {A : Type} (l1 l2 : option (list A)) :=
   match l1, l2 with
   | Some l1, Some l2 => Some (l1 ++ l2)

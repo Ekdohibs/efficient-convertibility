@@ -26,6 +26,8 @@
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="RedM.html">RedM</a></span>.<br/>
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="kwd">Inductive</span>.<br/>
 <br/>
+<div class="doc">Compatibility proof between <span class="bracket"><span class="id">redM</span></span> and <span class="bracket"><span class="id">redE</span></span>. </div>
+<br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="read_eiM">read_eiM</a></span> (<span class="id">res</span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#option">option</a></span> <span class="id"><a href="RedE.html#clo">clo</a></span>) <span class="id">dom</span> : <span class="id"><a href="RedM.html#eiM">eiM</a></span> -&gt; <span class="id"><a href="RedE.html#clo">clo</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="read_eiM_lazy">read_eiM_lazy</a></span> : <span class="kwd">forall</span> <span class="id">t</span> <span class="id">ys</span> <span class="id">vs</span> <span class="id">xs</span>,<br/>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#map">map</a></span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">vs</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#map">map</a></span> <span class="id">res</span> <span class="id">ys</span> -&gt;<br/>

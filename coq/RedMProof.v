@@ -12,6 +12,8 @@ Require Import RedE.
 Require Import RedM.
 Require Import Inductive.
 
+(** Compatibility proof between [redM] and [redE]. *)
+
 Inductive read_eiM (res : freevar -> option clo) dom : eiM -> clo -> Prop :=
 | read_eiM_lazy : forall t ys vs xs,
     map Some vs = map res ys ->

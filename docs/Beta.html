@@ -24,6 +24,8 @@
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="kwd">Inductive</span>.<br/>
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="GenInd.html">GenInd</a></span>.<br/>
 <br/>
+<div class="doc">Definition of beta-reduction. </div>
+<br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="beta">beta</a></span> : <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="beta_app1">beta_app1</a></span> : <span class="kwd">forall</span> <span class="id">t1</span> <span class="id">t2</span> <span class="id">t3</span>, <span class="id">beta</span> <span class="id">t1</span> <span class="id">t2</span> -&gt; <span class="id">beta</span> (<span class="id"><a href="STerm.html#app">app</a></span> <span class="id">t1</span> <span class="id">t3</span>) (<span class="id"><a href="STerm.html#app">app</a></span> <span class="id">t2</span> <span class="id">t3</span>)<br/>
 | <span class="id"><a name="beta_app2">beta_app2</a></span> : <span class="kwd">forall</span> <span class="id">t1</span> <span class="id">t2</span> <span class="id">t3</span>, <span class="id">beta</span> <span class="id">t1</span> <span class="id">t2</span> -&gt; <span class="id">beta</span> (<span class="id"><a href="STerm.html#app">app</a></span> <span class="id">t3</span> <span class="id">t1</span>) (<span class="id"><a href="STerm.html#app">app</a></span> <span class="id">t3</span> <span class="id">t2</span>)<br/>
@@ -125,7 +127,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="id">apply</span> <span class="id"><a href="Beta.html#star_beta_subst1">star_beta_subst1</a></span>, <span class="id">Hus</span>.<br/>
 Qed.</details>
 <br/>
-<br/>
+<div class="doc">Parallel beta reduction, used for proving confluence. </div>
 <span class="kwd">Inductive</span> <span class="id"><a name="pbeta">pbeta</a></span> : <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="pbeta_var">pbeta_var</a></span> : <span class="kwd">forall</span> <span class="id">n</span>, <span class="id">pbeta</span> (<span class="id"><a href="STerm.html#var">var</a></span> <span class="id">n</span>) (<span class="id"><a href="STerm.html#var">var</a></span> <span class="id">n</span>)<br/>
 | <span class="id"><a name="pbeta_dvar">pbeta_dvar</a></span> : <span class="kwd">forall</span> <span class="id">n</span>, <span class="id">pbeta</span> (<span class="id"><a href="STerm.html#dvar">dvar</a></span> <span class="id">n</span>) (<span class="id"><a href="STerm.html#dvar">dvar</a></span> <span class="id">n</span>)<br/>
@@ -315,6 +317,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="id">apply</span> <span class="id"><a href="Beta.html#pbeta_refl">pbeta_refl</a></span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Diamond property for parallel beta. </div>
 <span class="kwd">Lemma</span> <span class="id"><a name="pbeta_diamond">pbeta_diamond</a></span> : <span class="id"><a href="Rewrite.html#diamond">diamond</a></span> <span class="id"><a href="Beta.html#pbeta">pbeta</a></span>.<br/>
 <details><summary>Proof.</summary>
 &nbsp;&nbsp;<span class="id">intros</span> <span class="id">t1</span> <span class="id">t2</span> <span class="id">t3</span> <span class="id">H12</span>. <span class="id">revert</span> <span class="id">t3</span>. <span class="id">induction</span> <span class="id">H12</span> <span class="kwd">using</span> <span class="id"><a href="Beta.html#pbeta_ind2">pbeta_ind2</a></span>; <span class="id">intros</span> <span class="id">t5</span> <span class="id">H15</span>; <span class="id">inversion</span> <span class="id">H15</span>; <span class="id">subst</span>.<br/>
@@ -418,6 +421,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">eapply</span> <span class="id"><a href="Misc.html#Forall3_select23">Forall3_select23</a></span>, <span class="id"><a href="Misc.html#Forall3_impl">Forall3_impl</a></span>, <span class="id">Hlt4</span>; <span class="id">intros</span>; <span class="id">simpl</span> <span class="kwd">in</span> *; <span class="id">tauto</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Confluence for beta. </div>
 <span class="kwd">Lemma</span> <span class="id"><a name="beta_confluent">beta_confluent</a></span> :<br/>
 &nbsp;&nbsp;<span class="id"><a href="Rewrite.html#confluent">confluent</a></span> <span class="id"><a href="Beta.html#beta">beta</a></span>.<br/>
 <details><summary>Proof.</summary>
@@ -425,6 +429,8 @@ Qed.</details>
 &nbsp;&nbsp;<span class="id">apply</span> <span class="id"><a href="Rewrite.html#between_star">between_star</a></span>; [<span class="id">apply</span> <span class="id"><a href="Beta.html#beta_pbeta">beta_pbeta</a></span>|<span class="id">apply</span> <span class="id"><a href="Beta.html#pbeta_star_beta">pbeta_star_beta</a></span>].<br/>
 Qed.</details>
 <br/>
+<br/>
+<div class="doc">Unfolding of constants. For historical reasons, this is called <span class="bracket"><span class="id">iota</span></span> in the development. </div>
 <span class="kwd">Inductive</span> <span class="id"><a name="iota">iota</a></span> <span class="id">defs</span> : <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="iota_unfold">iota_unfold</a></span> : <span class="kwd">forall</span> <span class="id">k</span> <span class="id">t</span>, <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#nth_error">nth_error</a></span> <span class="id">defs</span> <span class="id">k</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">t</span> -&gt; <span class="id"><a href="STerm.html#closed_at">closed_at</a></span> <span class="id">t</span> 0 -&gt; <span class="id">iota</span> <span class="id">defs</span> (<span class="id"><a href="STerm.html#dvar">dvar</a></span> <span class="id">k</span>) <span class="id">t</span><br/>
 | <span class="id"><a name="iota_app1">iota_app1</a></span> : <span class="kwd">forall</span> <span class="id">t1</span> <span class="id">t2</span> <span class="id">t3</span>, <span class="id">iota</span> <span class="id">defs</span> <span class="id">t1</span> <span class="id">t2</span> -&gt; <span class="id">iota</span> <span class="id">defs</span> (<span class="id"><a href="STerm.html#app">app</a></span> <span class="id">t1</span> <span class="id">t3</span>) (<span class="id"><a href="STerm.html#app">app</a></span> <span class="id">t2</span> <span class="id">t3</span>)<br/>
@@ -629,6 +635,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">rewrite</span> <span class="id"><a href="Misc.html#select2_app_assoc">select2_app_assoc</a></span>. <span class="id">constructor</span>; <span class="id">assumption</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Confluence for <span class="bracket"><span class="id">iota</span></span> and <span class="bracket"><span class="id">beta</span></span> + <span class="bracket"><span class="id">iota</span></span>. </div>
 <span class="kwd">Lemma</span> <span class="id"><a name="iota_confluent">iota_confluent</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">defs</span>, <span class="id"><a href="Rewrite.html#confluent">confluent</a></span> (<span class="id"><a href="Beta.html#iota">iota</a></span> <span class="id">defs</span>).<br/>
 <details><summary>Proof.</summary>
@@ -646,7 +653,6 @@ Qed.</details>
 Qed.</details>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="betaiota">betaiota</a></span> <span class="id">defs</span> := <span class="id"><a href="Rewrite.html#union">union</a></span> (<span class="id"><a href="Beta.html#iota">iota</a></span> <span class="id">defs</span>) <span class="id"><a href="Beta.html#beta">beta</a></span>.<br/>
-<br/>
 <br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="is_head">is_head</a></span> : <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="is_head_var">is_head_var</a></span> : <span class="kwd">forall</span> <span class="id">n</span>, <span class="id">is_head</span> (<span class="id"><a href="STerm.html#var">var</a></span> <span class="id">n</span>)<br/>
@@ -829,7 +835,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">apply</span> <span class="id"><a href="Beta.html#beta_hnf_ctx">beta_hnf_ctx</a></span> <span class="kwd">with</span> (<span class="id">h</span> := <span class="id"><a href="Beta.html#h_switch">h_switch</a></span> <span class="id"><a href="Beta.html#h_hole">h_hole</a></span> <span class="id">m</span>); <span class="id">eassumption</span>.<br/>
 Qed.</details>
 <br/>
-<br/>
+<div class="doc">Comparison of weak head-normal forms. </div>
 <span class="kwd">Definition</span> <span class="id"><a name="mk_merge">mk_merge</a></span> {<span class="id">A</span> : <span class="kwd">Type</span>} (<span class="id">l1</span> <span class="id">l2</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#option">option</a></span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id">A</span>)) :=<br/>
 &nbsp;&nbsp;<span class="kwd">match</span> <span class="id">l1</span>, <span class="id">l2</span> <span class="kwd">with</span><br/>
 &nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">l1</span>, <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">l2</span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> (<span class="id">l1</span> ++ <span class="id">l2</span>)<br/>

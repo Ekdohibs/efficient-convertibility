@@ -11,10 +11,13 @@ Require Import STerm.
 Require Import GenInd.
 Require Import Beta.
 
+(** Proof of the efficient convertibility test. *)
+
 Definition fst3 {A B C : Type} (x : A * B * C) := fst (fst x).
 Definition snd3 {A B C : Type} (x : A * B * C) := snd (fst x).
 Definition thd3 {A B C : Type} (x : A * B * C) := snd x.
 
+(** Type definitions for continuations, values, and threads. *)
 
 Definition rthreadptr := nat.
 Definition cthreadptr := nat.
@@ -54,6 +57,8 @@ Inductive cthread :=
 | cthread_or : cthread -> cthread -> cthread.
 
 Definition addr := rthreadptr.
+
+(** Expresses whether a given continuation or value refers to a given thread. We will ensure that the induced graph is acyclic. *)
 
 Inductive cont_points_to : cont -> addr -> Prop :=
 | kapp_points_to_1 : forall v c a, val_points_to v a -> cont_points_to (Kapp v c) a
@@ -125,6 +130,7 @@ Proof.
     destruct nth_error; intuition congruence.
 Qed.
 
+(** Steps of reduction threads. *)
 
 Definition update_rthread st rid rt :=
   {|
@@ -263,6 +269,8 @@ Definition step_r (st : state) (rid : rthreadptr) : state :=
     end
   end.
 
+(** Steps of convertibility threads. *)
+
 Fixpoint cthread_andn (l : list cthread) :=
   match l with
   | nil => cthread_done true
@@ -391,6 +399,7 @@ Inductive step : (cthread * state) -> (cthread * state) -> Prop :=
     forall ct1 ct2 st, cthread_red st ct1 ct2 -> step (ct1, st) (ct2, st).
 
 
+(** Definition of the readback from [value] and threads to terms, and [cont] to contexts. *)
 
 Inductive dvar_free x : term -> Prop :=
 | dvar_free_var : forall n, dvar_free x (var n)
@@ -531,6 +540,8 @@ Ltac read_cont_kswitch_intro :=
 Ltac read_ind :=
   apply read_ind; [read_thread_val_intro|read_thread_term_intro|read_val_thread_intro|read_val_clos_intro|read_val_block_intro|read_val_neutral_intro|read_cont_kid_intro|read_cont_kapp_intro|read_cont_kswitch_intro].
 
+
+(** [points] is acyclic. *)
 Lemma read_Acc_aux :
   forall st defs, (forall varmap a t, read_thread st defs varmap a t -> Acc (flip (points st)) a) /\
              (forall varmap v t, read_val st defs varmap v t -> forall a, val_points_to v a -> Acc (flip (points st)) a) /\
@@ -706,7 +717,7 @@ Qed.
  *)
 
 
-
+(** Expresses that a property is true for each address transitively pointed to from a given address. *)
 
 Definition every_reachable st a (P : addr -> Prop) :=
   forall a2, star (points st) a a2 -> P a2.
@@ -775,6 +786,7 @@ Proof.
     apply H. rewrite (plus_star_iff _ _ _ _); eexists; split; eassumption.
 Qed.
 
+(** If all threads pointed to from an address are unchanged, the readback is still compatible. *)
 
 Definition unchanged_from st1 st2 a := every_reachable st1 a (fun a2 => nth_error st1.(st_rthreads) a2 = nth_error st2.(st_rthreads) a2).
 Definition unchanged_from_plus st1 st2 a := every_reachable_plus st1 a (fun a2 => nth_error st1.(st_rthreads) a2 = nth_error st2.(st_rthreads) a2).
@@ -906,6 +918,7 @@ Proof.
   - unfold points, points_to in *. rewrite <- (unchanged_from_same _ _ _ H12). assumption.
 Qed.
 
+(** Expresses that we did not change existing addresses, or at most one of them. *)
 
 Definition only_extended st1 st2 :=
   forall rid rt, nth_error (st_rthreads st1) rid = Some rt -> nth_error (st_rthreads st2) rid = Some rt.
@@ -1060,6 +1073,7 @@ Proof.
   apply only_changed_update.
 Qed.
 
+(** Each reachable point has the same readback. *)
 
 Definition same_read_plus st1 st2 defs rid :=
   every_reachable_plus st1 rid (fun a => forall varmap t, read_thread st1 defs varmap a t -> read_thread st2 defs varmap a t).
@@ -1208,6 +1222,7 @@ Proof.
     intros rid rt H; assumption.
 Qed.
 
+(** [step_r] only changes the thread passed to it. *)
 
 Lemma only_changed_step_r :
   forall st rid, only_changed st (step_r st rid) rid.
@@ -1248,6 +1263,8 @@ Proof.
       apply only_changed_update.
 Qed.
 
+
+(** Initial state computation. *)
 
 Definition defs_ok (defs : list term) st :=
   length defs <= st.(st_freename).
@@ -1445,6 +1462,7 @@ Proof.
   - simpl. lia.
 Qed.
 
+(** Properties about contexts and reduction. *)
 
 Lemma compose_hctx_hole_r :
   forall h, compose_hctx h h_hole = h.
@@ -1483,6 +1501,8 @@ Proof.
   intros t1 t2 h H. eapply star_map_impl; [|eassumption].
   intros t3 t4 [Ht34 | Ht34]; [left | right]; apply beta_fill; assumption.
 Qed.
+
+(** Proof that readback is compatible with [step_r]. *)
 
 Lemma read_val_only_extended :
   forall st st2 defs varmap v t, st_freename st <= st_freename st2 -> only_extended st st2 -> read_val st defs varmap v t -> read_val st2 defs varmap v t.
@@ -3076,6 +3096,8 @@ Proof.
   refine (proj1 (proj2 (stable_beta_hnf_aux3 st defs rid _ _)) _ _ _ Hread Hvarmap); assumption.
 Qed.
 
+(** Readback of convertibility threads. *)
+
 Inductive read_cthread st defs : cthread -> bool -> Prop :=
 | read_cthread_done : forall b, read_cthread st defs (cthread_done b) b
 | read_cthread_and_true :
@@ -3697,6 +3719,7 @@ Proof.
   - constructor; [assumption|constructor].
 Qed.
 
+(** Well-formedness of convertibility threads. *)
 
 Inductive cthread_wf st (defs : list term) : cthread -> Prop :=
 | cthread_wf_done : forall b, cthread_wf st defs (cthread_done b)
@@ -3836,6 +3859,8 @@ Proof.
     eapply cmp_cont_cthread_wf; eassumption.
 Qed.
 
+
+(** Proof of compatibility of readback for convertibility threads. *)
 
 Lemma read_cthread_andn_true :
   forall st defs l, read_cthread st defs (cthread_andn l) true <-> Forall (fun c => read_cthread st defs c true) l.
@@ -4481,6 +4506,7 @@ Proof.
     + eapply step_wf; eassumption.
 Qed.
 
+(** Initialisation for convertibility and correctness of the machine. *)
 
 Definition init_conv (defs : list term) (t1 t2 : term) :=
   let (st, vs) := init_all {| st_rthreads := nil ; st_freename := length defs |} nil defs in

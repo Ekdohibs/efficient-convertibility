@@ -28,6 +28,8 @@
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="kwd">Inductive</span>.<br/>
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="Rewrite.html">Rewrite</a></span>.<br/>
 <br/>
+<div class="doc">Proof that <span class="bracket"><span class="id">red</span></span> is compatible with <span class="bracket"><span class="id">beta</span></span>. </div>
+<br/>
 <span class="kwd">Fixpoint</span> <span class="id"><a name="read_nfval">read_nfval</a></span> <span class="id">v</span> :=<br/>
 &nbsp;&nbsp;<span class="kwd">match</span> <span class="id">v</span> <span class="kwd">with</span><br/>
 &nbsp;&nbsp;| <span class="id"><a href="Red.html#nvar">nvar</a></span> <span class="id">n</span> =&gt; <span class="id"><a href="STerm.html#var">var</a></span> <span class="id">n</span><br/>
@@ -146,6 +148,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">destruct</span> <span class="id">o0</span>; <span class="id">simpl</span> <span class="kwd">in</span> *; <span class="id">autoinjSome</span>; <span class="id">simpl</span> <span class="kwd">in</span> *; <span class="id">congruence</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Proof of preservation of divergence. </div>
 <span class="kwd">Definition</span> <span class="id"><a name="read_ext_with_size">read_ext_with_size</a></span> {<span class="id">df</span>} (<span class="id">e</span> : <span class="id"><a href="Red.html#ext">ext</a></span> <span class="id">df</span>) :=<br/>
 &nbsp;&nbsp;<span class="kwd">match</span> <span class="id">e</span> <span class="kwd">with</span><br/>
 &nbsp;&nbsp;| <span class="id"><a href="Red.html#ext_term">ext_term</a></span> <span class="id">t</span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> (<span class="id">t</span>, 2 * <span class="id"><a href="STerm.html#size">size</a></span> <span class="id">t</span>)<br/>
@@ -185,7 +188,6 @@ Qed.</details>
 <details><summary>Proof.</summary>
 &nbsp;&nbsp;<span class="id">destruct</span> <span class="id">x</span> <span class="kwd">as</span> [[<span class="id">x</span> <span class="id">y</span>]|]; <span class="id">simpl</span>; <span class="id">reflexivity</span>.<br/>
 Qed.</details>
-<br/>
 <br/>
 <span class="kwd">Lemma</span> <span class="id"><a name="red_div_beta_aux">red_div_beta_aux</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">t</span> <span class="id">df</span> <span class="id">e</span> <span class="id">o</span>, <span class="id"><a href="Red.html#cored">cored</a></span> <span class="id">df</span> <span class="id">e</span> <span class="id">o</span> -&gt; <span class="id"><a href="RedProof.html#read_ext_with_size">read_ext_with_size</a></span> <span class="id">e</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">t</span> -&gt;<br/>

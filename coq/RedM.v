@@ -11,6 +11,8 @@ Require Import Pretty.
 Require Import RedE.
 Require Import Inductive.
 
+(** Strong call-by-need pretty-big-step semantics. *)
+
 Inductive eiM :=
 | eiM_lazy : term -> list freevar -> eiM
 | eiM_abs1 : term -> list freevar -> eiM
@@ -255,6 +257,8 @@ CoInductive coredM : forall df, extM df -> outM (valM df) memxM -> Prop :=
 
 Lemma redM_is_ind3 : is_ind3 redM_ redM.
 Proof. prove_ind3. Qed.
+
+(** Lemmas for proofs and stronger induction principles. *)
 
 Lemma update_env_fst :
   forall {A : Type} (env : list (freevar * A)) x u, map fst env \subseteq map fst (update_env env x u).

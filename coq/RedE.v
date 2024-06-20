@@ -10,6 +10,8 @@ Require Import STerm.
 Require Import Pretty.
 Require Import Inductive.
 
+(** Strong call-by-name pretty-big-step semantics, with environments. *)
+
 Inductive clo :=
 | clo_var : freevar -> clo
 | clo_term : list freevar -> term -> list clo -> clo.
@@ -272,6 +274,7 @@ CoInductive coredE : forall df, list freevar -> list freevar -> list freevar -> 
 Lemma redE_is_ind6 : is_ind6 redE_ redE.
 Proof. prove_ind6. Defined.
 
+(** Lemma for stronger induction principles. *)
 Lemma valE_nf_closed :
   forall df v xs, nfvalx_fv v \subseteq xs -> valE_closed xs (@valE_nf df v).
 Proof.
@@ -541,6 +544,8 @@ Proof.
     intros; simpl in *; split; [assumption|]. eapply redE_closed; apply H0.
   - assumption.
 Qed.
+
+(** Transfer lemmas. *)
 
 Definition extE_shallow_to_deep (e : extE shallow) : extE deep :=
   match e return extE deep with

@@ -25,6 +25,8 @@
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="RedE.html">RedE</a></span>.<br/>
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="kwd">Inductive</span>.<br/>
 <br/>
+<div class="doc">Strong call-by-need pretty-big-step semantics. </div>
+<br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="eiM">eiM</a></span> :=<br/>
 | <span class="id"><a name="eiM_lazy">eiM_lazy</a></span> : <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="id">eiM</span><br/>
 | <span class="id"><a name="eiM_abs1">eiM_abs1</a></span> : <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="id">eiM</span><br/>
@@ -270,6 +272,8 @@
 <span class="kwd">Lemma</span> <span class="id"><a name="redM_is_ind3">redM_is_ind3</a></span> : <span class="id"><a href="Inductive.html#is_ind3">is_ind3</a></span> <span class="id"><a href="RedM.html#redM_">redM_</a></span> <span class="id"><a href="RedM.html#redM">redM</a></span>.<br/>
 <details><summary>Proof.</summary>
  <span class="id">prove_ind3</span>. Qed.</details>
+<br/>
+<div class="doc">Lemmas for proofs and stronger induction principles. </div>
 <br/>
 <span class="kwd">Lemma</span> <span class="id"><a name="update_env_fst">update_env_fst</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> {<span class="id">A</span> : <span class="kwd">Type</span>} (<span class="id">env</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> (<span class="id"><a href="Freevar.html#freevar">freevar</a></span> * <span class="id">A</span>)) <span class="id">x</span> <span class="id">u</span>, <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#map">map</a></span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#fst">fst</a></span> <span class="id">env</span> \<span class="id">subseteq</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#map">map</a></span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#fst">fst</a></span> (<span class="id"><a href="FEnv.html#update_env">update_env</a></span> <span class="id">env</span> <span class="id">x</span> <span class="id">u</span>).<br/>

@@ -25,10 +25,13 @@
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="GenInd.html">GenInd</a></span>.<br/>
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="Beta.html">Beta</a></span>.<br/>
 <br/>
+<div class="doc">Proof of the efficient convertibility test. </div>
+<br/>
 <span class="kwd">Definition</span> <span class="id"><a name="fst3">fst3</a></span> {<span class="id">A</span> <span class="id">B</span> <span class="id">C</span> : <span class="kwd">Type</span>} (<span class="id">x</span> : <span class="id">A</span> * <span class="id">B</span> * <span class="id">C</span>) := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#fst">fst</a></span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#fst">fst</a></span> <span class="id">x</span>).<br/>
 <span class="kwd">Definition</span> <span class="id"><a name="snd3">snd3</a></span> {<span class="id">A</span> <span class="id">B</span> <span class="id">C</span> : <span class="kwd">Type</span>} (<span class="id">x</span> : <span class="id">A</span> * <span class="id">B</span> * <span class="id">C</span>) := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#snd">snd</a></span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#fst">fst</a></span> <span class="id">x</span>).<br/>
 <span class="kwd">Definition</span> <span class="id"><a name="thd3">thd3</a></span> {<span class="id">A</span> <span class="id">B</span> <span class="id">C</span> : <span class="kwd">Type</span>} (<span class="id">x</span> : <span class="id">A</span> * <span class="id">B</span> * <span class="id">C</span>) := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#snd">snd</a></span> <span class="id">x</span>.<br/>
 <br/>
+<div class="doc">Type definitions for continuations, values, and threads. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="rthreadptr">rthreadptr</a></span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span>.<br/>
 <span class="kwd">Definition</span> <span class="id"><a name="cthreadptr">cthreadptr</a></span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span>.<br/>
@@ -68,6 +71,8 @@
 | <span class="id"><a name="cthread_or">cthread_or</a></span> : <span class="id">cthread</span> -&gt; <span class="id">cthread</span> -&gt; <span class="id">cthread</span>.<br/>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="addr">addr</a></span> := <span class="id"><a href="Convert.html#rthreadptr">rthreadptr</a></span>.<br/>
+<br/>
+<div class="doc">Expresses whether a given continuation or value refers to a given thread. We will ensure that the induced graph is acyclic. </div>
 <br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="cont_points_to">cont_points_to</a></span> : <span class="id"><a href="Convert.html#cont">cont</a></span> -&gt; <span class="id"><a href="Convert.html#addr">addr</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="kapp_points_to_1">kapp_points_to_1</a></span> : <span class="kwd">forall</span> <span class="id">v</span> <span class="id">c</span> <span class="id">a</span>, <span class="id">val_points_to</span> <span class="id">v</span> <span class="id">a</span> -&gt; <span class="id">cont_points_to</span> (<span class="id"><a href="Convert.html#Kapp">Kapp</a></span> <span class="id">v</span> <span class="id">c</span>) <span class="id">a</span><br/>
@@ -139,6 +144,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="id">destruct</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#nth_error">nth_error</a></span>; <span class="id">intuition</span> <span class="id">congruence</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Steps of reduction threads. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="update_rthread">update_rthread</a></span> <span class="id">st</span> <span class="id">rid</span> <span class="id">rt</span> :=<br/>
 &nbsp;&nbsp;{|<br/>
@@ -276,6 +282,8 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">end</span><br/>
 &nbsp;&nbsp;<span class="kwd">end</span>.<br/>
 <br/>
+<div class="doc">Steps of convertibility threads. </div>
+<br/>
 <span class="kwd">Fixpoint</span> <span class="id"><a name="cthread_andn">cthread_andn</a></span> (<span class="id">l</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Convert.html#cthread">cthread</a></span>) :=<br/>
 &nbsp;&nbsp;<span class="kwd">match</span> <span class="id">l</span> <span class="kwd">with</span><br/>
 &nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span> =&gt; <span class="id"><a href="Convert.html#cthread_done">cthread_done</a></span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span><br/>
@@ -404,6 +412,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">ct1</span> <span class="id">ct2</span> <span class="id">st</span>, <span class="id"><a href="Convert.html#cthread_red">cthread_red</a></span> <span class="id">st</span> <span class="id">ct1</span> <span class="id">ct2</span> -&gt; <span class="id">step</span> (<span class="id">ct1</span>, <span class="id">st</span>) (<span class="id">ct2</span>, <span class="id">st</span>).<br/>
 <br/>
 <br/>
+<div class="doc">Definition of the readback from <span class="bracket"><span class="id">value</span></span> and threads to terms, and <span class="bracket"><span class="id">cont</span></span> to contexts. </div>
 <br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="dvar_free">dvar_free</a></span> <span class="id">x</span> : <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="dvar_free_var">dvar_free_var</a></span> : <span class="kwd">forall</span> <span class="id">n</span>, <span class="id">dvar_free</span> <span class="id">x</span> (<span class="id"><a href="STerm.html#var">var</a></span> <span class="id">n</span>)<br/>
@@ -539,6 +548,8 @@ Qed.</details>
 <span class="kwd">Ltac</span> <span class="id">read_ind</span> :=<br/>
 &nbsp;&nbsp;<span class="id">apply</span> <span class="id"><a href="Convert.html#read_ind">read_ind</a></span>; [<span class="id">read_thread_val_intro</span>|<span class="id">read_thread_term_intro</span>|<span class="id">read_val_thread_intro</span>|<span class="id">read_val_clos_intro</span>|<span class="id">read_val_block_intro</span>|<span class="id">read_val_neutral_intro</span>|<span class="id">read_cont_kid_intro</span>|<span class="id">read_cont_kapp_intro</span>|<span class="id">read_cont_kswitch_intro</span>].<br/>
 <br/>
+<br/>
+<div class="doc"><span class="bracket"><span class="id">points</span></span> is acyclic. </div>
 <span class="kwd">Lemma</span> <span class="id"><a name="read_Acc_aux">read_Acc_aux</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">st</span> <span class="id">defs</span>, (<span class="kwd">forall</span> <span class="id">varmap</span> <span class="id">a</span> <span class="id">t</span>, <span class="id"><a href="Convert.html#read_thread">read_thread</a></span> <span class="id">st</span> <span class="id">defs</span> <span class="id">varmap</span> <span class="id">a</span> <span class="id">t</span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Wf.html#Acc">Acc</a></span> (<span class="id"><a href="Rewrite.html#flip">flip</a></span> (<span class="id"><a href="Convert.html#points">points</a></span> <span class="id">st</span>)) <span class="id">a</span>) /\<br/>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(<span class="kwd">forall</span> <span class="id">varmap</span> <span class="id">v</span> <span class="id">t</span>, <span class="id"><a href="Convert.html#read_val">read_val</a></span> <span class="id">st</span> <span class="id">defs</span> <span class="id">varmap</span> <span class="id">v</span> <span class="id">t</span> -&gt; <span class="kwd">forall</span> <span class="id">a</span>, <span class="id"><a href="Convert.html#val_points_to">val_points_to</a></span> <span class="id">v</span> <span class="id">a</span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Wf.html#Acc">Acc</a></span> (<span class="id"><a href="Rewrite.html#flip">flip</a></span> (<span class="id"><a href="Convert.html#points">points</a></span> <span class="id">st</span>)) <span class="id">a</span>) /\<br/>
@@ -667,7 +678,7 @@ Qed.</details>
 <br/>
 <br/>
 <br/>
-<br/>
+<div class="doc">Expresses that a property is true for each address transitively pointed to from a given address. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="every_reachable">every_reachable</a></span> <span class="id">st</span> <span class="id">a</span> (<span class="id">P</span> : <span class="id"><a href="Convert.html#addr">addr</a></span> -&gt; <span class="kwd">Prop</span>) :=<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">a2</span>, <span class="id"><a href="Rewrite.html#star">star</a></span> (<span class="id"><a href="Convert.html#points">points</a></span> <span class="id">st</span>) <span class="id">a</span> <span class="id">a2</span> -&gt; <span class="id">P</span> <span class="id">a2</span>.<br/>
@@ -736,6 +747,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="id">apply</span> <span class="id">H</span>. <span class="id">rewrite</span> (<span class="id"><a href="Rewrite.html#plus_star_iff">plus_star_iff</a></span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span>); <span class="id">eexists</span>; <span class="id">split</span>; <span class="id">eassumption</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">If all threads pointed to from an address are unchanged, the readback is still compatible. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="unchanged_from">unchanged_from</a></span> <span class="id">st1</span> <span class="id">st2</span> <span class="id">a</span> := <span class="id"><a href="Convert.html#every_reachable">every_reachable</a></span> <span class="id">st1</span> <span class="id">a</span> (<span class="kwd">fun</span> <span class="id">a2</span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#nth_error">nth_error</a></span> <span class="id">st1</span>.(<span class="id"><a href="Convert.html#st_rthreads">st_rthreads</a></span>) <span class="id">a2</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#nth_error">nth_error</a></span> <span class="id">st2</span>.(<span class="id"><a href="Convert.html#st_rthreads">st_rthreads</a></span>) <span class="id">a2</span>).<br/>
 <span class="kwd">Definition</span> <span class="id"><a name="unchanged_from_plus">unchanged_from_plus</a></span> <span class="id">st1</span> <span class="id">st2</span> <span class="id">a</span> := <span class="id"><a href="Convert.html#every_reachable_plus">every_reachable_plus</a></span> <span class="id">st1</span> <span class="id">a</span> (<span class="kwd">fun</span> <span class="id">a2</span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#nth_error">nth_error</a></span> <span class="id">st1</span>.(<span class="id"><a href="Convert.html#st_rthreads">st_rthreads</a></span>) <span class="id">a2</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#nth_error">nth_error</a></span> <span class="id">st2</span>.(<span class="id"><a href="Convert.html#st_rthreads">st_rthreads</a></span>) <span class="id">a2</span>).<br/>
@@ -863,6 +875,7 @@ Qed.</details>
 &nbsp;&nbsp;- <span class="id">unfold</span> <span class="id"><a href="Convert.html#points">points</a></span>, <span class="id"><a href="Convert.html#points_to">points_to</a></span> <span class="kwd">in</span> *. <span class="id">rewrite</span> &lt;- (<span class="id"><a href="Convert.html#unchanged_from_same">unchanged_from_same</a></span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">H12</span>). <span class="id">assumption</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Expresses that we did not change existing addresses, or at most one of them. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="only_extended">only_extended</a></span> <span class="id">st1</span> <span class="id">st2</span> :=<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">rid</span> <span class="id">rt</span>, <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#nth_error">nth_error</a></span> (<span class="id"><a href="Convert.html#st_rthreads">st_rthreads</a></span> <span class="id">st1</span>) <span class="id">rid</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">rt</span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#nth_error">nth_error</a></span> (<span class="id"><a href="Convert.html#st_rthreads">st_rthreads</a></span> <span class="id">st2</span>) <span class="id">rid</span> = <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">rt</span>.<br/>
@@ -1017,6 +1030,7 @@ Qed.</details>
 &nbsp;&nbsp;<span class="id">apply</span> <span class="id"><a href="Convert.html#only_changed_update">only_changed_update</a></span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Each reachable point has the same readback. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="same_read_plus">same_read_plus</a></span> <span class="id">st1</span> <span class="id">st2</span> <span class="id">defs</span> <span class="id">rid</span> :=<br/>
 &nbsp;&nbsp;<span class="id"><a href="Convert.html#every_reachable_plus">every_reachable_plus</a></span> <span class="id">st1</span> <span class="id">rid</span> (<span class="kwd">fun</span> <span class="id">a</span> =&gt; <span class="kwd">forall</span> <span class="id">varmap</span> <span class="id">t</span>, <span class="id"><a href="Convert.html#read_thread">read_thread</a></span> <span class="id">st1</span> <span class="id">defs</span> <span class="id">varmap</span> <span class="id">a</span> <span class="id">t</span> -&gt; <span class="id"><a href="Convert.html#read_thread">read_thread</a></span> <span class="id">st2</span> <span class="id">defs</span> <span class="id">varmap</span> <span class="id">a</span> <span class="id">t</span>).<br/>
@@ -1165,6 +1179,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="id">intros</span> <span class="id">rid</span> <span class="id">rt</span> <span class="id">H</span>; <span class="id">assumption</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc"><span class="bracket"><span class="id">step_r</span></span> only changes the thread passed to it. </div>
 <br/>
 <span class="kwd">Lemma</span> <span class="id"><a name="only_changed_step_r">only_changed_step_r</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">st</span> <span class="id">rid</span>, <span class="id"><a href="Convert.html#only_changed">only_changed</a></span> <span class="id">st</span> (<span class="id"><a href="Convert.html#step_r">step_r</a></span> <span class="id">st</span> <span class="id">rid</span>) <span class="id">rid</span>.<br/>
@@ -1205,6 +1220,8 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">apply</span> <span class="id"><a href="Convert.html#only_changed_update">only_changed_update</a></span>.<br/>
 Qed.</details>
 <br/>
+<br/>
+<div class="doc">Initial state computation. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="defs_ok">defs_ok</a></span> (<span class="id">defs</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="STerm.html#term">term</a></span>) <span class="id">st</span> :=<br/>
 &nbsp;&nbsp;<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#length">length</a></span> <span class="id">defs</span> &lt;= <span class="id">st</span>.(<span class="id"><a href="Convert.html#st_freename">st_freename</a></span>).<br/>
@@ -1402,6 +1419,7 @@ Qed.</details>
 &nbsp;&nbsp;- <span class="id">simpl</span>. <span class="id">lia</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Properties about contexts and reduction. </div>
 <br/>
 <span class="kwd">Lemma</span> <span class="id"><a name="compose_hctx_hole_r">compose_hctx_hole_r</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">h</span>, <span class="id"><a href="Beta.html#compose_hctx">compose_hctx</a></span> <span class="id">h</span> <span class="id"><a href="Beta.html#h_hole">h_hole</a></span> = <span class="id">h</span>.<br/>
@@ -1440,6 +1458,8 @@ Qed.</details>
 &nbsp;&nbsp;<span class="id">intros</span> <span class="id">t1</span> <span class="id">t2</span> <span class="id">h</span> <span class="id">H</span>. <span class="id">eapply</span> <span class="id"><a href="Rewrite.html#star_map_impl">star_map_impl</a></span>; [|<span class="id">eassumption</span>].<br/>
 &nbsp;&nbsp;<span class="id">intros</span> <span class="id">t3</span> <span class="id">t4</span> [<span class="id">Ht34</span> | <span class="id">Ht34</span>]; [<span class="id">left</span> | <span class="id">right</span>]; <span class="id">apply</span> <span class="id"><a href="Convert.html#beta_fill">beta_fill</a></span>; <span class="id">assumption</span>.<br/>
 Qed.</details>
+<br/>
+<div class="doc">Proof that readback is compatible with <span class="bracket"><span class="id">step_r</span></span>. </div>
 <br/>
 <span class="kwd">Lemma</span> <span class="id"><a name="read_val_only_extended">read_val_only_extended</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">st</span> <span class="id">st2</span> <span class="id">defs</span> <span class="id">varmap</span> <span class="id">v</span> <span class="id">t</span>, <span class="id"><a href="Convert.html#st_freename">st_freename</a></span> <span class="id">st</span> &lt;= <span class="id"><a href="Convert.html#st_freename">st_freename</a></span> <span class="id">st2</span> -&gt; <span class="id"><a href="Convert.html#only_extended">only_extended</a></span> <span class="id">st</span> <span class="id">st2</span> -&gt; <span class="id"><a href="Convert.html#read_val">read_val</a></span> <span class="id">st</span> <span class="id">defs</span> <span class="id">varmap</span> <span class="id">v</span> <span class="id">t</span> -&gt; <span class="id"><a href="Convert.html#read_val">read_val</a></span> <span class="id">st2</span> <span class="id">defs</span> <span class="id">varmap</span> <span class="id">v</span> <span class="id">t</span>.<br/>
@@ -3033,6 +3053,8 @@ Qed.</details>
 &nbsp;&nbsp;<span class="id">refine</span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#proj1">proj1</a></span> (<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Logic.html#proj2">proj2</a></span> (<span class="id"><a href="Convert.html#stable_beta_hnf_aux3">stable_beta_hnf_aux3</a></span> <span class="id">st</span> <span class="id">defs</span> <span class="id">rid</span> <span class="id">_</span> <span class="id">_</span>)) <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">Hread</span> <span class="id">Hvarmap</span>); <span class="id">assumption</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Readback of convertibility threads. </div>
+<br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="read_cthread">read_cthread</a></span> <span class="id">st</span> <span class="id">defs</span> : <span class="id"><a href="Convert.html#cthread">cthread</a></span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#bool">bool</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="read_cthread_done">read_cthread_done</a></span> : <span class="kwd">forall</span> <span class="id">b</span>, <span class="id">read_cthread</span> <span class="id">st</span> <span class="id">defs</span> (<span class="id"><a href="Convert.html#cthread_done">cthread_done</a></span> <span class="id">b</span>) <span class="id">b</span><br/>
 | <span class="id"><a name="read_cthread_and_true">read_cthread_and_true</a></span> :<br/>
@@ -3574,6 +3596,7 @@ Qed.</details>
 &nbsp;&nbsp;- <span class="id">constructor</span>; [<span class="id">assumption</span>|<span class="id">constructor</span>].<br/>
 Qed.</details>
 <br/>
+<div class="doc">Well-formedness of convertibility threads. </div>
 <br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="cthread_wf">cthread_wf</a></span> <span class="id">st</span> (<span class="id">defs</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="STerm.html#term">term</a></span>) : <span class="id"><a href="Convert.html#cthread">cthread</a></span> -&gt; <span class="kwd">Prop</span> :=<br/>
 | <span class="id"><a name="cthread_wf_done">cthread_wf_done</a></span> : <span class="kwd">forall</span> <span class="id">b</span>, <span class="id">cthread_wf</span> <span class="id">st</span> <span class="id">defs</span> (<span class="id"><a href="Convert.html#cthread_done">cthread_done</a></span> <span class="id">b</span>)<br/>
@@ -3713,6 +3736,8 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="id">eapply</span> <span class="id"><a href="Convert.html#cmp_cont_cthread_wf">cmp_cont_cthread_wf</a></span>; <span class="id">eassumption</span>.<br/>
 Qed.</details>
 <br/>
+<br/>
+<div class="doc">Proof of compatibility of readback for convertibility threads. </div>
 <br/>
 <span class="kwd">Lemma</span> <span class="id"><a name="read_cthread_andn_true">read_cthread_andn_true</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">st</span> <span class="id">defs</span> <span class="id">l</span>, <span class="id"><a href="Convert.html#read_cthread">read_cthread</a></span> <span class="id">st</span> <span class="id">defs</span> (<span class="id"><a href="Convert.html#cthread_andn">cthread_andn</a></span> <span class="id">l</span>) <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span> &lt;-&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html#Forall">Forall</a></span> (<span class="kwd">fun</span> <span class="id">c</span> =&gt; <span class="id"><a href="Convert.html#read_cthread">read_cthread</a></span> <span class="id">st</span> <span class="id">defs</span> <span class="id">c</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span>) <span class="id">l</span>.<br/>
@@ -4358,6 +4383,7 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;+ <span class="id">eapply</span> <span class="id"><a href="Convert.html#step_wf">step_wf</a></span>; <span class="id">eassumption</span>.<br/>
 Qed.</details>
 <br/>
+<div class="doc">Initialisation for convertibility and correctness of the machine. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="init_conv">init_conv</a></span> (<span class="id">defs</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="STerm.html#term">term</a></span>) (<span class="id">t1</span> <span class="id">t2</span> : <span class="id"><a href="STerm.html#term">term</a></span>) :=<br/>
 &nbsp;&nbsp;<span class="kwd">let</span> (<span class="id">st</span>, <span class="id">vs</span>) := <span class="id"><a href="Convert.html#init_all">init_all</a></span> {| <span class="id"><a href="Convert.html#st_rthreads">st_rthreads</a></span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span> ; <span class="id"><a href="Convert.html#st_freename">st_freename</a></span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#length">length</a></span> <span class="id">defs</span> |} <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nil">nil</a></span> <span class="id">defs</span> <span class="kwd">in</span><br/>

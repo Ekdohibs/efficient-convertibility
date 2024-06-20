@@ -24,6 +24,8 @@
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="Pretty.html">Pretty</a></span>.<br/>
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="kwd">Inductive</span>.<br/>
 <br/>
+<div class="doc">Strong call-by-name pretty-big-step semantics, with environments. </div>
+<br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="clo">clo</a></span> :=<br/>
 | <span class="id"><a name="clo_var">clo_var</a></span> : <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="id">clo</span><br/>
 | <span class="id"><a name="clo_term">clo_term</a></span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="Freevar.html#freevar">freevar</a></span> -&gt; <span class="id"><a href="STerm.html#term">term</a></span> -&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id">clo</span> -&gt; <span class="id">clo</span>.<br/>
@@ -287,6 +289,7 @@ Qed.</details>
 <details><summary>Proof.</summary>
  <span class="id">prove_ind6</span>. Defined.</details>
 <br/>
+<div class="doc">Lemma for stronger induction principles. </div>
 <span class="kwd">Lemma</span> <span class="id"><a name="valE_nf_closed">valE_nf_closed</a></span> :<br/>
 &nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">df</span> <span class="id">v</span> <span class="id">xs</span>, <span class="id"><a href="RedE.html#nfvalx_fv">nfvalx_fv</a></span> <span class="id">v</span> \<span class="id">subseteq</span> <span class="id">xs</span> -&gt; <span class="id"><a href="RedE.html#valE_closed">valE_closed</a></span> <span class="id">xs</span> (@<span class="id"><a href="RedE.html#valE_nf">valE_nf</a></span> <span class="id">df</span> <span class="id">v</span>).<br/>
 <details><summary>Proof.</summary>
@@ -556,6 +559,8 @@ Qed.</details>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="id">intros</span>; <span class="id">simpl</span> <span class="kwd">in</span> *; <span class="id">split</span>; [<span class="id">assumption</span>|]. <span class="id">eapply</span> <span class="id"><a href="RedE.html#redE_closed">redE_closed</a></span>; <span class="id">apply</span> <span class="id">H0</span>.<br/>
 &nbsp;&nbsp;- <span class="id">assumption</span>.<br/>
 Qed.</details>
+<br/>
+<div class="doc">Transfer lemmas. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="extE_shallow_to_deep">extE_shallow_to_deep</a></span> (<span class="id">e</span> : <span class="id"><a href="RedE.html#extE">extE</a></span> <span class="id"><a href="Misc.html#shallow">shallow</a></span>) : <span class="id"><a href="RedE.html#extE">extE</a></span> <span class="id"><a href="Misc.html#deep">deep</a></span> :=<br/>
 &nbsp;&nbsp;<span class="kwd">match</span> <span class="id">e</span> <span class="kwd">return</span> <span class="id"><a href="RedE.html#extE">extE</a></span> <span class="id"><a href="Misc.html#deep">deep</a></span> <span class="kwd">with</span><br/>

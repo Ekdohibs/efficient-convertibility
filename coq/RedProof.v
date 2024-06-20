@@ -14,6 +14,8 @@ Require Import Pretty.
 Require Import Inductive.
 Require Import Rewrite.
 
+(** Proof that [red] is compatible with [beta]. *)
+
 Fixpoint read_nfval v :=
   match v with
   | nvar n => var n
@@ -132,6 +134,7 @@ Proof.
     + destruct o0; simpl in *; autoinjSome; simpl in *; congruence.
 Qed.
 
+(** Proof of preservation of divergence. *)
 Definition read_ext_with_size {df} (e : ext df) :=
   match e with
   | ext_term t => Some (t, 2 * size t)
@@ -171,7 +174,6 @@ Lemma option_map_fst_id :
 Proof.
   destruct x as [[x y]|]; simpl; reflexivity.
 Qed.
-
 
 Lemma red_div_beta_aux :
   forall t df e o, cored df e o -> read_ext_with_size e = Some t ->

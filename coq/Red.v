@@ -10,6 +10,7 @@ Require Import STerm.
 Require Import Pretty.
 Require Import Inductive.
 
+(** Strong pretty-big-step call-by-name semantics, with substitutions. *)
 
 Inductive nfval :=
 | nvar : nat -> nfval
