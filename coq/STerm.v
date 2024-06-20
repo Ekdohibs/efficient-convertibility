@@ -7,6 +7,9 @@ Require Import Coq.Logic.Eqdep_dec.
 Require Import FEnv.
 Require Import Inductive.
 
+(** Renaming are increasing functions from nat to nat, used when we need to rename variables. For practical purposes,
+    we define them in such a manner that two equivalent renamings are actually equal, avoiding to require functional extensionality. *)
+
 Definition renaming := list nat.
 Fixpoint renv (L : renaming) (n : nat) : nat :=
   match L with
@@ -210,7 +213,8 @@ Proof.
 Qed.
 
 
-
+(** Definition of terms and substitution, in de Bruijn syntax. The [var] constructor corresponds to bound variables, while [dvar] 
+    is used for defined constants. *)
 
 Inductive term :=
 | var : nat -> term

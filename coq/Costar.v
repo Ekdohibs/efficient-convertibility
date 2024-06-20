@@ -9,13 +9,21 @@ Require Import FEnv.
 Require Import STerm.
 Require Import Inductive.
 
+(** Infinite reduction starting from an element. *)
 CoInductive infred {A : Type} (R : A -> A -> Prop) : A -> Prop :=
 | infred_step : forall x y, R x y -> infred R y -> infred R x.
+
+(** Either divergence or finite reduction from an element to another. *)
 CoInductive costar {A : Type} (R : A -> A -> Prop) : A -> option A -> Prop :=
 | costar_refl : forall x, costar R x (Some x)
 | costar_step : forall x y z, R x y -> costar R y z -> costar R x z.
+
+(** Impredicative encoding of [costar], useful for proofs. *)
 Definition costarP {A : Type} (R : A -> A -> Prop) x y :=
   exists H, H x y /\ forall x1 y1, H x1 y1 -> y1 = Some x1 \/ exists z, R x1 z /\ H z y1.
+
+
+(** Lemmas useful for proving [costar]. *)
 
 Lemma costarP_costar :
   forall A (R : A -> A -> Prop) x y, costarP R x y -> costar R x y.

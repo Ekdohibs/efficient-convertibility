@@ -9,7 +9,7 @@
 <link href="coq2html.css" rel="stylesheet" type="text/css" />
 </head>
 
-<body onload="hideAll('proofscript')">
+<body>
 <h1 class="title">Module STerm</h1>
 <div class="coq">
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Lists.List.html">List</a></span>.<br/>
@@ -20,6 +20,9 @@
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Logic.Eqdep_dec.html">Coq.Logic.Eqdep_dec</a></span>.<br/>
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="FEnv.html">FEnv</a></span>.<br/>
 <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="kwd">Inductive</span>.<br/>
+<br/>
+<div class="doc">Renaming are increasing functions from nat to nat, used when we need to rename variables. For practical purposes,
+    we define them in such a manner that two equivalent renamings are actually equal, avoiding to require functional extensionality. </div>
 <br/>
 <span class="kwd">Definition</span> <span class="id"><a name="renaming">renaming</a></span> := <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#list">list</a></span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span>.<br/>
 <span class="kwd">Fixpoint</span> <span class="id"><a name="renv">renv</a></span> (<span class="id">L</span> : <span class="id"><a href="STerm.html#renaming">renaming</a></span>) (<span class="id">n</span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span>) : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span> :=<br/>
@@ -224,7 +227,8 @@ Qed.</details>
 Qed.</details>
 <br/>
 <br/>
-<br/>
+<div class="doc">Definition of terms and substitution, in de Bruijn syntax. The <span class="bracket"><span class="id">var</span></span> constructor corresponds to bound variables, while <span class="bracket"><span class="id">dvar</span></span> 
+    is used for defined constants. </div>
 <br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="term">term</a></span> :=<br/>
 | <span class="id"><a name="var">var</a></span> : <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span> -&gt; <span class="id">term</span><br/>

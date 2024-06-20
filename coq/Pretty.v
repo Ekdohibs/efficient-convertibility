@@ -1,4 +1,9 @@
 
+(** Datatype to express the result of computations. For now, this is essentially isomorphic
+    to an option type; where [out_ret] corresponds to normal termination, and [out_div] to
+    divergence. In the future, it would be possible to add a third [out_err] for computations
+    that produce errors. *)
+
 Inductive out t :=
 | out_ret : t -> out t
 | out_div : out t.
@@ -23,6 +28,9 @@ Lemma get_out_abort_div :
 Proof.
   intros; destruct o1; simpl in *; congruence.
 Qed.
+
+(** This type is mainly useful for computations that hold a memory state; this is easier than
+    packing both the result and the memory in a normal [out] type. *)
 
 Inductive outM t m :=
 | outM_ret : t -> m -> outM t m

@@ -9,9 +9,14 @@
 <link href="coq2html.css" rel="stylesheet" type="text/css" />
 </head>
 
-<body onload="hideAll('proofscript')">
+<body>
 <h1 class="title">Module Pretty</h1>
 <div class="coq">
+<br/>
+<div class="doc">Datatype to express the result of computations. For now, this is essentially isomorphic
+    to an option type; where <span class="bracket"><span class="id">out_ret</span></span> corresponds to normal termination, and <span class="bracket"><span class="id">out_div</span></span> to
+    divergence. In the future, it would be possible to add a third <span class="bracket"><span class="id">out_err</span></span> for computations
+    that produce errors. </div>
 <br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="out">out</a></span> <span class="id">t</span> :=<br/>
 | <span class="id"><a name="out_ret">out_ret</a></span> : <span class="id">t</span> -&gt; <span class="id">out</span> <span class="id">t</span><br/>
@@ -37,6 +42,9 @@
 <details><summary>Proof.</summary>
 &nbsp;&nbsp;<span class="id">intros</span>; <span class="id">destruct</span> <span class="id">o1</span>; <span class="id">simpl</span> <span class="kwd">in</span> *; <span class="id">congruence</span>.<br/>
 Qed.</details>
+<br/>
+<div class="doc">This type is mainly useful for computations that hold a memory state; this is easier than
+    packing both the result and the memory in a normal <span class="bracket"><span class="id">out</span></span> type. </div>
 <br/>
 <span class="kwd">Inductive</span> <span class="id"><a name="outM">outM</a></span> <span class="id">t</span> <span class="id">m</span> :=<br/>
 | <span class="id"><a name="outM_ret">outM_ret</a></span> : <span class="id">t</span> -&gt; <span class="id">m</span> -&gt; <span class="id">outM</span> <span class="id">t</span> <span class="id">m</span><br/>
