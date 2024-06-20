@@ -1,0 +1,46 @@
+Beta.vo Beta.glob Beta.v.beautified Beta.required_vo: Beta.v Freevar.vo Misc.vo FEnv.vo Rewrite.vo STerm.vo Inductive.vo GenInd.vo
+Beta.vio: Beta.v Freevar.vio Misc.vio FEnv.vio Rewrite.vio STerm.vio Inductive.vio GenInd.vio
+Convert.vo Convert.glob Convert.v.beautified Convert.required_vo: Convert.v Freevar.vo Misc.vo Star.vo FEnv.vo STerm.vo Inductive.vo Beta.vo
+Convert.vio: Convert.v Freevar.vio Misc.vio Star.vio FEnv.vio STerm.vio Inductive.vio Beta.vio
+coqperf.vo coqperf.glob coqperf.v.beautified coqperf.required_vo: coqperf.v 
+coqperf.vio: coqperf.v 
+Costar.vo Costar.glob Costar.v.beautified Costar.required_vo: Costar.v Freevar.vo Misc.vo Star.vo FEnv.vo STerm.vo Inductive.vo
+Costar.vio: Costar.v Freevar.vio Misc.vio Star.vio FEnv.vio STerm.vio Inductive.vio
+FEnv.vo FEnv.glob FEnv.v.beautified FEnv.required_vo: FEnv.v Freevar.vo Misc.vo
+FEnv.vio: FEnv.v Freevar.vio Misc.vio
+Freevar.vo Freevar.glob Freevar.v.beautified Freevar.required_vo: Freevar.v Misc.vo
+Freevar.vio: Freevar.v Misc.vio
+GenInd.vo GenInd.glob GenInd.v.beautified GenInd.required_vo: GenInd.v Rewrite.vo Misc.vo
+GenInd.vio: GenInd.v Rewrite.vio Misc.vio
+Inductive.vo Inductive.glob Inductive.v.beautified Inductive.required_vo: Inductive.v 
+Inductive.vio: Inductive.v 
+Lambda.vo Lambda.glob Lambda.v.beautified Lambda.required_vo: Lambda.v Freevar.vo Misc.vo FEnv.vo Pretty.vo Inductive.vo
+Lambda.vio: Lambda.v Freevar.vio Misc.vio FEnv.vio Pretty.vio Inductive.vio
+Misc.vo Misc.glob Misc.v.beautified Misc.required_vo: Misc.v 
+Misc.vio: Misc.v 
+native_compute.vo native_compute.glob native_compute.v.beautified native_compute.required_vo: native_compute.v 
+native_compute.vio: native_compute.v 
+Pretty.vo Pretty.glob Pretty.v.beautified Pretty.required_vo: Pretty.v 
+Pretty.vio: Pretty.v 
+RedEProof.vo RedEProof.glob RedEProof.v.beautified RedEProof.required_vo: RedEProof.v Freevar.vo Misc.vo Star.vo FEnv.vo STerm.vo Red.vo RedE.vo Pretty.vo Inductive.vo
+RedEProof.vio: RedEProof.v Freevar.vio Misc.vio Star.vio FEnv.vio STerm.vio Red.vio RedE.vio Pretty.vio Inductive.vio
+RedE.vo RedE.glob RedE.v.beautified RedE.required_vo: RedE.v Freevar.vo Misc.vo Star.vo FEnv.vo STerm.vo Pretty.vo Inductive.vo
+RedE.vio: RedE.v Freevar.vio Misc.vio Star.vio FEnv.vio STerm.vio Pretty.vio Inductive.vio
+RedMProof.vo RedMProof.glob RedMProof.v.beautified RedMProof.required_vo: RedMProof.v Freevar.vo Misc.vo Star.vo FEnv.vo STerm.vo Pretty.vo RedE.vo RedM.vo Inductive.vo
+RedMProof.vio: RedMProof.v Freevar.vio Misc.vio Star.vio FEnv.vio STerm.vio Pretty.vio RedE.vio RedM.vio Inductive.vio
+RedM.vo RedM.glob RedM.v.beautified RedM.required_vo: RedM.v Freevar.vo Misc.vo Star.vo FEnv.vo STerm.vo Pretty.vo RedE.vo Inductive.vo
+RedM.vio: RedM.v Freevar.vio Misc.vio Star.vio FEnv.vio STerm.vio Pretty.vio RedE.vio Inductive.vio
+RedProof.vo RedProof.glob RedProof.v.beautified RedProof.required_vo: RedProof.v Freevar.vo Misc.vo Star.vo FEnv.vo STerm.vo Beta.vo Red.vo Costar.vo Pretty.vo Inductive.vo Rewrite.vo
+RedProof.vio: RedProof.v Freevar.vio Misc.vio Star.vio FEnv.vio STerm.vio Beta.vio Red.vio Costar.vio Pretty.vio Inductive.vio Rewrite.vio
+Red.vo Red.glob Red.v.beautified Red.required_vo: Red.v Freevar.vo Misc.vo Star.vo FEnv.vo STerm.vo Pretty.vo Inductive.vo
+Red.vio: Red.v Freevar.vio Misc.vio Star.vio FEnv.vio STerm.vio Pretty.vio Inductive.vio
+Rewrite.vo Rewrite.glob Rewrite.v.beautified Rewrite.required_vo: Rewrite.v Misc.vo
+Rewrite.vio: Rewrite.v Misc.vio
+Star.vo Star.glob Star.v.beautified Star.required_vo: Star.v 
+Star.vio: Star.v 
+STerm.vo STerm.glob STerm.v.beautified STerm.required_vo: STerm.v Freevar.vo Misc.vo FEnv.vo Inductive.vo
+STerm.vio: STerm.v Freevar.vio Misc.vio FEnv.vio Inductive.vio
+Term.vo Term.glob Term.v.beautified Term.required_vo: Term.v Freevar.vo Misc.vo
+Term.vio: Term.v Freevar.vio Misc.vio
+test.vo test.glob test.v.beautified test.required_vo: test.v 
+test.vio: test.v 

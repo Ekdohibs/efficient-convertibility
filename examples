@@ -1,0 +1,130 @@
+Idée de compilation :
+
+lazy e = LazyTag ([e shallow], [e deep], [env])
+
+[x shallow] = lazy_force_shallow x
+[x deep] = lazy_force_deep x
+
+[(t1 t2) shallow] = apply_shallow (t1 shallow) (lazy t2)
+[(t1 t2) deep] = apply_deep (t1 shallow) (lazy t2)
+
+[(\x.t) shallow] = CloTag ([t shallow], [t deep], NULL, [env])
+[(\x.t) deep] = let x = clo_var () in CloTag ([t shallow], [t deep], Lam (x, nfpart ([t deep] x)), [env])
+
+lazy_force_shallow v =
+  match v with
+  | LazyTag (f, _, env) -> v := f@env (); v
+  | _ -> v
+
+lazy_force_deep v =
+  match v with
+  | LazyTag (_, f, env) -> v := f@env (); v
+  | CloTag (fs, fd, NULL, e) ->
+    let x = clo_var () in v := CloTag (fs, fd, Lam (x, nfpart (fd@e x)), e); v
+  | _ -> v
+
+apply_shallow v1 v2 =
+  match v1 with
+  | CloTag (fs, _, _, e) -> fs@e v2
+  | _ -> assert false
+
+apply_deep v1 v2 =
+  match v1 with
+  | CloTag (_, fd, _, e) -> fd@e v2
+  | _ -> assert false
+
+nfpart v =
+  match v with
+  | CloTag (_, _, nf, e) -> assert (nf <> NULL); nf
+  | _ -> assert false
+
+do_acc v @ e =
+  match e with
+  | CloTag (_, _, v2) -> acc (App (v2, nfpart (lazy_force_deep v)))
+
+acc v = CloTag (do_acc, do_acc, v)
+
+clo_var () = let rec x = Var x in acc x
+
+
+
+==================
+
+Idée 2 : paramètre (registre ?) pour deep_flag
+
+lazy e = LazyTag([e], env)
+lazy_force deep_flag v =
+  match v with
+  | LazyTag (f, env) -> v := f@env deep_flag; v
+  | _ when deep_flag = shallow -> v
+  | CloTag (f, NULL, env) -> let x = clo_var () in v := CloTag (f, Lam (x, nfpart (f@env x)), env); v
+  | _ -> v
+
+[x] = lazy_force deep_flag x
+[t1 t2] = apply deep_flag (let deep_flag = shallow in t1) (lazy t2)
+[(fun x -> t)] = if deep_flag = deep then let x = clo_var () in CloTag ([t], Lam (x, nfpart ([t] deep x)), env) else CloTag ([t], NULL, [env])
+
+apply deep_flag f v =
+  match f with
+  | CloTag (f, _, env) -> f@env deep_flag v
+
+nfpart v =
+  match v with
+  | CloTag (_, nf, _) -> assert (nf <> NULL); nf
+
+do_acc v@e =
+  match e with
+  | CloTag (_, nf, _) -> acc (App (nf, nfpart (lazy_force deep v)))
+
+acc v = CloTag (do_acc, v, [empty env])
+
+clo_var () = acc (fresh Var)
+
+
+======================
+
+Compilation si on a le droit de torturer le runtime :
+
+Accu = 0
+LazyTag = 1
+ForwardTag = 2
+
+let forward_shallow @ [f] x =
+  f[shallow] x
+let forward_deep @ [f] x =
+  f[deep] x
+
+force_shallow @ ([e shallow] :: [e deep] :: env) x =
+  let f = [e shallow] @ env in
+  let r = f[shallow] x in
+  Tag(env) <- ForwardTag(forward_shallow, forward_deep, f)
+  r
+force_deep @ ([e shallow] :: [e deep] :: env) x =
+  let f = [e shallow] @ env in
+  let r = f[deep] x in
+  Tag(env) <- ForwardTag(forward_shallow, forward_deep, f)
+  r
+
+lazy e = LazyTag(force_shallow, force_deep, [e shallow], [e deep], env) 
+
+[x shallow] = x
+[x deep] = x
+[t1 t2 shallow] = ([t1 shallow])[shallow] (lazy t2)
+[t1 t2 deep] = ([t1 shallow])[deep] (lazy t2)
+[(fun x -> t) shallow] = CloTag([t shallow], [t deep], NULL, env)
+[(fun x -> t) deep] = CloTag([t shallow], [t deep], (let x = clo_var () in Lam(x, nf ([t deep] x))), env)
+
+nf v = match v with
+| Accu (_, _, acc) -> acc
+| LazyTag (_, _, _, edeep, env) -> nf ([e deep] @ env)
+| ForwardTag (_, _, f) -> nf f
+| CloTag (_, tdeep, NULL, env) ->
+  let x = clo_var () in
+  let r = Lam (x, nf (tdeep @ env x)) in
+  NULL <- r
+  r
+
+clo_var () = Accu (do_acc, do_acc, Var ())
+do_acc @ [v] x =
+  Accu (do_acc, do_acc, App (v, x))
+

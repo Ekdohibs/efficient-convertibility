@@ -1,0 +1,1 @@
+(Main arg) = (λa (λb ((b a) λc λd ((c b) d)) (a λe λf a)) λg (g g))
